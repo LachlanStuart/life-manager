@@ -222,7 +222,7 @@ Video playback, serving video files, and hosting an agent that arranges windows 
 
 Snapshot data must be accessible to external processes for later analysis. Specific reports, formulas, and reporting UI are deferred until real usage data exists. Reports can be produced and viewed entirely outside the application.
 
-Built-in importers and migration-specific APIs are excluded. One-off external scripts may use ordinary application operations or write directly to the database during offline migration. SQLite is the selected storage; the schema is described in [README.md](README.md#storage). There is no requirement for a general interchange format or compatibility framework across alternative implementations. If a later migration is needed, it can be planned against the actual databases and content.
+Built-in importers and migration-specific APIs are excluded. One-off external scripts may use ordinary application operations or write directly to the database during offline migration. SQLite is the selected storage; the schema is described in [docs/REFERENCE.md](docs/REFERENCE.md#storage). There is no requirement for a general interchange format or compatibility framework across alternative implementations. If a later migration is needed, it can be planned against the actual databases and content.
 
 Other excluded requirements are time tracking, built-in reminders or recurrence, automatic status propagation, multi-parent Items, and a general-purpose custom-property system. Regular dashboard visits provide the reminder by exposing looming obligations alongside other pursuits.
 
@@ -249,6 +249,6 @@ The dashboard toolbar provides a temporary sort override for each view: Order, S
 
 ## Current phase
 
-- Phase: source anonymisation complete; demo and documentation are generic, and the private source collection and one-off tools are archived outside the project.
-- Next action: extract the sanitised tracked files into the standalone repository with fresh Git history.
-- Publication boundary: exclude existing Git history and all ignored runtime data, credentials, dependencies and private archives. The running workspace remains separate from the distributable source.
+- Phase: standalone repository populated with sanitised source and a user-facing README, sample screenshots and a workflow animation.
+- Next action: review the repository presentation before changing its visibility.
+- Publication boundary: keep runtime data, credentials and private imports out of source control. Documentation media uses only the synthetic demo workspace.

@@ -1,160 +1,141 @@
 # Life Manager
 
-An ordinary local web app for planning attention across Tend, Build, Learn and Enjoy. [PRD.md](PRD.md) is the canonical product specification and resume document. [PLUGINS-PRD.md](PLUGINS-PRD.md) covers the activity widgets.
+**Notion-like notes and task boards meet a Goalscape-inspired map of your attention.**
 
-## Run
+Life Manager brings projects, routines, learning and leisure into one personal workspace. Keep the context you would put on a Notion page, give each pursuit a place in a visual hierarchy, and choose how much of your attention it deserves right now.
 
-Requires Node 22.12 or newer and npm.
+Use the sunburst to plan. Switch to Kanban when you're ready to act. Return to your notes when you need to pick up where you left off.
+
+![An attention map with nested projects, colour-coded statuses and effort fills](docs/media/attention-map.png)
+
+## What you can do
+
+- **See the whole picture.** Arrange areas, projects and tasks in a zoomable sunburst. Resize slices to express their relative importance.
+- **Keep today's choices manageable.** Hide inactive branches without losing their notes or next steps. Bring them back when your interests change.
+- **Work from a familiar board.** Drag cards between statuses, focus on one part of your life, and sort temporarily by importance, effort or status. Card size reflects intended attention.
+- **Keep tasks and knowledge together.** Every Item has children and rich Markdown notes, with checklists, images, links, tables and direct source editing.
+- **Reflect without a timer.** Record effort against your intention, including effort above 100%. For checklist-style projects, let completed children contribute automatically.
+- **Preserve each planning period.** Capture Opening, Planned and Closing snapshots, including titles, hierarchy, notes, visibility and allocations. Revisit a period as it was at the time.
+- **Bring activities into your notes.** Optional widgets list local media or live Twitch follows; turn an interesting entry into an Item when you want to keep it.
+- **Keep your workspace on your own machine.** Use desktop and phone browsers against one server. Your notes and history live in a local SQLite database, with JSON export available.
+
+## A quick tour
+
+This animated tour uses the included sample workspace: the full attention map, a focused branch, project notes, the board, and a task moving into Doing.
+
+![Animated tour of planning, project notes, board filtering and changing a task's status](docs/media/workflow.gif)
+
+### Plan around the life you actually lead
+
+A fresh workspace starts with four areas:
+
+| Area | What belongs here |
+| --- | --- |
+| **Tend** | Routines, obligations and practical projects |
+| **Build** | Things you want to make, experiment with or improve |
+| **Learn** | Deliberate study and practice |
+| **Enjoy** | Leisure, entertainment and downtime |
+
+These are starting points: rename, add and reorganise Items to suit your life. The same Item can hold a short task, a long-running project or a page of ideas with children underneath it.
+
+A slice's size means **intended share of attention**. Its fill means **effort spent relative to that intention in the current period**. Neither is a time estimate or an overall project-completion percentage. You can finish a productive session on an open-ended project without pretending the whole project is nearly done.
+
+Click or tap a slice to zoom. Double-click on desktop or long-press on touch to open its details. Desktop Omni mode also puts allocation, effort and creation controls directly on the wheel.
+
+### Switch to execution
+
+The Kanban board keeps the same hierarchy and focus. Related tasks stay grouped by their parent, while the small wheel and branch navigation help you choose what to work on.
+
+![Kanban board with related tasks grouped inside status columns](docs/media/kanban-board.png)
+
+Use **Now** for work you intend to tackle, **Doing** while it's underway, and **Blocked** when something is in the way. **Done** records completion, **Later** keeps a possibility for reconsideration, **Skip** means it isn't relevant this period, and **Cut** means you've intentionally abandoned it.
+
+Parents with included children stay off the board so the actionable children take the space. A parent with no included children can remain visible as a placeholder for work you still need to define.
+
+### Leave yourself a good place to resume
+
+Open an Item to edit its children and notes together. Record a blocker, paste a useful link, or leave a few lines about the next experiment. Notes autosave, and Markdown source mode is available when you want direct control.
+
+![Project details beside the attention map, with editable children and next-session notes](docs/media/project-notes.png)
+
+When it's time to reconsider your priorities, use the period menu to capture your plan or begin the next period. Rollover preserves the previous period and carries your current work forward; it does not automatically reset tasks.
+
+## Install and try it
+
+You'll need **Node.js 22.12 or newer**, npm and Git. Use the same Node version for installation and execution.
 
 ```sh
+git clone https://github.com/LachlanStuart/life-manager.git
 cd life-manager
-npm install
+npm ci
 npm run build
+npm run demo
+```
+
+Open **[localhost:4317](http://localhost:4317)**. The demo contains only fictional sample projects and stores your trial edits separately in `.demo-data/`.
+
+To start your own workspace, stop the demo with **Ctrl+C**, then run:
+
+```sh
 npm start
 ```
 
-Open [localhost:4317](http://localhost:4317). For phone access, use the server's address on a trusted private network, for example through Tailscale. The host and server must remain running. There is no sign-in screen; do not expose the server directly to the public internet.
+This starts a separate workspace in `.data/`, with the four initial areas and no sample projects. Stop the server with Ctrl+C when you're finished.
 
-`npm run demo` starts a separate sample workspace on the same port. It seeds `.demo-data/` once and retains trial edits on subsequent starts. Stop one server before starting another on that port, or choose a different `PORT`. `npm start` uses `.data/`; a fresh data directory starts with the four Topics.
+## Configure your workspace
 
-Use the same supported Node version for dependency installation and execution. If changing Node versions causes a native SQLite ABI error, reinstall dependencies under the chosen runtime.
+The **Settings** cog contains display preferences and saved agent prompts. Adjust label sizes and padding for your screen; display preferences are saved in that browser. Tasks, notes and planning periods are saved on the server.
 
-| Setting | Default |
-| --- | --- |
-| `PORT` | `4317` |
-| `HOST` | `0.0.0.0`; use `127.0.0.1` for this computer only |
-| `LIFE_MANAGER_DATA_DIR` | `.data/` alongside this README |
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `4317` | Choose the server port |
+| `HOST` | `0.0.0.0` | Network interface; use `127.0.0.1` for access from this computer only |
+| `LIFE_MANAGER_DATA_DIR` | `.data/` | Choose where your personal workspace is stored; the demo always uses `.demo-data/` |
 
-The data directory may contain private notes, attachments, snapshots and authorization tokens. Keep it out of source distributions and version control.
+For example, to keep access local to this computer on macOS or Linux:
 
-Rebuild after frontend changes. `npm run dev` watches server changes; it does not run a separate frontend development server. Runtime data and build outputs are ignored by Git.
-
-## Use
-
-The home URL opens the current full wheel. Omni is the default for desktop mouse use; touch starts in Navigate. In Navigate and Omni, tap/click zooms and long-press/double-click opens details; Importance and Effort allow dragging a slice immediately, and Create adds temporary child buttons. Numeric editing is available in Item details. Show all reveals hidden Items without changing their real allocations.
-
-With a mouse, Omni combines click-to-zoom and double-click-to-open with small persistent controls: white boundary handles adjust importance, green handles adjust effort, and plus buttons add children. Handle drags do not open the Item pane. The separate modes remain available for touch interaction.
-
-The wheel's gear menu adjusts radial titles, font sizes, label padding/truncation, visible depth and relative layer widths. These preferences stay in this browser's local storage; Reset display restores defaults. Narrow slices remain accessible by zooming into their branch.
-
-Switch to **Kanban** for execution. The compact sunburst and branch links filter the board. Upward links lead to Life and ancestors; Open beside the current Item opens its details. Child links show branches that have children. Columns group lifecycle states, and each parent-path heading connects its sibling cards with a subtle rail. Importance controls card height and title size within readable bounds.
-
-Drag anywhere on a title-only card to move it into another status column; the card follows the pointer. Drop before or after a sibling card in the same parent group to also change sibling order; the insertion marker shows when reordering will occur. Other drops never reparent or reorder. A click or tap opens the Item, where status can also be edited. Opening a card uses the usual Item pane, and Back returns to the same board and branch. The view is preserved in links as `?view=kanban`.
-
-Wide windows show a resizable Item pane. Below 1050px an Item occupies the main view, with Children above Notes. Item and wheel-focus URLs participate in browser history. Notes offer rich text and Markdown source editing; a short debounce saves changes, with best-effort flushes on navigation/backgrounding.
-
-The period picker contains Planning → Active → Next. Active captures Planned once. Next opens rollover, which captures Closing and the next Opening without resetting anything. Historical snapshots are read-only until Correct this snapshot is selected; corrections affect only that snapshot.
-
-## Storage
-
-The server uses Node HTTP, SQLite (`better-sqlite3`) and a Vite/React client. MDXEditor is loaded when an Item is opened. Domain calculations are shared with the server; HTTP actions validate inputs and use revision checks to avoid silently applying stale writes.
-
-The database is `life-manager.sqlite` inside the data directory. Managed images live in its `attachments/` directory and use Markdown URLs such as `/attachments/<id>.png`. Images referenced by older snapshots are retained. Back up the database and attachments together; stop the server before making a simple filesystem copy, or use SQLite's backup facilities while it runs.
-
-[src/store.ts](src/store.ts) owns the schema and additive migrations. [src/types.ts](src/types.ts) defines the corresponding application records:
-
-- `items`: `id`, `parent_id`, `sibling_order`, `title`, `status`, Markdown `notes`, `included`, `weight`, `allocation_auto` (default false for existing Items), nullable `effort_override`, nullable `default_prompt_id`, nullable `resource_uri`.
-- `prompt_templates`: `id`, `name`, `prompt`. An Item's unset default inherits from its nearest configured ancestor.
-- `periods`, `snapshots`, `life_manager_meta`: period boundaries, complete Item snapshots and the current revision. A snapshot stores its Item records as JSON, including notes and hidden Items.
-
-`resource_uri` is a specific saved file/folder reference for the video widget; it is not a generic property system. Prompt defaults and resource references are included in snapshots. Templates are current application configuration; deleting a template clears current defaults without rewriting historical Item records.
-
-Call `initializeDatabase(db)` before `createLifeManagerStore(db)`. New stores seed the Topic IDs `tend`, `build`, `learn`, `enjoy`. There is no built-in importer. Use the shared API or prepare an offline migration into a new data directory when bringing in existing material.
-
-## Shared API
-
-All paths are relative to the running server. POST requests use `Content-Type: application/json` and `X-Life-Manager: 1`. Cross-origin browser actions are rejected. Read endpoints are ordinary GETs.
-
-| Endpoint | Input / result |
-| --- | --- |
-| `GET /api/workspace` | Current Items, periods, snapshot summaries, widgets and prompt templates. Add `?snapshotId=<id>` for a checkpoint. |
-| `GET /api/items/<id>` | Item, immediate children, ancestors, revision and period context. Supports `snapshotId`. |
-| `POST /api/mutate` | `{command, expectedRevision?, snapshotId?}`; returns the updated workspace. |
-| `POST /api/plan` | `{expectedRevision?}` |
-| `POST /api/rollover` | `{name?, expectedRevision?}` |
-| `GET /api/export` | Complete current/historical data and templates as JSON. |
-| `GET /api/templates` | Saved templates. |
-| `POST /api/templates/save` | `{id, name, prompt}` |
-| `POST /api/templates/delete` | `{id}` |
-| `POST /api/widgets/render` | `{widgetId, itemId, config?, snapshotId?}` → `{html}` |
-| `POST /api/widgets/action` | Render context plus `{action, input?}` |
-| `POST /api/agent/link` | `{itemId, templateId}` → `{message, url}` containing a prefilled `codex://` link. |
-| `POST /api/attachments` | Raw PNG/JPEG/GIF/WebP bytes, image content type and `X-Life-Manager: 1`; returns `{url}`. Maximum 20 MB. |
-
-Commands support create, update, delete, delete-many, move, reorder, allocate and bulk updates. New Items default to automatic allocation unless an explicit `patch.weight` or optional creation `share` is supplied. Creation `share` applies a local percentage atomically with the new Item. `allocate` with `share: null` enables automatic allocation; blanks equally divide the remainder after included explicit shares. With included blanks, manual weights represent percentages; without them, weights retain proportional normalization. The additive optional `allocationAuto` field is retained in checkpoint and export Items (schema version 2); absent means manual, preserving older exports and snapshots. `delete-many` accepts `ids` and removes all selected subtrees atomically while preserving historical snapshots. See [the agent skill](skills/life-manager/SKILL.md) for examples. Revision conflicts return HTTP 409. Other invalid operations return an error string. Browser clients receive change notifications over `/api/events` and refresh current server state.
-
-## Widgets
-
-A fenced block embeds an installed widget and nested configuration:
-
-````markdown
-```life-widget
-{
-  "id": "branch-tools",
-  "config": {"example": {"nested": true}}
-}
+```sh
+HOST=127.0.0.1 npm start
 ```
-````
 
-The visual editor renders the block and provides its configuration text. Source mode always exposes the fence. Malformed/unknown blocks retain editable source.
+### Use it on your phone
 
-[src/widgets.ts](src/widgets.ts) contains trusted widget definitions. A definition returns HTML and registers named, validated server actions. The HTML runs in a sandboxed iframe and can call `window.lifeManager.action(name, input)`. Widgets can call `window.lifeManager.refresh()` to request newly rendered HTML; reloading the iframe alone would replay its old document. Its server action receives the owning Item, config, workspace, shared `mutate` operations and a `runCommand(executable, args)` helper. Command definitions are code; the HTTP API does not expose a general shell endpoint. Restart after editing definitions.
+Connect to the server's address through a trusted private network, such as Tailscale. The phone uses the same workspace, and the host must be awake with the server running. This is an ordinary online web app; offline editing is not supported.
 
-The included Branch tools widget demonstrates Item creation and a bulk reset. Activity definitions live in `src/plugins/`. Historical widgets cannot execute host commands, and their UI action bridge is disabled while viewing a snapshot.
+**There is no sign-in screen or multi-user isolation. Keep the server on a trusted private network and do not expose it directly to the public internet.**
 
-### Local videos
+### Optional activity widgets and agent prompts
 
-The `local-video` block lists only immediate regular files and folders. Dotfiles are omitted. Each widget requires an absolute root directory; no directory names are excluded by default. Set the root and any exact excluded directory names in Markdown:
+Add widgets from the Notes editor and edit their configuration in Markdown:
 
-````markdown
-```life-widget
-{
-  "id": "local-video",
-  "config": {
-    "root": "/path/to/media",
-    "exclude": ["Watched"]
-  }
-}
-```
-````
+- **Local videos:** choose an absolute media-directory path and optional folder exclusions. The widget lists immediate files and folders on the server; it does not play or host videos.
+- **Twitch:** supply your own public Twitch Client ID, connect your account, and group followed channels however you like. No client secret is needed.
+- **Agent prompts:** save reusable prompts that include an Item's title, link and ID. The Notes link opens a prefilled task in Codex on the viewing device; it does not automatically submit the task or choose a remote host.
 
-Refresh rereads that one directory. Create Item adds a child of the widget owner, with the file stem or folder name, Later status, inclusion enabled and a saved file URL. A current reference anywhere in the hierarchy suppresses the entry unless all referencing Items are Done or Cut. Hidden Items still count. Folders produce one Item and are never recursively imported. Playback and file moves remain external.
+See the [configuration reference](docs/REFERENCE.md#widgets) for widget examples and Twitch setup, or [agent prompts](docs/REFERENCE.md#codex-dispatch) for the integration details. None of these integrations is required for ordinary planning and note-taking.
 
-### Twitch
+### Back up your data
 
-The `twitch-live` widget shows live followed channels. Its Markdown configuration contains only public setup and grouping data:
+Back up the **whole data directory**, including the SQLite database and `attachments/`. Stop the server before making a simple folder copy. For backups while the app is running, use SQLite's backup facilities and preserve the attachments alongside the database.
 
-````markdown
-```life-widget
-{
-  "id": "twitch-live",
-  "config": {
-    "clientId": "YOUR_PUBLIC_CLIENT_ID",
-    "groups": {"example_channel": "Creative"},
-    "groupOrder": ["Creative", "Gaming", "Music"]
-  }
-}
-```
-````
+[Download a JSON export](http://localhost:4317/api/export) from a server on the default local port, or use `/api/export` on your server's address. JSON exports include current and historical records, but do not replace an attachments backup.
 
-Register a unique application in the [Twitch developer console](https://dev.twitch.tv/console/apps), choose the Public client type, and copy its Client ID into the widget configuration. If registration requires a redirect URI, use `https://localhost`; the device-code connection flow does not use a callback. No client secret is required. Connect in the widget, authorise the displayed code on Twitch, then return to Life Manager. The only requested permission is `user:read:follows`. [Twitch's device-code documentation](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#device-code-grant-flow) describes this flow.
+Keep data directories and authorisation tokens private. [Storage details](docs/REFERENCE.md#storage) describe what is saved.
 
-Channel links open Twitch on the viewing device. Create Item always adds a fresh child named after the channel, with a channel link in its notes. Existing Items never suppress live channels. Group names derive from the channel-login mapping; unmapped channels appear in Ungrouped. Reorder groups or change membership in the Markdown configuration.
+## Development and feedback
 
-Add activity widgets through the Notes editor and configure their Markdown blocks for your own media directories and Twitch application.
+Life Manager is early, self-hosted software for a single personal workspace. It has no built-in reminders, automatic recurrence or time tracking. Routine review and period rollover are deliberate actions.
 
-## Codex dispatch
+For a source update, stop the server, pull the changes, then run `npm ci`, `npm run build` and `npm start` again. Back up your workspace before updating.
 
-Saved prompts interpolate `{{item.name}}`, `{{item.url}}` and `{{item.id}}` for the selected Item. The server appends its loopback read API URL and the local Life Manager skill location, so agents on the server host can read Items directly. Sending does not change lifecycle or effort.
-
-The selected prompt appears as an inline link at the right of the Notes heading. Click its text to open Codex; click its chevron or surrounding control to choose another prompt. Links are prepared automatically when the Item or prompt changes. This is an ordinary browser link on every device, so the viewing device decides which app handles it. Preparation does not launch an application, submit a task, or enqueue work. Notes retain their usual autosave behavior. Manage templates under the global Settings cog → Prompts.
-
-The link uses `codex://threads/new` with encoded `prompt` and `path` parameters. The [official deep-link reference](https://learn.chatgpt.com/docs/reference/commands#deep-links) describes a prefilled composer requiring Send and documents no new-task host selector. iPhone handling is an experiment; the link does not nominate a remote execution host. Host-local paths and the loopback API context are useful when the task runs on the application server.
-
-## Verification
+To check changes locally:
 
 ```sh
 npm run verify
 ```
 
-This runs strict TypeScript checks, domain/storage/HTTP/UI tests and the production build. HTTP tests bind temporary localhost ports. Browser checks have covered desktop, 820px and 390px layouts, URL/back navigation, source saving, Create mode, last-sibling allocation dragging and effort beyond the visual cap. A physical iPhone/Safari trial remains outstanding.
+This runs the TypeScript checks, tests and production build. `npm run dev` watches server changes; rebuild after editing the frontend.
+
+[Report a bug or suggest an improvement](https://github.com/LachlanStuart/life-manager/issues). For integrations and contributors, the [technical reference](docs/REFERENCE.md), [product model](PRD.md) and [agent API guide](skills/life-manager/SKILL.md) describe the existing behaviour.
+
+Inspired by Notion's combination of notes and task organisation and Goalscape's visual approach to priorities. Life Manager is an independent project.

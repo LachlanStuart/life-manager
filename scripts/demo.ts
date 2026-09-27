@@ -12,11 +12,14 @@ if (!existsSync(filename)) {
   mkdirSync(dataDir, { recursive: true });
   const db = new Database(filename); initializeDatabase(db);
   const store = createLifeManagerStore(db);
-  const create = (id: string, parentId: string, title: string, patch: ItemPatch = {}) => store.mutate({ command: { type: 'create', id, parentId, title, patch } });
+  const create = (id: string, parentId: string, title: string, patch: ItemPatch = {}) => store.mutate({ command: { type: 'create', id, parentId, title, patch: { weight: 1, ...patch } } });
   const update = (id: string, patch: ItemPatch) => store.mutate({ command: { type: 'update', id, patch } });
   db.prepare('UPDATE periods SET name = ?').run('Sample period');
   update('tend', { weight: 25, status: 'Now' }); update('build', { weight: 35, status: 'Doing' });
   update('learn', { weight: 25, status: 'Now' }); update('enjoy', { weight: 15, status: 'Later' });
+  for (const [id, share] of [['tend', 25], ['build', 35], ['learn', 25], ['enjoy', 15]] as const) {
+    store.mutate({ command: { type: 'allocate', id, share } });
+  }
   create('routines', 'tend', 'Routines', { weight: 2, status: 'Now', notes: 'Review the list, choose what matters, and leave the rest for another period.' });
   create('groceries', 'routines', 'Get groceries', { status: 'Done' });
   create('laundry', 'routines', 'Do laundry', { status: 'Done' });
