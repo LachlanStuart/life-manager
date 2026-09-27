@@ -15,6 +15,7 @@ import { childrenOf, effectiveIncluded } from './src/domain';
 import { type AgentReply, type Item, type ItemCommand, type PromptTemplate, type WidgetActionInput, type WidgetActionResult, type WidgetRenderInput, type WidgetRenderResult, type Workspace } from './src/types';
 import type { WheelMode } from './ui/contracts';
 import './ui/workspace.css';
+import { appBase, browserDemo } from './ui/runtime';
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 type Draft = { itemId: string; markdown: string; snapshotId?: string };
@@ -150,7 +151,7 @@ export function LifeManagerPage() {
     window.addEventListener('popstate', onPop);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
-    const feed = typeof EventSource === 'undefined' ? null : new EventSource('/api/events');
+    const feed = browserDemo || typeof EventSource === 'undefined' ? null : new EventSource('/api/events');
     const onChanged = () => { void queue.current.then(refresh).catch(cause => setError(message(cause))); };
     feed?.addEventListener('changed', onChanged);
     feed?.addEventListener('ready', onChanged);
@@ -198,7 +199,7 @@ export function LifeManagerPage() {
 
   return <main className="lm-workspace" aria-label="Life Manager" data-item-open={Boolean(route.itemId)}>
     <header className="lm-header">
-      <a className="lm-brand" href="/" onClick={event => { event.preventDefault(); navigate({ itemId: null, focusId: null }); }}><img src="/favicon.svg" alt="" /><h1>Life Manager</h1></a>
+      <a className="lm-brand" href={routeUrl({ itemId: null, focusId: null })} onClick={event => { event.preventDefault(); navigate({ itemId: null, focusId: null }); }}><img src={`${appBase}favicon.svg`} alt="" /><h1>Life Manager</h1></a>
       <div className="lm-search"><input aria-label="Find an Item" type="search" placeholder="Find an Item" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch(''); }} />
         {search.trim() && <div className="lm-search-results" role="listbox" aria-label="Search results">{results.length ? results.map(item => <button key={item.id} role="option" aria-selected={item.id === route.itemId} onClick={() => navigate({ ...routeRef.current, itemId: item.id, focusId: null })}><span>{item.title}</span><small>{parentPath(searchItems, item)}{!effectiveIncluded(searchItems, item.id) ? ' · hidden' : ''}</small></button>) : <span>No matching Items</span>}</div>}
       </div>
@@ -268,7 +269,7 @@ export function LifeManagerPage() {
         <section className="lm-detail-pane" aria-label="Item details"><div className="lm-pane-actions"><button onClick={() => navigate({ ...routeRef.current, itemId: null })}>{board ? '← Board' : '← Wheel'}</button><div className="lm-pane-actions__right"><button className="lm-expand" onClick={() => setExpanded(value => !value)}>{expanded ? 'Split view' : 'Expand'}</button></div></div>
           {displayed ? <Suspense fallback={<div className="lm-loading">Opening Item…</div>}><ItemPanel key={`${route.snapshotId ?? 'current'}:${displayed.id}`} item={displayed} items={items} showAll={showAll} readOnly={readOnly} snapshotId={route.snapshotId} widgets={workspace.widgets}
             renderWidget={renderWidget} actWidget={actWidget} uploadImage={uploadImage} onOpenItem={select} onCommand={async value => { if (value.type === 'delete' || value.type === 'delete-many') await saveNotes(); await command(value); }} onSelect={select} onNotesChange={changeNotes} notesStatus={noteStatus}
-            promptTemplates={workspace.promptTemplates} onSendToAgent={sendToAgent} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
+            promptTemplates={workspace.promptTemplates} onSendToAgent={browserDemo ? undefined : sendToAgent} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
           {noteStatus === 'Save error' && <button onClick={() => void run(saveNotes)}>Retry saving notes</button>}
         </section></>}
     </div>}

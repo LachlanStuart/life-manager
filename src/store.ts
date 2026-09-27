@@ -1,5 +1,13 @@
-import { randomUUID } from 'node:crypto';
-import type Database from 'better-sqlite3';
+/** The synchronous SQLite surface shared by native SQLite and the browser demo. */
+export interface StoreDatabase {
+  exec(sql: string): unknown;
+  prepare(sql: string): {
+    run(...params: unknown[]): { changes: number };
+    get(...params: unknown[]): unknown;
+    all(...params: unknown[]): unknown[];
+  };
+  transaction<A extends unknown[], R>(operation: (...args: A) => R): (...args: A) => R;
+}
 
 import { mutateItems, seedItems } from './domain.js';
 import type {
@@ -61,7 +69,7 @@ export const STORE_MIGRATIONS = [
 ] as const;
 
 /** Apply only additive schema changes; existing snapshot JSON and notes remain untouched. */
-export function initializeDatabase(db: Database.Database): void {
+export function initializeDatabase(db: StoreDatabase): void {
   db.transaction(() => {
     for (const migration of STORE_MIGRATIONS) db.exec(migration);
     const columns = new Set((db.prepare('PRAGMA table_info(items)').all() as Array<{ name: string }>).map(column => column.name));
@@ -195,11 +203,11 @@ function parseItems(json: string): Item[] {
 }
 
 export function createLifeManagerStore(
-  db: Database.Database,
+  db: StoreDatabase,
   options: { now?: () => Date; id?: () => string } = {},
 ): LifeManagerStore {
   const now = options.now ?? (() => new Date());
-  const makeId = options.id ?? randomUUID;
+  const makeId = options.id ?? (() => globalThis.crypto.randomUUID());
 
   const getMetaStatement = db.prepare('SELECT value FROM life_manager_meta WHERE key = ?');
   const setMetaStatement = db.prepare(`

@@ -4,7 +4,7 @@
 
 A standalone web application for organising personal pursuits, choosing their intended shares of attention, and preserving enough context to resume and reflect on them. Its foundation is a persistent hierarchy of Items, a current dashboard expressing intention, and historical period snapshots.
 
-This is the canonical product specification for the standalone application. The [glossary](CONTEXT.md) defines its language; the [decision records](docs/adr/) explain consequential trade-offs.
+This is the canonical product specification for the standalone application. The [glossary](CONTEXT.md) defines its language.
 
 ## Problem and personal context
 
@@ -91,7 +91,7 @@ For example, two equally weighted visible activities at 150% and 50% yield 100% 
 
 ### Sunburst
 
-The sunburst follows the interaction model in the supplied Goalscape references: [overview](docs/references/goalscape-overview.png), [Item details and radial fill](docs/references/goalscape-item-details.png), and [zoom with overview map](docs/references/goalscape-zoom.png).
+The sunburst presents a zoomable hierarchy with importance expressed by angular share and effort by radial fill.
 
 - Angular size communicates intended allocation.
 - Colour communicates lifecycle status: Now uses muted orange, Doing blue, Done green, and Skip a neutral tone.
@@ -249,6 +249,6 @@ The dashboard toolbar provides a temporary sort override for each view: Order, S
 
 ## Current phase
 
-- Phase: standalone repository populated with sanitised source and a user-facing README, sample screenshots and a workflow animation.
-- Next action: review the repository presentation before changing its visibility.
+- Phase: public MIT-licensed application with a browser-only interactive demo for GitHub Pages.
+- Browser demo: reuse the SQLite planning model through WebAssembly and persist temporary changes in IndexedDB. Warn on entry that there is no export and browser storage may be cleared. Host integrations remain available only in the server application.
 - Publication boundary: keep runtime data, credentials and private imports out of source control. Documentation media uses only the synthetic demo workspace.

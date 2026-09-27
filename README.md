@@ -6,7 +6,7 @@ Life Manager brings projects, routines, learning and leisure into one personal w
 
 Use the sunburst to plan. Switch to Kanban when you're ready to act. Return to your notes when you need to pick up where you left off.
 
-![An attention map with nested projects, colour-coded statuses and effort fills](docs/media/attention-map.png)
+![Animated tour of planning, project notes, board filtering and changing a task's status](docs/media/workflow.gif)
 
 ## What you can do
 
@@ -19,13 +19,7 @@ Use the sunburst to plan. Switch to Kanban when you're ready to act. Return to y
 - **Bring activities into your notes.** Optional widgets list local media or live Twitch follows; turn an interesting entry into an Item when you want to keep it.
 - **Keep your workspace on your own machine.** Use desktop and phone browsers against one server. Your notes and history live in a local SQLite database, with JSON export available.
 
-## A quick tour
-
-This animated tour uses the included sample workspace: the full attention map, a focused branch, project notes, the board, and a task moving into Doing.
-
-![Animated tour of planning, project notes, board filtering and changing a task's status](docs/media/workflow.gif)
-
-### Plan around the life you actually lead
+## Plan around the life you actually lead
 
 A fresh workspace starts with four areas:
 
@@ -59,6 +53,10 @@ Open an Item to edit its children and notes together. Record a blocker, paste a 
 ![Project details beside the attention map, with editable children and next-session notes](docs/media/project-notes.png)
 
 When it's time to reconsider your priorities, use the period menu to capture your plan or begin the next period. Rollover preserves the previous period and carries your current work forward; it does not automatically reset tasks.
+
+## Browser demo
+
+[Try the interactive demo](https://lachlanstuart.github.io/life-manager/). The browser-only build lets you try the planner, boards, notes and snapshots with fictional sample projects. It stores changes in this browser only. **There is no data export, and browser storage can be cleared without warning: do not use the demo for anything you need to keep.** Local media, Twitch and agent launch need the self-hosted app below.
 
 ## Install and try it
 
@@ -139,3 +137,7 @@ This runs the TypeScript checks, tests and production build. `npm run dev` watch
 [Report a bug or suggest an improvement](https://github.com/LachlanStuart/life-manager/issues). For integrations and contributors, the [technical reference](docs/REFERENCE.md), [product model](PRD.md) and [agent API guide](skills/life-manager/SKILL.md) describe the existing behaviour.
 
 Inspired by Notion's combination of notes and task organisation and Goalscape's visual approach to priorities. Life Manager is an independent project.
+
+## License
+
+[MIT](LICENSE).

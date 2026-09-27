@@ -115,3 +115,18 @@ npm run verify
 ```
 
 This runs strict TypeScript checks, domain/storage/HTTP/UI tests and the production build. HTTP tests bind temporary localhost ports.
+
+## Browser-only demo
+
+```sh
+npm run build:demo
+npm run preview:demo
+```
+
+Open the `/life-manager/` URL printed by the preview server. `dist-demo/` contains only static assets and the synthetic sample workspace. No application server, private data directory or credentials are deployed. Hash-based Item routes let deep links reload on static hosting.
+
+The demo uses sql.js (SQLite compiled to WebAssembly) with the same schema, mutations and period/snapshot logic as the native server. It saves the database image to IndexedDB after successful edits. Web Locks serialize operations between tabs; each operation reads the latest saved image and revision checks still apply. A failed IndexedDB write is reported as a save error, not a successful edit.
+
+Browser storage is disposable. The startup dialog and persistent banner warn that data may disappear and there is no supported export from the demo. This is not a backup, sync or offline-app offering. A current browser with IndexedDB, WebAssembly and Web Locks is required.
+
+Branch tools run locally. Local media access, Twitch authentication and agent launch require the self-hosted version. Demo image uploads embed data URLs in notes and accept PNG/JPEG/GIF/WebP files up to 2 MB each. The normal server's upload and export behavior is unchanged.

@@ -1,0 +1,46 @@
+import type { StoreDatabase, LifeManagerStore } from './store';
+import type { ItemPatch } from './types';
+
+/** Synthetic sample workspace shared by the local and static demos. */
+export function seedDemo(db: StoreDatabase, store: LifeManagerStore): void {
+  const create = (id: string, parentId: string, title: string, patch: ItemPatch = {}) => store.mutate({ command: { type: 'create', id, parentId, title, patch: { weight: 1, ...patch } } });
+  const update = (id: string, patch: ItemPatch) => store.mutate({ command: { type: 'update', id, patch } });
+  db.prepare('UPDATE periods SET name = ?').run('Sample period');
+  update('tend', { weight: 25, status: 'Now' }); update('build', { weight: 35, status: 'Doing' });
+  update('learn', { weight: 25, status: 'Now' }); update('enjoy', { weight: 15, status: 'Later' });
+  for (const [id, share] of [['tend', 25], ['build', 35], ['learn', 25], ['enjoy', 15]] as const) {
+    store.mutate({ command: { type: 'allocate', id, share } });
+  }
+  create('routines', 'tend', 'Routines', { weight: 2, status: 'Now', notes: 'Review the list, choose what matters, and leave the rest for another period.' });
+  create('groceries', 'routines', 'Get groceries', { status: 'Done' });
+  create('laundry', 'routines', 'Do laundry', { status: 'Done' });
+  create('plants', 'routines', 'Water the plants', { status: 'Skip' });
+  create('kitchen', 'routines', 'Tidy the kitchen', { status: 'Now' });
+  create('bike', 'tend', 'Repair the bicycle', { weight: 3, status: 'Blocked', notes: '## Resume here\n\nWaiting for a replacement part to arrive.\n\n- [x] Identify the worn parts\n- [ ] Fit the replacement brake pads\n\n| Part | State |\n| --- | --- |\n| Brake pads | Ordered |\n| Tools | Ready |' });
+  create('parts', 'bike', 'Collect replacement parts', { status: 'Blocked', weight: 2 });
+  create('repair', 'bike', 'Fit and test the new parts', { status: 'Now' });
+  create('garden', 'build', 'Build a balcony herb garden', { status: 'Doing', weight: 3, effortOverride: 145,
+    notes: '## Next session\n\nTry a small self-watering planter. Record the result before adding more plants.\n\n## Findings\n\nThe first planter kept the soil moist for a full weekend.\n\n```life-widget\n{"id":"branch-tools","config":{"example":{"nested":true}}}\n```' });
+  create('sketch', 'garden', 'Sketch the approach', { status: 'Done' });
+  create('prototype', 'garden', 'Build the smallest test', { status: 'Doing', weight: 3, effortOverride: 170 });
+  create('compare', 'garden', 'Compare the results', { status: 'Later', weight: 2 });
+  create('language-tool', 'build', 'Make a photo journal', { status: 'Later', weight: 2, effortOverride: 30 });
+  create('reading-flow', 'language-tool', 'Choose photos for the first page', { status: 'Now' });
+  create('paused-project', 'build', 'A project for later', { included: false, notes: 'Kept for a future burst of interest. The selected next steps will be here when it returns.' });
+  create('paused-next', 'paused-project', 'Resume from the last experiment', { included: true });
+  create('paused-extra', 'paused-project', 'A less useful direction', { included: false, status: 'Cut' });
+  create('french', 'learn', 'French', { weight: 3, status: 'Now', effortOverride: 60 });
+  create('french-reading', 'french', 'Reading', { weight: 2, status: 'Doing' });
+  create('story', 'french-reading', 'Read a short story', { effortOverride: 65, notes: 'Write unfamiliar words and a short summary here.' });
+  create('french-games', 'french', 'Games', { notes: 'Choose an activity, then use its saved prompt when ready.' });
+  create('japanese', 'learn', 'Japanese', { weight: 2, status: 'Later' });
+  create('japanese-video', 'japanese', 'Watch and transcribe', { notes: 'Keep the next sentence and useful dictionary links here.' });
+  create('video', 'enjoy', 'Something to watch', { status: 'Now', weight: 2, effortOverride: 25, notes: 'A place for notes about why a film looks appealing. Add a local-video widget to browse a configured media folder.' });
+  create('games', 'enjoy', 'Games', { status: 'Later', weight: 2 });
+  create('book', 'enjoy', 'A quiet evening with a book', { status: 'Later' });
+  store.savePromptTemplate({ id: 'next-step', name: 'Explore the next step', prompt: 'Read the context of {{item.name}} at {{item.url}} (ID: {{item.id}}). Help me choose one small next step. Leave the Item unchanged.' });
+  store.savePromptTemplate({ id: 'practice-session', name: 'Plan a practice session', prompt: 'Read {{item.name}} at {{item.url}} (ID: {{item.id}}). Suggest a short language practice exercise using the saved material. Leave the Item unchanged.' });
+  update('build', { defaultPromptId: 'next-step' }); update('french-games', { defaultPromptId: 'practice-session' });
+  const initial = store.workspace().dashboard.items;
+  db.prepare('UPDATE snapshots SET items_json = ?').run(JSON.stringify(initial));
+}

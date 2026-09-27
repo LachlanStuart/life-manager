@@ -344,7 +344,7 @@ export function ItemPanel({
         <div className="lm-item-panel__section-heading"><h2 id="lm-notes-heading">Notes</h2>
           <div className="lm-item-panel__notes-actions">
             {notesStatus && notesStatus !== 'Saved' && <span role="status">{notesStatus}</span>}
-      <div className="lm-item-panel__agent">
+      {onSendToAgent && <div className="lm-item-panel__agent">
         <span className="lm-inline-choice lm-item-panel__prompt">
           <select aria-label="Agent prompt template" value={templateId} disabled={readOnly || promptTemplates.length === 0}
             onChange={(event) => setTemplateId(event.target.value)}>
@@ -355,7 +355,7 @@ export function ItemPanel({
           <span className="lm-inline-chevron" aria-hidden="true">⌄</span>
         </span>
         {!readOnly && templateId && !currentLink && <span className="lm-item-panel__hint" role="status">Preparing…</span>}
-      </div>
+      </div>}
           </div>
         </div>
         <NotesEditor key={item.id} itemId={item.id} value={item.notes} readOnly={readOnly} snapshotId={snapshotId}

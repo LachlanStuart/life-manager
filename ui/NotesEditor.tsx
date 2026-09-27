@@ -96,7 +96,7 @@ function NotesDocument(props: NotesEditorProps) {
   const insertItemLink = () => {
     const id = window.prompt('Item ID')?.trim();
     if (!id) return;
-    insertMarkdown(`[${id.replace(/[\\[\]]/g, '\\$&')}](/items/${encodeURIComponent(id)})`);
+    insertMarkdown(`[${id.replace(/[\\[\]]/g, '\\$&')}](${routeUrl({ itemId: id, focusId: null })})`);
   };
 
   const plugins = useMemo(() => [
@@ -138,9 +138,11 @@ function NotesDocument(props: NotesEditorProps) {
     const anchor = event.target.closest<HTMLAnchorElement>('a[href]');
     if (!anchor) return;
     const url = new URL(anchor.href, window.location.href);
-    const match = url.origin === window.location.origin && /^\/items\/([^/]+)\/?$/.exec(url.pathname);
-    if (!match) return;
-    try { event.preventDefault(); props.onOpenItem(decodeURIComponent(match[1])); } catch { /* Invalid URL remains editable in source. */ }
+    if (url.origin !== window.location.origin) return;
+    try {
+      const { itemId } = parseRoute(url);
+      if (itemId) { event.preventDefault(); props.onOpenItem(itemId); }
+    } catch { /* Invalid URL remains editable in source. */ }
   };
 
   return <WidgetContext.Provider value={props}>
@@ -159,3 +161,4 @@ function NotesDocument(props: NotesEditorProps) {
     </div>
   </WidgetContext.Provider>;
 }
+import { parseRoute, routeUrl } from './navigation';
