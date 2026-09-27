@@ -1,0 +1,304 @@
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent, ReactNode } from 'react';
+import { ItemContextMenu } from './ui/ItemContextMenu';
+import { Icon } from './ui/Icons';
+import { SortControl } from './ui/SortControl';
+import type { ViewSort } from './ui/view-sort';
+import { PeriodControl } from './ui/PeriodControl';
+import { Sunburst } from './ui/Sunburst';
+import { CreateItemForm } from './ui/CreateItemForm';
+import { Kanban } from './ui/Kanban';
+import { api, uploadImage } from './ui/api';
+import { newClientId, parseRoute, routeUrl, type ViewRoute } from './ui/navigation';
+import { SunburstDisplaySettings } from './ui/SunburstDisplaySettings';
+import { childrenOf, effectiveIncluded } from './src/domain';
+import { type AgentReply, type Item, type ItemCommand, type PromptTemplate, type WidgetActionInput, type WidgetActionResult, type WidgetRenderInput, type WidgetRenderResult, type Workspace } from './src/types';
+import type { WheelMode } from './ui/contracts';
+import './ui/workspace.css';
+
+const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+type Draft = { itemId: string; markdown: string; snapshotId?: string };
+const ItemPanel = lazy(() => import('./ui/ItemPanel').then(module => ({ default: module.ItemPanel })));
+
+function Modal({ title, onClose, children, error }: { title: string; onClose: () => void; children: ReactNode; error?: string }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { ref.current?.showModal?.(); ref.current?.querySelector<HTMLInputElement>('input, textarea, select')?.focus(); }, []);
+  return <dialog ref={ref} className="lm-modal" aria-label={title} onCancel={event => { event.preventDefault(); onClose(); }}>
+    <div className="lm-modal-heading"><h2>{title}</h2><button aria-label="Close dialog" onClick={onClose}>×</button></div>{error && <p role="alert" className="lm-error">{error}</p>}{children}
+  </dialog>;
+}
+
+function parentPath(items: Item[], item: Item) {
+  const parts: string[] = [];
+  let parent = items.find(value => value.id === item.parentId);
+  while (parent) { parts.unshift(parent.title); parent = items.find(value => value.id === parent!.parentId); }
+  return parts.join(' / ');
+}
+
+export function LifeManagerPage() {
+  const [route, setRoute] = useState<ViewRoute>(() => parseRoute(new URL(window.location.href)));
+  const routeRef = useRef(route);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const latest = useRef<Workspace | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(route.itemId);
+  const [mode, setMode] = useState<WheelMode>(() => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches ? 'Omni' : 'Navigate');
+  const [contextItem, setContextItem] = useState<{id: string; x: number; y: number} | null>(null);
+  const [viewSorts, setViewSorts] = useState<Record<'sunburst' | 'kanban', ViewSort>>({sunburst: 'Order', kanban: 'Order'});
+  const [showAll, setShowAll] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const pending = useRef<Draft | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saving = useRef<Promise<void> | null>(null);
+  const [noteStatus, setNoteStatus] = useState('Saved');
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const [paneWidth, setPaneWidth] = useState(46);
+  const [expanded, setExpanded] = useState(false);
+  const [rolloverOpen, setRolloverOpen] = useState(false);
+  const [periodName, setPeriodName] = useState('');
+  const [createParent, setCreateParent] = useState<string | null | undefined>(undefined);
+  const [search, setSearch] = useState('');
+  const [searchItems, setSearchItems] = useState<Item[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<PromptTemplate>({ id: '', name: '', prompt: '' });
+  const frame = useRef<HTMLDivElement>(null);
+  const backgroundPress = useRef<{target: EventTarget; x: number; y: number} | null>(null);
+
+  const accept = useCallback((next: Workspace) => {
+    if ((next.dashboard.snapshotId ?? undefined) !== routeRef.current.snapshotId) return;
+    const prior = latest.current?.dashboard;
+    if (prior && prior.snapshotId === next.dashboard.snapshotId && prior.periodId === next.dashboard.periodId && prior.revision > next.dashboard.revision) return;
+    latest.current = next; setWorkspace(next);
+  }, []);
+  const refresh = useCallback(async () => {
+    const snapshot = routeRef.current.snapshotId;
+    const next = await api<Workspace>(`workspace${snapshot ? `?snapshotId=${encodeURIComponent(snapshot)}` : ''}`);
+    if (snapshot === routeRef.current.snapshotId) accept(next);
+  }, [accept]);
+  const enqueue = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = queue.current.then(operation); queue.current = result.catch(() => undefined); return result;
+  }, []);
+  const command = useCallback((value: ItemCommand) => enqueue(async () => {
+    const current = latest.current;
+    if (!current || (current.dashboard.snapshotId ?? undefined) !== routeRef.current.snapshotId) throw new Error('Wait for the dashboard to load.');
+    try {
+      const next = await api<Workspace>('mutate', { snapshotId: current.dashboard.snapshotId ?? undefined, expectedRevision: current.dashboard.revision, command: value });
+      accept(next); setError('');
+      if (routeRef.current.itemId && !next.dashboard.items.some(item => item.id === routeRef.current.itemId)) {
+        const previous = current.dashboard.items.find(item => item.id === routeRef.current.itemId);
+        const updated = { ...routeRef.current, itemId: previous?.parentId ?? null };
+        if (updated.focusId && !next.dashboard.items.some(item => item.id === updated.focusId)) updated.focusId = null;
+        window.history.replaceState(null, '', routeUrl(updated)); routeRef.current = updated; setRoute(updated);
+      }
+    } catch (cause) { setError(message(cause)); await refresh().catch(() => undefined); throw cause; }
+  }), [enqueue, accept, refresh]);
+
+  const saveNotes = useCallback((): Promise<void> => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    if (saving.current) return saving.current;
+    if (!pending.current) return Promise.resolve();
+    const task = (async () => {
+      while (pending.current) {
+        const value = pending.current;
+        if (value.snapshotId !== routeRef.current.snapshotId) throw new Error('Return to the edited snapshot to save these notes.');
+        setNoteStatus('Saving…');
+        await command({ type: 'update', id: value.itemId, patch: { notes: value.markdown } });
+        if (pending.current === value) { pending.current = null; setDraft(null); setNoteStatus('Saved'); }
+      }
+    })();
+    saving.current = task;
+    void task.catch(() => setNoteStatus('Save error')).finally(() => { saving.current = null; });
+    return task;
+  }, [command]);
+  const changeNotes = useCallback((itemId: string, markdown: string) => {
+    const stored = latest.current?.dashboard.items.find(item => item.id === itemId)?.notes;
+    if (!pending.current && markdown === stored) return;
+    const value = { itemId, markdown, snapshotId: routeRef.current.snapshotId };
+    pending.current = value; setDraft(value); setNoteStatus('Saving…');
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => { void saveNotes().catch(() => undefined); }, 650);
+  }, [saveNotes]);
+  const run = useCallback(async (operation: () => Promise<void>) => {
+    setBusy(true);
+    try { await operation(); setError(''); } catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }, []);
+  const applyRoute = useCallback(async (next: ViewRoute, push: boolean) => {
+    await saveNotes(); await queue.current;
+    const changedSnapshot = next.snapshotId !== routeRef.current.snapshotId;
+    if (push) window.history.pushState(null, '', routeUrl(next));
+    routeRef.current = next; setRoute(next); setSearch(''); setExpanded(false); setHighlightId(next.itemId);
+    if (changedSnapshot) { setCorrecting(false); latest.current = null; setWorkspace(null); await refresh(); }
+  }, [saveNotes, refresh]);
+  const navigate = useCallback((next: ViewRoute) => { void run(() => applyRoute(next, true)); }, [run, applyRoute]);
+  const select = useCallback((id: string) => navigate({ ...routeRef.current, itemId: id }), [navigate]);
+  const focus = useCallback((id: string | null) => navigate({ ...routeRef.current, itemId: null, focusId: id }), [navigate]);
+
+  useEffect(() => {
+    void refresh().catch(cause => setError(message(cause)));
+    const onPop = () => {
+      const next = parseRoute(new URL(window.location.href));
+      void run(async () => { try { await applyRoute(next, false); } catch (cause) { window.history.replaceState(null, '', routeUrl(routeRef.current)); throw cause; } });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') void saveNotes().catch(() => undefined);
+      else void queue.current.then(refresh).catch(cause => setError(message(cause)));
+    };
+    const onPageHide = () => { void saveNotes().catch(() => undefined); };
+    window.addEventListener('popstate', onPop);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    const feed = typeof EventSource === 'undefined' ? null : new EventSource('/api/events');
+    const onChanged = () => { void queue.current.then(refresh).catch(cause => setError(message(cause))); };
+    feed?.addEventListener('changed', onChanged);
+    feed?.addEventListener('ready', onChanged);
+    return () => { window.removeEventListener('popstate', onPop); document.removeEventListener('visibilitychange', onVisibility); window.removeEventListener('pagehide', onPageHide); feed?.close(); if (noteTimer.current) clearTimeout(noteTimer.current); };
+  }, [applyRoute, refresh, run, saveNotes]);
+
+  useEffect(() => {
+    if (!search.trim()) return;
+    if (!route.snapshotId) { setSearchItems(workspace?.dashboard.items ?? []); return; }
+    let active = true;
+    void api<Workspace>('workspace').then(value => { if (active) setSearchItems(value.dashboard.items); }).catch(cause => setError(message(cause)));
+    return () => { active = false; };
+  }, [search, route.snapshotId, workspace]);
+
+  const renderWidget = useCallback((input: WidgetRenderInput) => api<WidgetRenderResult>('widgets/render', input), []);
+  const actWidget = useCallback(async (input: WidgetActionInput) => { await saveNotes(); const result = await api<WidgetActionResult>('widgets/action', input); await refresh(); return result; }, [saveNotes, refresh]);
+  const sendToAgent = useCallback((itemId: string, templateId: string) => api<AgentReply>('agent/link', { itemId, templateId }), []);
+
+  const items = workspace?.dashboard.items ?? [];
+  const selected = items.find(item => item.id === route.itemId);
+  const displayed = selected && draft?.itemId === selected.id && draft.snapshotId === route.snapshotId ? { ...selected, notes: draft.markdown } : selected;
+  const historical = Boolean(route.snapshotId);
+  const readOnly = historical && !correcting;
+  useEffect(() => { setContextItem(null); }, [route.focusId, route.snapshotId, route.view, mode]);
+  const board = route.view === 'kanban';
+  const viewSort = viewSorts[board ? 'kanban' : 'sunburst'];
+  const focusedItem = items.find(item => item.id === route.focusId);
+  const focusAncestors: Item[] = [];
+  let ancestor = items.find(item => item.id === focusedItem?.parentId);
+  while (ancestor) {
+    focusAncestors.unshift(ancestor);
+    ancestor = items.find(item => item.id === ancestor!.parentId);
+  }
+  const childBranches = childrenOf(items, focusedItem?.id ?? null)
+    .filter(item => item.included && items.some(child => child.parentId === item.id));
+  const results = search.trim() ? searchItems.filter(item => item.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).slice(0, 40) : [];
+  const beginCreate = (parentId: string) => {
+    setCreateParent(parentId);
+  };
+  function resize(event: PointerEvent<HTMLDivElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId) || !frame.current) return;
+    const rect = frame.current.getBoundingClientRect(); setPaneWidth(Math.min(82, Math.max(30, (rect.right - event.clientX) / rect.width * 100)));
+  }
+  const setTemplate = (id: string) => setEditingTemplate(workspace?.promptTemplates.find(value => value.id === id) ?? { id: '', name: '', prompt: '' });
+
+  return <main className="lm-workspace" aria-label="Life Manager" data-item-open={Boolean(route.itemId)}>
+    <header className="lm-header">
+      <a className="lm-brand" href="/" onClick={event => { event.preventDefault(); navigate({ itemId: null, focusId: null }); }}><img src="/favicon.svg" alt="" /><h1>Life Manager</h1></a>
+      <div className="lm-search"><input aria-label="Find an Item" type="search" placeholder="Find an Item" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch(''); }} />
+        {search.trim() && <div className="lm-search-results" role="listbox" aria-label="Search results">{results.length ? results.map(item => <button key={item.id} role="option" aria-selected={item.id === route.itemId} onClick={() => navigate({ ...routeRef.current, itemId: item.id, focusId: null })}><span>{item.title}</span><small>{parentPath(searchItems, item)}{!effectiveIncluded(searchItems, item.id) ? ' · hidden' : ''}</small></button>) : <span>No matching Items</span>}</div>}
+      </div>
+      <button className="lm-settings-button" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings"><Icon name="settings" /></button>
+    </header>
+    <div className="lm-period-controls">
+      <div className="lm-mode-picker lm-view-picker" role="group" aria-label="Dashboard view">
+        <button aria-pressed={!board} aria-label="Sunburst" title="Sunburst" onClick={() => navigate({ ...routeRef.current, view: undefined })}><Icon name="sunburst" /><span className="lm-tool-text">Sunburst</span></button>
+        <button aria-pressed={board} aria-label="Kanban" title="Kanban" onClick={() => navigate({ ...routeRef.current, view: 'kanban' })}><Icon name="kanban" /><span className="lm-tool-text">Kanban</span></button>
+      </div>
+      {!board && <><div className="lm-mode-picker" role="group" aria-label="Wheel mode">{(['Navigate', 'Omni', 'Importance', 'Effort', 'Create'] as WheelMode[]).map(value => <button key={value} aria-label={value} title={value} aria-pressed={mode === value} disabled={readOnly && ['Importance', 'Effort', 'Create'].includes(value)} onClick={() => setMode(value)}><Icon name={value} /><span className="lm-tool-text">{value}</span></button>)}</div>
+        <button className="lm-show-all" aria-label="Show all" title={showAll ? 'Hide excluded Items' : 'Show all Items'} aria-pressed={showAll} onClick={() => setShowAll(value => !value)}><Icon name={showAll ? 'eye' : 'eye-off'} /></button></>}
+      {board && <button disabled={!workspace || busy || readOnly} onClick={() => setCreateParent(focusedItem?.id ?? null)}>+ New</button>}
+      <SortControl value={viewSort} onChange={sort => setViewSorts(current => ({...current, [board ? 'kanban' : 'sunburst']: sort}))} />
+      <PeriodControl workspace={workspace} snapshotId={route.snapshotId} busy={busy} onSelect={snapshotId => navigate({ ...routeRef.current, snapshotId })}
+        onPlan={() => void run(async () => { await saveNotes(); await enqueue(async () => accept(await api<Workspace>('plan', { expectedRevision: latest.current!.dashboard.revision }))); })}
+        onNext={() => { setPeriodName(''); setRolloverOpen(true); }} />
+      {historical && <button disabled={busy} onClick={() => void run(async () => { await saveNotes(); setCorrecting(value => !value); })}>{correcting ? 'Finish correction' : 'Correct this snapshot'}</button>}
+      {historical && <span className="lm-snapshot-badge">{correcting ? 'Correcting snapshot' : 'Snapshot'}</span>}
+    </div>
+    {error && <div className="lm-error" role="alert"><span>{error}</span><button onClick={() => void run(async () => { await saveNotes(); await refresh(); })}>Retry</button><button aria-label="Dismiss error" onClick={() => setError('')}>×</button></div>}
+    {!workspace ? <div className="lm-loading" role="status">Loading…</div> : <div className={`lm-main ${expanded ? 'lm-main-expanded' : ''}`} data-item-open={Boolean(route.itemId)} ref={frame} style={{ '--lm-pane-width': `${paneWidth}%` } as CSSProperties}>
+      <section className={`lm-chart-pane${board ? ' lm-chart-pane--board' : ''}`} aria-label="Attention dashboard"
+        onPointerDown={event => {
+          const target = event.target;
+          backgroundPress.current = target instanceof Element && target.matches('.lm-chart-pane, .lm-board-layout, .lm-kanban, .lm-kanban__board, .lm-kanban__column-dropzone, .lm-kanban__cards, .lm-wheel-space, .lm-sunburst, .lm-sunburst__stage, .lm-sunburst__svg, .lm-sunburst__backdrop')
+            ? {target, x: event.clientX, y: event.clientY} : null;
+        }}
+        onClick={event => {
+          const down = backgroundPress.current; backgroundPress.current = null;
+          if (route.itemId && down?.target === event.target && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 4) {
+            navigate({ ...routeRef.current, itemId: null });
+          }
+        }}>
+        {board ? <div className="lm-board-layout">
+          <aside className="lm-board-scope" aria-label="Board focus">
+            <Sunburst sort={viewSort} items={items} selectedId={null} focusId={focusedItem?.id ?? null} showAll={false} compact mode="Navigate"
+              onSelect={focus} onFocus={focus} onAllocate={() => undefined} />
+            <nav aria-label="Focus branch">
+              {focusedItem && <button onClick={() => focus(null)}>↑ Life</button>}
+              {focusAncestors.map(item => <button key={item.id} onClick={() => focus(item.id)}>↑ {item.title}</button>)}
+              <div className="lm-board-current">
+                <button aria-current="true" onClick={() => focus(focusedItem?.id ?? null)}>{focusedItem?.title ?? 'Life'}</button>
+                {focusedItem && <button onClick={() => select(focusedItem.id)}>Open</button>}
+              </div>
+              {childBranches.map(item => <button key={item.id} onClick={() => focus(item.id)}>{item.title}</button>)}
+            </nav>
+          </aside>
+          <Kanban sort={viewSort} items={items} focusId={focusedItem?.id ?? null} selectedId={route.itemId} disabled={readOnly || busy}
+            onSelect={select} onCommand={async value => {
+              if (routeRef.current.snapshotId !== route.snapshotId || latest.current?.dashboard.periodId !== workspace.dashboard.periodId) {
+                const reason = 'The dashboard changed during this move. Check the Item before trying again.';
+                setError(reason); throw new Error(reason);
+              }
+              await command(value);
+            }} />
+        </div> : <>
+
+        <div className="lm-wheel-space"><Sunburst sort={viewSort} items={items} selectedId={highlightId ?? route.itemId} focusId={route.focusId && items.some(item => item.id === route.focusId) ? route.focusId : null} showAll={showAll} mode={mode}
+          onSelect={id => { setHighlightId(id); if (mode === 'Navigate' || mode === 'Omni') select(id); }} onHighlight={setHighlightId} onFocus={focus} onCreate={beginCreate} onContextMenu={(id, x, y) => setContextItem({id, x, y})} disabled={readOnly || busy}
+          onAllocate={(id, share) => void run(() => command({ type: 'allocate', id, share }))} onEffort={(id, effortOverride) => void run(() => command({ type: 'update', id, patch: { effortOverride } }))} /></div>
+        </>}
+      </section>
+      {route.itemId && <><div className="lm-divider" role="separator" aria-label="Resize Item pane" aria-orientation="vertical" tabIndex={0} aria-valuemin={30} aria-valuemax={82} aria-valuenow={paneWidth}
+        onPointerDown={event => event.currentTarget.setPointerCapture(event.pointerId)} onPointerMove={resize} onPointerUp={event => event.currentTarget.releasePointerCapture(event.pointerId)}
+        onKeyDown={event => { if (event.key === 'ArrowLeft') setPaneWidth(value => Math.min(82, value + 3)); if (event.key === 'ArrowRight') setPaneWidth(value => Math.max(30, value - 3)); }} />
+        <section className="lm-detail-pane" aria-label="Item details"><div className="lm-pane-actions"><button onClick={() => navigate({ ...routeRef.current, itemId: null })}>{board ? '← Board' : '← Wheel'}</button><div className="lm-pane-actions__right"><button className="lm-expand" onClick={() => setExpanded(value => !value)}>{expanded ? 'Split view' : 'Expand'}</button></div></div>
+          {displayed ? <Suspense fallback={<div className="lm-loading">Opening Item…</div>}><ItemPanel key={`${route.snapshotId ?? 'current'}:${displayed.id}`} item={displayed} items={items} showAll={showAll} readOnly={readOnly} snapshotId={route.snapshotId} widgets={workspace.widgets}
+            renderWidget={renderWidget} actWidget={actWidget} uploadImage={uploadImage} onOpenItem={select} onCommand={async value => { if (value.type === 'delete' || value.type === 'delete-many') await saveNotes(); await command(value); }} onSelect={select} onNotesChange={changeNotes} notesStatus={noteStatus}
+            promptTemplates={workspace.promptTemplates} onSendToAgent={sendToAgent} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
+          {noteStatus === 'Save error' && <button onClick={() => void run(saveNotes)}>Retry saving notes</button>}
+        </section></>}
+    </div>}
+    {contextItem && items.some(item => item.id === contextItem.id) && <ItemContextMenu item={items.find(item => item.id === contextItem.id)!} x={contextItem.x} y={contextItem.y} disabled={readOnly || busy}
+      onClose={() => setContextItem(null)} onOpen={() => { select(contextItem.id); setContextItem(null); }}
+      onStatus={status => { const id = contextItem.id; setContextItem(null); void run(() => command({type: 'update', id, patch: {status}})); }} />}
+    {rolloverOpen && <Modal error={error} title="New period" onClose={() => !busy && setRolloverOpen(false)}><form onSubmit={event => { event.preventDefault(); void run(async () => { await saveNotes(); await enqueue(async () => accept(await api<Workspace>('rollover', { name: periodName.trim() || undefined, expectedRevision: latest.current!.dashboard.revision }))); setRolloverOpen(false); }); }}>
+      <p>Capture this period’s Closing snapshot and carry the dashboard forward unchanged.</p><label>Name<input autoFocus value={periodName} onChange={event => setPeriodName(event.target.value)} placeholder="Optional" maxLength={200} /></label>
+      <div className="lm-modal-actions"><button type="button" disabled={busy} onClick={() => setRolloverOpen(false)}>Cancel</button><button className="lm-primary" disabled={busy}>Close and roll over</button></div>
+    </form></Modal>}
+    {createParent !== undefined && <Modal error={error} title={`Add to ${items.find(item => item.id === createParent)?.title ?? 'Life'}`} onClose={() => !busy && setCreateParent(undefined)}>
+      <CreateItemForm items={items} parentId={createParent} disabled={busy} onCancel={() => setCreateParent(undefined)}
+        onCreate={value => void run(async () => { await command(value); setCreateParent(undefined); })} />
+    </Modal>}
+    {settingsOpen && <Modal error={error} title="Settings" onClose={() => !busy && setSettingsOpen(false)}>
+      <details className="lm-settings-section">
+        <summary>Prompts</summary>
+        <form onSubmit={event => { event.preventDefault(); void run(async () => {
+          const saved = await api<PromptTemplate>('templates/save', { ...editingTemplate, id: editingTemplate.id || newClientId('prompt') }); setEditingTemplate(saved); await refresh();
+        }); }}><label>Template<select aria-label="Edit template" value={editingTemplate.id} onChange={event => setTemplate(event.target.value)}><option value="">New template</option>{workspace?.promptTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+          <label>Name<input required maxLength={200} value={editingTemplate.name} onChange={event => setEditingTemplate(value => ({ ...value, name: event.target.value }))} /></label>
+          <label>Prompt<textarea required rows={8} value={editingTemplate.prompt} onChange={event => setEditingTemplate(value => ({ ...value, prompt: event.target.value }))} /></label>
+          <div className="lm-placeholders">{['{{item.name}}', '{{item.url}}', '{{item.id}}'].map(value => <button type="button" key={value} onClick={() => setEditingTemplate(template => ({ ...template, prompt: `${template.prompt}${value}` }))}><code>{value}</code></button>)}</div>
+          <div className="lm-modal-actions">{editingTemplate.id && <button type="button" className="lm-danger" disabled={busy} onClick={() => { if (window.confirm(`Delete the “${editingTemplate.name}” prompt template?`)) void run(async () => { await api('templates/delete', { id: editingTemplate.id }); setTemplate(''); await refresh(); }); }}>Delete</button>}<button disabled={busy} className="lm-primary">Save template</button></div>
+        </form>
+      </details>
+      <details className="lm-settings-section">
+        <summary>Sunburst display</summary>
+        <SunburstDisplaySettings />
+      </details>
+    </Modal>}
+  </main>;
+}

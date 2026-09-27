@@ -1,0 +1,254 @@
+# Life Manager
+
+## Purpose
+
+A standalone web application for organising personal pursuits, choosing their intended shares of attention, and preserving enough context to resume and reflect on them. Its foundation is a persistent hierarchy of Items, a current dashboard expressing intention, and historical period snapshots.
+
+This is the canonical product specification for the standalone application. The [glossary](CONTEXT.md) defines its language; the [decision records](docs/adr/) explain consequential trade-offs.
+
+## Problem and personal context
+
+Personal pursuits are spread across task boards, notes, code, bookmarks, browser tabs, installed games, and memory. Returning to a dormant project requires reconstructing its context. Choosing a learning or leisure activity often requires enough setup to discourage starting. Routine obligations need to remain visible alongside more attractive possibilities.
+
+Four topics organise these pursuits:
+
+| Topic | Purpose and characteristic needs |
+| --- | --- |
+| Tend | Routines and obligations. Includes simple actions and extended undertakings such as recovering an account, assembling tax documents, and making sporadic calls. Routine lists are reviewed manually; some tasks are completed and others are irrelevant for that review. |
+| Build | Exploratory making and R&D, driven by novelty and finding better possibilities. Projects often go dormant and need durable notes about progress, blockers, and next steps for easy resumption. |
+| Learn | Deliberate learning requiring effort and memory maintenance, predominantly languages, with active cultural enrichment and other skills. Organisation by language and media type and low-friction access to activities matter. |
+| Enjoy | Mental downtime, including videos, streams, games, and newsletters. Available options and notes about why they are appealing help with choosing an activity. |
+
+These topics reflect the satisfaction sought from an activity. A shared Item model supports all four; specialised activity  interfaces belong in widgets.
+
+Material brought in from other note-taking or task tools should become canonical in Life Manager unless continued external querying is useful. Import preparation is separate from the application platform.
+
+## User stories
+
+1. As the owner, I want obligations visible when I visit the dashboard, so that they remain in mind while I choose among other pursuits.
+2. As the owner, I want tasks, projects, and supporting notes in one hierarchy, so that I can organise each pursuit at the detail it needs.
+3. As the owner, I want to add Items quickly at a chosen location, so that capture does not interrupt planning or doing.
+4. As the owner, I want to hide a dormant project and later restore its selected next steps, so that reprioritising does not require rebuilding context.
+5. As the owner, I want to resize intended attention within a branch, so that I can rebalance local priorities without disturbing its internal plans or other branches.
+6. As the owner, I want checklist-derived and manually assessed effort, so that routine work and open-ended pursuits can share a dashboard.
+7. As the owner, I want overinvestment visible, so that hyperfocus is apparent even when an activity has no meaningful completion target.
+8. As the owner, I want rich project notes and nearby child controls, so that I can record a session and resume it later.
+9. As the owner, I want widgets to offer relevant possibilities and launch external activities, so that starting can be quick without turning every option into a task.
+10. As the owner, I want explicit period rollover and planning checkpoints, so that past intentions and outcomes remain available for reflection.
+11. As the owner, I want to correct historical mistakes locally, so that a correction does not unexpectedly rewrite other periods.
+12. As the owner, I want local agents and external processes to access application operations and historical data, so that automation and reporting can evolve outside the platform.
+
+## Item hierarchy and lifecycle
+
+Items form a single-parent tree organised under Tend, Build, Learn, and Enjoy. Notes may link to Items elsewhere without adding parents or additional allocation paths. Language and media type can be branches such as `Learn → Japanese → Games`.
+
+The shared structured information is title, parent and sibling order, lifecycle status, dashboard inclusion, allocation, effort assessment, and rich notes. This describes product information, not a database schema or a requirement that every field be stored on the Item itself. A general-purpose custom-property system is unnecessary.
+
+Every Item has a manually controlled lifecycle status: **Later, Now, Doing, Blocked, Done, Skip, or Cut**. Skip represents a routine task that is irrelevant for the current review; Cut represents intentional abandonment. Status can be changed during ordinary use. Status and dashboard inclusion are independent.
+
+Completing children never automatically completes their parent. Changing a parent's status never rewrites its children's statuses. Broad topics and ongoing projects can have lifecycle annotations even when overall completion has no useful meaning.
+
+Project journals, blockers, and rough next-step plans may remain in project-level notes rather than becoming child Items. Items can be created quickly at specific locations and moved within the hierarchy.
+
+A red trash icon ends the shared Item controls in the title row and each child row. Deleting an Item removes it and its descendants from the current hierarchy after confirmation. Historical snapshots remain unchanged. Cut retains an abandoned Item in the current hierarchy; deletion does not require a recycle bin.
+
+The Item path ends in an inline editable title. Shared controls in the title row and Children rows appear in this order: Hidden when applicable, inclusion checkbox, inline status picker, allocation percentage × effort percentage, and a red trash icon. Percentages have no visible field titles, retain accessible labels, and display rounded whole numbers without rounding the saved value. A tap focuses text entry; vertical dragging adjusts by roughly 100 percentage points per 300px and shows a vertical-resize cursor. Allocation stays within 0–100%; effort may exceed 100%. Clearing effort restores calculated mode, whose value is gray when unfocused. New Items default to blank automatic allocation; numeric allocations are optional overrides. Clearing or right-clicking an allocation input restores automatic mode: blank allocations divide the remainder after explicit allocations equally, with the calculated percentage shown in gray when unfocused. Child rows use compact spacing and drag reordering without up/down buttons. Child names edit inline on click, save on blur or Enter, and cancel with Escape. A separate Open icon navigates to the child. Item settings contain parent and default-prompt selection. Prompt management is accessed through the global Settings cog rather than a separate Item-level button. Items without children offer a compact Add child action that reveals the entry field. In populated Children lists, selection enables bulk deletion with confirmation of the selected children and descendant count; it affects the current hierarchy only. The Notes toolbar keeps common formatting and Markdown mode visible, with less-used formatting, inserts and widgets under an overflow control.
+
+## Dashboard selection and allocation
+
+The current dashboard selects Items from the persistent hierarchy. Hidden Items retain their current content and context. The ordinary UI presents one current version of each Item; historical versions are reached through historical views.
+
+Size declares intended relative attention, effort, or energy. It is not duration, an objective measurement of work, or project completion. There is no time tracking.
+
+Allocation is local to visible siblings within a parent. An Item's overall share is derived through its ancestors. Resizing a topic changes its footprint while preserving its descendants' relative allocations. It must not require rewriting allocation values across potentially hundreds of descendants in that topic or other topics.
+
+Blank allocations divide the remainder after explicit allocations equally among included automatic siblings: 40%, blank, blank yields 40%/30%/30%. While other included automatic siblings remain, editing a percentage fixes that Item’s explicit share and recalculates the blanks; other explicit shares remain unchanged. An explicit edit cannot exceed the available remainder, and drag controls stop at that limit. A numeric edit or drag leaves automatic mode. When all included siblings have explicit allocations, reallocating an Item proportionally scales all other included siblings, preserving their relative proportions: increasing the first share in 50/30/20 to 60 produces 60/24/16. Existing allocations retain their proportions until edited; snapshots retain both the allocation mode and values. If inclusion or hierarchy changes overfill a mixed group, explicit shares are fitted proportionally to 100% and blanks receive zero.
+
+Allocation handles always begin on the Item's clockwise-most edge, including for the last sibling. Dragging uses virtual angular space that can extend beyond the parent's region: displacement from the initial pointer position adjusts the initial allocation, clockwise to increase and counterclockwise to decrease. The gesture remains attached to the original Item as the layout changes. The actual slice boundaries follow the resulting proportional allocation and need not coincide with the pointer. A live allocation readout provides feedback; no side-dependent handle behaviour is required.
+
+Hiding a child redistributes its share among remaining visible siblings using the allocation rules above, without changing the parent's share. Hiding a parent suppresses its branch. Restoring it recovers the prior descendant selection and relative allocations. Recovering these values from the last dashboard where the parent was visible is an acceptable simplification; never-seen-before children may default to selected with an even share. The representation is open.
+
+Large branches need efficient inclusion and exclusion controls. The child table and a dashboard-wide **Show all** toggle expose hidden Items for browsing and selection. Show all may give hidden Items arbitrary display shares and disable resizing or other allocation-dependent functions. Its temporary geometry must not change real membership, allocations, or effort calculations, and hidden Items should be distinguishable from included Items.
+
+## Effort assessment
+
+Effort is assessed for the period against current, editable intent. **100%** means the intended effort has been spent; values above 100% represent overinvestment. It does not measure overall project completion or establish an absolute quantity of effort.
+
+The shared rules are:
+
+- A leaf defaults to 100% for Done and 0% otherwise, unless manually assessed.
+- A parent defaults to the allocation-weighted average of its visible children's effort assessments.
+- A manual assessment at any level replaces that Item's calculated assessment, without changing descendants. An Item with no visible children can be assessed directly.
+- Effort flows only from child to parent. An overridden parent's assessment contributes upward, without separately counting the children it overrides.
+- In checklist-derived effort, visible Skip and Cut Items retain their denominator weight and earn no completion credit. Hidden Items are excluded. Explicit manual assessments remain available.
+- Resizing an Item does not change its manual effort percentage. Reweighting children does update their parent's calculated assessment.
+
+The Planned snapshot is a historical reference, not an enforced denominator. Hiding unfinished work can legitimately increase checklist-derived effort by reducing intended scope. The application relies on honest reassessment as priorities change.
+
+For example, two equally weighted visible activities at 150% and 50% yield 100% calculated parent effort. A manual assessment of that parent replaces this result without distributing anything back to the activities.
+
+## Main workspace
+
+### Sunburst
+
+The sunburst follows the interaction model in the supplied Goalscape references: [overview](docs/references/goalscape-overview.png), [Item details and radial fill](docs/references/goalscape-item-details.png), and [zoom with overview map](docs/references/goalscape-zoom.png).
+
+- Angular size communicates intended allocation.
+- Colour communicates lifecycle status: Now uses muted orange, Doing blue, Done green, and Skip a neutral tone.
+- Radial fill communicates effort against intent.
+- Above 100%, a second, more intense radial fill layer shows excess effort. The visualisation caps at 190%, preserving contrast between the two layers. Stored effort is not capped at 190%.
+- Clicking or tapping an Item zooms into its branch, with a zoomed-out overview map for orientation and a central zoom-out interaction. Double-click on desktop or long-press on touch opens details.
+
+Mobile wheel interactions use explicit modes:
+
+| Mode | Interaction |
+| --- | --- |
+| Navigate | Tap a slice to focus its branch; long-press to open its full-screen Item view. |
+| Importance | Drag directly on a slice or its clockwise-edge handle to adjust allocation, without a preliminary selection tap or opening its page. |
+| Effort | Drag directly on a slice or its handle to adjust effort radially, without a preliminary selection tap or opening its page. |
+| Create | Show a phantom “+” child for every Item represented in the wheel view; tapping it opens a naming form for a new child under the associated Item. |
+
+Desktop mouse use defaults to **Omni**: click zooms, double-click opens an Item, and small importance, effort, and add-child controls remain visible on the represented Items. Zooming briefly waits to distinguish a double-click; dragging a handle highlights the Item without opening its pane or moving the wheel. Importance controls remain unavailable in Show all, and historical read-only views expose navigation without editing controls. Navigate combines opening and zooming under the pointer icon: tap zooms and a stationary long-press opens on touch; click zooms and double-click opens on desktop. Touch defaults to Navigate, and selectable Omni uses these same gestures. Enter zooms and Shift+Enter opens for keyboard access. Movement or cancellation cancels a pending long-press. Importance, Effort and Create remain separate modes. A right-click menu on a slice offers direct lifecycle status choices and Open details; ordinary click keeps its navigation behavior.
+
+Omni shows no dashed allocation or effort guides, which would obscure titles. In Importance and Effort modes, mouse hover reveals the relevant handle. Visible drag handles are about 25% smaller than the original controls, while direct slice dragging avoids requiring a small target. A tap without a drag does not change allocation or create an effort override.
+
+The wheel uses the available window space, with no reserved Life circle in the overview; focused branches retain a central Back control. Compact Topic sectors leave room for wider outer layers, and leaf sectors extend through unused outer space. Titles default to outward-aligned radial text, with short overview Topic names treated compactly. The global Settings cog groups Prompts and sunburst display controls. Display controls cover radial titles, preferred/minimum font sizes, label and outer-edge padding, truncation threshold, visible depth, and relative layer widths. Unsaved phone defaults use a 5px minimum font and 1px label and outer-edge padding; desktop defaults and saved preferences remain unchanged. Numeric fields allow an empty draft while typing and commit on blur or Enter. Both Settings sections start collapsed. Settings persist in browser local storage, affect presentation only, and can be reset. Small slices still require zooming to read fully.
+
+Effort dragging is radial, matching the fill direction: movement outward increases the starting assessment and movement inward decreases it. It uses displacement from the drag's initial position rather than angular movement. The assessment changes continuously through 100% and can exceed the 190% visual cap, with a live numeric readout. Dragging creates a manual assessment; the control for restoring calculation from children remains available.
+
+Phantom children are temporary creation controls, not Items: they have no real allocation, effort, or historical state. Creating a child is distinct from reordering existing Items. The active mode is explicit, with a straightforward return to Navigate mode; numeric allocation and effort controls remain available for precise editing.
+
+The creation form identifies the parent and focuses title entry. The pop-up reuses the compact inclusion, status, allocation × effort controls. Status defaults to Later, inclusion to enabled, and allocation and effort to blank automatic values; neither percentage is required. Submitting appends the child after existing siblings with any chosen overrides. It returns to the wheel in Create mode for further additions. Cancelling leaves no empty Item; opening the new Item's full notes is a separate action.
+
+The current dashboard also supports Show all as described above. Exact colours, styling, and small-segment presentation remain design choices for prototyping.
+
+Opening the application's home URL shows the current period's full wheel. Direct Item links open their target; refreshing and browser Back preserve the view represented by the URL. A separate last-session restoration mechanism is unnecessary.
+
+### Kanban execution view
+
+The workspace switches between the sunburst planning view and a Kanban execution view. A compact sunburst navigates the board to a branch. Its navigation lists Life and every ancestor as upward links, the clickable current Item with an adjacent Open action, and included immediate children that themselves have children. Leaf children are omitted from this branch navigation. One toolbar combines the view switch, wheel modes, Show all and period controls, with the view switch at the far left. View and mode switches use icons on phones, and Show all uses an eye toggle. A compact period selector shows the current phase. Its popup starts with Planning » Active » Next; Active captures planning and Next opens rollover. Kanban’s + New toolbar action opens the shared creation popup at the current focus, including top-level creation from Life. Clicking empty main-view background dismisses Item details in either view, while clicks on Items and controls retain their own actions. The wheel has no surrounding panel frame or legends. The board shows effectively included descendants of that branch only when they have no included immediate children; it excludes the focused Item itself. Parents with included children remain available through navigation and parent-path headings, without a duplicate card. An included parent whose children are all hidden, or which has no children yet, remains a card. This presentation rule also applies to Topics at the overview and does not change inclusion, allocation or effort. A hidden ancestor suppresses its branch. The board view and focus participate in URL navigation, refresh and browser Back, including when opening Item details.
+
+Columns are ordered **Now, Doing, Blocked, Done, Later, Skip, Cut**. They group relevance rather than enforce a required sequence. Cards in each column are grouped by immediate parent, with a shared parent-path heading and a subtle connecting rail. Compact column headers, quiet tinted backgrounds and plain cards follow the supplied Notion reference.
+
+Cards show only their title, without percentages, status menus, focus buttons or drag grips. Dragging can begin anywhere on a card; after a small movement threshold, a matching floating card follows the pointer while a faint placeholder retains its original space. A click or tap without dragging opens the Item. A drop on a column or group background changes status without reordering. A drop explicitly before or after a sibling card in a matching parent group also reorders within that parent, whether or not status changes. Drops on unrelated groups never reparent an Item or imply sibling order. Reordering includes the full sibling list, retaining the relative order of siblings hidden from the board or in other columns. There is no default importance sort.
+
+Card height and font size vary with the Item's share relative to the focused branch, bounded for readability. An initial height formula near 32px plus share × 320px is a starting point for visual tuning, not an exact requirement. Shares still follow the full allocation hierarchy, including parents omitted from the board. Titles may grow a card beyond its nominal size to avoid hiding content. Status selection remains available in Item details, which retain the existing responsive pane/full-screen behaviour.
+
+### Item details and child table
+
+A resizable detail pane presents an Item's notes, widgets, and immediate children on wide layouts. It can expand to give editing or widget interaction most of the available space. On narrow layouts, including intermediate widths where a useful side-by-side arrangement does not fit, opening an Item replaces the wheel with a full-screen Item view. The wheel must not remain stacked above it occupying most of the viewport.
+
+Within the Item view, Children appear first and Notes follow vertically in one scrolling view, without separate Children/Notes tabs. Keep section headers compact and avoid UI subtitles or explanatory taglines. Section framing should consume little space.
+
+Navigating to a child from the Item view opens that child in the same full-screen space. These view changes participate in browser history: Back returns to the previously viewed Item or wheel, including its prior focus. Use native browser navigation rather than implementing a competing edge-swipe gesture. The sunburst does not support reordering; sibling reordering belongs in the list/table view.
+
+Notes use a Notion-like, Markdown-esque rich editor supporting text, images, links, and tables. Notes can contain links to other Items and embedded interactive widgets.
+
+Pasted or dropped images become application-managed attachments stored in a directory alongside the database and referenced through Markdown links. They do not depend on the original file location. Images referenced by historical snapshots remain available; automatic attachment cleanup is outside the initial scope.
+
+Widgets are configurable Markdown extensions embedded within Item notes. A widget can present a virtual view, such as a live directory listing, without making its displayed entries child Items. The extension representation should accommodate nested parameters for future widgets; the exact syntax and editor controls remain design decisions.
+
+Use MDXEditor for visual and source editing, with Markdown-style note storage. Extension syntax remains to be selected using the editor's existing facilities. The agreed rich-note capabilities remain required.
+
+The notes UI provides both visual editing and direct editing of the underlying Markdown text. Source mode supports configuring extensions and repairing malformed or broken blocks; it is a required part of the editing experience.
+
+Unsupported or malformed extension content may use the chosen library's conventional fallback presentation. The underlying source remains available for repair; no particular per-block error UI or automatic repair mechanism is required.
+
+Notes use a short autosave debounce. The Notes heading shows Saving or a save error while applicable, but hides the idle Saved indicator. The agent prompt link and selector sit at the right of this heading, after the save indicator. Saving on navigation or browser backgrounding is best effort. Offline save queues, draft recovery systems, and guaranteed background delivery are outside scope; revisit only if actual use exposes a problem.
+
+The immediate-child table should be compact and carefully laid out, with drag-and-drop sibling reordering, convenient lifecycle dropdowns, and a checkbox for inclusion on the current dashboard. Allocation and effort are also directly editable in the table. A narrow-screen row can use two compact lines to avoid forcing horizontal scrolling. It includes hidden children. The table and sunburst operate on the same Items and dashboard state.
+
+Global search matches current Item titles, including hidden Items, and displays the parent path for context. Full-note search and historical search are outside the initial scope.
+
+## Periods and historical views
+
+Periods advance explicitly through rollover, not through a recurrence schedule. A period has these checkpoints:
+
+| Checkpoint | Capture |
+| --- | --- |
+| Opening | The new dashboard as copied from the preceding dashboard at rollover. |
+| Planned | The state when “Planning is finished” is clicked, if that happens. |
+| Closing | The final state when the dashboard is closed through rollover. |
+
+Rollover captures Closing for the old period, copies the dashboard unchanged, and captures Opening for the new period. Selection, allocations, statuses, and effort assessments carry forward. Clearing assessments, resetting routine Items to Later, or hiding completed one-offs are explicit planning actions, supported by convenient bulk actions or widget buttons. Clearing a manual override returns to calculated/default behaviour; routine statuses can be reset separately.
+
+A period can close without a Planned snapshot. No retroactive planning step or fabricated checkpoint is required. The current dashboard remains editable after planning finishes.
+
+Historical views retain the checkpoint's Item titles, hierarchy, notes, allocation, effort assessments, lifecycle statuses, and visibility. Later changes to current Items must not silently change historical views. This is a behavioural requirement; copying, revision references, commit references, and other storage methods remain unspecified.
+
+Historical corrections are for fixing mistakes. A correction affects only its selected snapshot. Later snapshots and the current dashboard remain unchanged, including content originally inherited from the corrected snapshot. They can be corrected separately. A user-facing branching-history model is unnecessary.
+
+**Low-priority preference:** historical recovery of hidden Items' content and state is desirable, but may be omitted if it fits the chosen data representation poorly. Preservation of the displayed dashboard's historical content remains required. Transient external widget listings need not be archived.
+
+## Deployment and device access
+
+The application server and database run on a local host. Desktop and mobile browsers can access that server through a trusted network while it is running. Remote hosting and host-runner design are deferred and impose no current architecture or deployment requirements.
+
+The iPhone-capable version must support the full application, including sunburst allocation, hierarchy and selection controls, rich notes, period operations, and widgets. Touch interactions may differ from desktop gestures while providing the same capabilities. A reduced mobile feature set is not the target.
+
+This is an ordinary online web application. It need not work when its server is asleep or unreachable. PWA functionality, offline editing, and client-database synchronisation are outside scope.
+
+Server-side actions can run directly on the application server; a remote action runner is outside the current scope. Opening something on the viewing device and triggering an action on the Mac remain distinct operations.
+
+## Extensibility
+
+### Send an Item to an agent
+
+Sending an Item to Codex with a reusable prompt is a core application action. Dispatched work must be accessible and managed in the installed ChatGPT Codex GUI; a separate CLI session owned by the Life Manager server does not satisfy this requirement. A dropdown offers a small set of saved prompt templates, preselected using the nearest ancestor with a configured default prompt. The prompt is an automatically prepared inline link: its text opens Codex, while its chevron or surrounding control opens the template picker. The user can choose another template for the invocation. Template interpolation always refers to the selected Item, not the ancestor supplying the default, and supports its name, URL and ID so the agent can inspect and act on its context.
+
+Templates and ancestor default references are persistent configuration. The selected storage, placeholder syntax and Codex adapter are described in [README.md](README.md#codex-dispatch). Dispatch does not automatically change lifecycle status or effort; any requested Item operations belong to the prompt's task. A language-game template can ask Codex to follow the launch-steam-game skill and close its task after success. Task-closing behaviour is template-specific.
+
+Every device uses the same browser-followed `codex://` link containing the prepared prompt. The user opens it on the viewing device and submits it in Codex. No persistent GUI dispatcher, server queue, device detection or server-side application launch is part of this action. New-task host selection and iPhone link handling depend on Codex; neither is assumed to work.
+
+The dispatched agent needs access to the referenced Item. Mac-specific actions depend on the Mac being available. This action does not require a separate activity plugin or a general-purpose custom-property system.
+
+### Widgets and shared operations
+
+Widgets can render arbitrary HTML or the rich Markdown-like format used by notes, with links and buttons invoking server-side actions. These actions can create or update Items, change statuses, run command-line commands, and open external applications on the appropriate host.
+
+Widgets and local agents share a callable interface for ordinary application operations, including reading Items, editing notes and statuses, arranging the hierarchy, changing allocations and selection, editing effort assessments, and managing period checkpoints. API shape and command formats remain open.
+
+Page-specific code can be bespoke and tightly coupled. Editing that code and restarting the application is acceptable. No dynamic plugin installation or hosted agent system is required.
+
+A live feed can exist inside an Item page without creating Items for its entries or adding them to the dashboard. A widget may offer direct use of an entry or an explicit action that creates a persistent Item. These behaviours belong to individual widgets, whose capabilities are deferred.
+
+All dynamically created Items default to dashboard inclusion enabled. Lifecycle status remains independent; the initial local-directory and Twitch widgets create children of their owning Item with status Later.
+
+The initial activity widgets are grouped live followed Twitch channels and local video listings, specified in [PLUGINS-PRD.md](PLUGINS-PRD.md). Names come directly from source fields: channel name for Twitch and file stem for videos. Link-title cleanup is unnecessary; newsletters are excluded from the first version. Launching learning environments can use the core agent action.
+
+Video playback, serving video files, and hosting an agent that arranges windows belong to external applications. The platform supplies the means to invoke them.
+
+## Data access and scope boundaries
+
+Snapshot data must be accessible to external processes for later analysis. Specific reports, formulas, and reporting UI are deferred until real usage data exists. Reports can be produced and viewed entirely outside the application.
+
+Built-in importers and migration-specific APIs are excluded. One-off external scripts may use ordinary application operations or write directly to the database during offline migration. SQLite is the selected storage; the schema is described in [README.md](README.md#storage). There is no requirement for a general interchange format or compatibility framework across alternative implementations. If a later migration is needed, it can be planned against the actual databases and content.
+
+Other excluded requirements are time tracking, built-in reminders or recurrence, automatic status propagation, multi-parent Items, and a general-purpose custom-property system. Regular dashboard visits provide the reminder by exposing looming obligations alongside other pursuits.
+
+## Delivery workstreams
+
+Data inventory and activity-plugin scoping proceed together: reviewing sources should also establish the intended workflows. This workstream identifies the material to retain and its organisation, prepares a single database seed file when the inputs and schema are settled, and produces the separate plugins PRD.
+
+The application workstream designs the standalone web application and assesses reuse of the existing BB implementation. The core application is tried before implementing the activity plugins and polishing the UI. Alternative platform implementations are deferred unless experience gives a reason to switch.
+
+## Behavioural evaluation
+
+Tool evaluation and prototypes should exercise the following scenarios. They are product checks, not a prescribed automated testing architecture.
+
+- Record a complex Tend undertaking's notes and intermittent next steps, then resume it without reconstructing its context.
+- Hide a Build project with a selected subset of children and later recover that selection without manually rebuilding it.
+- Resize a top-level topic while preserving descendant relative allocations; reweight visible children and see calculated parent effort change correctly.
+- Enter an effort override above 100% at a parent and observe it flow upward without changing descendants; retain a value above the sunburst's visual cap.
+- Show hidden Items temporarily without changing selection or calculated effort, then edit inclusion through the child table.
+- Roll over unchanged, perform explicit planning resets, capture Planned when desired, and later inspect all available checkpoints with their historical notes and hierarchy.
+- Correct one historical snapshot and verify that later snapshots and current content are unaffected.
+- Invoke a local server-side action from a widget or agent and access historical data externally, without requiring the application to host the external activity or its report.
+
+The dashboard toolbar provides a temporary sort override for each view: Order, Status, Importance or Effort. Order restores the saved sibling sequence. Status follows the board’s lifecycle order; importance uses effective allocation including automatic shares, and effort uses calculated/overridden effort percentage, both highest first. Sorting preserves hierarchy and Kanban parent groups, with saved order breaking ties. Kanban columns retain their lifecycle grouping. Overrides are session-local presentation choices and do not alter Item orders or snapshots. While a Kanban override is active, drops may change status but never reorder siblings or display insertion markers; Order restores manual reordering. The Children table retains its saved order.
+
+## Current phase
+
+- Phase: source anonymisation complete; demo and documentation are generic, and the private source collection and one-off tools are archived outside the project.
+- Next action: extract the sanitised tracked files into the standalone repository with fresh Git history.
+- Publication boundary: exclude existing Git history and all ignored runtime data, credentials, dependencies and private archives. The running workspace remains separate from the distributable source.

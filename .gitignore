@@ -1,0 +1,8 @@
+dist/
+node_modules/
+.data/
+.test-data/
+.demo-data/
+.import-data*/
+.data-before-import-*/
+*.log
