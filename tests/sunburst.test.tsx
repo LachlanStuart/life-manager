@@ -208,7 +208,7 @@ const pointAt = (degrees: number, radius = 300) => ({
 describe('sunburst interactions', () => {
   it.each(['Navigate', 'Omni'] as const)('%s zooms on click, opens on double-click, and cancels pending zoom on mode change', mode => {
     vi.useFakeTimers();
-    const items = [item('a1', null, 1), item('a2', null, 1)];
+    const items = [item('a1', null, 1), item('a2', null, 1), item('a3', 'a1', 1)];
     const view = mount(items, {mode});
     const slice = screen.getByRole('treeitem', {name: /Item a1/});
     fireEvent.click(slice, {detail: 1});
@@ -231,8 +231,8 @@ describe('sunburst interactions', () => {
 
   it.each(['Navigate', 'Omni'] as const)('%s zooms immediately on tap and opens only on a stationary long press', mode => {
     vi.useFakeTimers();
-    const view = mount([item('a1', null, 1)], {mode});
-    const slice = screen.getByRole('treeitem');
+    const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], {mode});
+    const slice = screen.getByRole('treeitem', {name: /Item a1/});
     const point = {pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 200};
     fireEvent.pointerDown(slice, point); vi.advanceTimersByTime(100);
     fireEvent.pointerUp(view.svg, point); fireEvent.click(slice, {detail: 1});
@@ -294,7 +294,7 @@ describe('sunburst interactions', () => {
     expect(label?.querySelector('tspan')?.textContent).toMatch(/^Read.*…$/);
     expect(label?.parentElement?.getAttribute('clip-path')).toMatch(/^url\(#/);
     fireEvent.click(slice);
-    expect(view.onFocus).toHaveBeenCalledWith('a1');
+    expect(view.onSelect).toHaveBeenCalledWith('a1');
   });
 
   it('uses the overview centre for Items and reserves the Back control for a focused branch', () => {
@@ -307,14 +307,17 @@ describe('sunburst interactions', () => {
   });
 
   it('focuses directly through keyboard activation in Navigate mode', () => {
-    const view = mount([item('a1', null, 1)], { mode: 'Navigate' });
-    fireEvent.click(screen.getByRole('treeitem', { name: /Item a1/ }));
+    const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], { mode: 'Navigate' });
+    fireEvent.keyDown(screen.getByRole('treeitem', { name: /Item a1/ }), {key: 'Enter'});
     expect(view.onFocus).toHaveBeenCalledWith('a1');
     expect(view.onSelect).not.toHaveBeenCalled();
   });
 
-  it('zooms out one level on a center tap and to root from the minimap', () => {
+  it('opens the focused Item from the center and uses separate controls to zoom out', () => {
     const view = mount([item('a1', null, 1), item('a2', 'a1', 1), item('a3', 'a2', 1)], { focusId: 'a2' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Item a2 details' }));
+    expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a2');
+    expect(view.onFocus).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Return to Item a1' }));
     expect(view.onFocus).toHaveBeenLastCalledWith('a1');
     fireEvent.click(screen.getByRole('button', { name: 'Return to full overview' }));
@@ -509,7 +512,8 @@ describe('sunburst interactions', () => {
     expect(view.onCreate).not.toHaveBeenCalled();
     expect(view.onEffort).not.toHaveBeenCalled();
     expect(view.onAllocate).not.toHaveBeenCalled();
-    expect(view.onFocus).toHaveBeenCalledWith('a1');
+    expect(view.onSelect).toHaveBeenCalledWith('a1');
+    expect(view.onFocus).not.toHaveBeenCalled();
   });
 });
 
@@ -533,4 +537,53 @@ it('opens the status menu without a pending Omni click changing focus', () => {
   expect(onSelect).not.toHaveBeenCalled();
   fireEvent.keyDown(slice, {key: 'F10', shiftKey: true});
   expect(onContextMenu).toHaveBeenCalledTimes(2);
+});
+
+
+it.each(['Navigate', 'Omni'] as const)('%s opens leaves and all-hidden branches on tap without changing focus', mode => {
+  const items = [item('a1', null, 1), item('a2', null, 1), item('a3', 'a2', 1, false)];
+  const view = mount(items, {mode});
+  for (const id of ['a1', 'a2']) {
+    const slice = screen.getByRole('treeitem', {name: new RegExp(`Item ${id}`)});
+    fireEvent.pointerDown(slice, {pointerType: 'touch', pointerId: 1});
+    fireEvent.pointerUp(view.svg, {pointerType: 'touch', pointerId: 1});
+    fireEvent.click(slice, {detail: 1});
+    expect(view.onSelect).toHaveBeenLastCalledWith(id);
+  }
+  expect(view.onFocus).not.toHaveBeenCalled();
+  view.rerender(<Sunburst items={items} selectedId={null} focusId={null} showAll mode={mode}
+    onSelect={view.onSelect} onFocus={view.onFocus} onAllocate={view.onAllocate} />);
+  fireEvent.keyDown(screen.getByRole('treeitem', {name: /Item a2/}), {key: 'Enter'});
+  expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a2');
+});
+
+it('opens leaves and focuses branches in the compact board navigator', () => {
+  const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], {compact: true});
+  fireEvent.click(screen.getByRole('treeitem', {name: /Item a1/}));
+  fireEvent.click(screen.getByRole('treeitem', {name: /Item a2/}));
+  expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
+  expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a2');
+});
+
+it('replaces an emptied branch with actions without navigating or inventing hidden children', () => {
+  const items = [item('a1', null, 1), item('a2', 'a1', 1)];
+  const onShowHidden = vi.fn();
+  const view = mount(items, {focusId: 'a1', onShowHidden});
+  const renderItems = (next: Item[], disabled = false) => view.rerender(<Sunburst items={next} selectedId={null} focusId="a1" showAll={false}
+    onSelect={view.onSelect} onFocus={view.onFocus} onAllocate={view.onAllocate} onCreate={view.onCreate} onShowHidden={onShowHidden} disabled={disabled} />);
+  renderItems([items[0]!, {...items[1]!, included: false}]);
+  expect(screen.queryByRole('tree')).toBeNull();
+  expect(view.onFocus).not.toHaveBeenCalled();
+  expect(view.onSelect).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', {name: 'Show hidden children'}));
+  expect(onShowHidden).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', {name: 'Open details'}));
+  expect(view.onSelect).toHaveBeenCalledWith('a1');
+  fireEvent.click(screen.getByRole('button', {name: '+ Add child'}));
+  expect(view.onCreate).toHaveBeenCalledWith('a1');
+  renderItems([items[0]!], true);
+  expect(screen.queryByRole('button', {name: 'Show hidden children'})).toBeNull();
+  expect(screen.queryByRole('button', {name: '+ Add child'})).toBeNull();
+  expect(screen.getByRole('button', {name: 'Open details'})).toBeTruthy();
+  expect(screen.getByText('No children yet')).toBeTruthy();
 });

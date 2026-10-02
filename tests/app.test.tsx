@@ -8,7 +8,7 @@ import type { ItemPanelProps, SunburstProps } from '../ui/contracts';
 import { LifeManagerPage } from '../app';
 import { parseRoute, routeUrl } from '../ui/navigation';
 
-vi.mock('../ui/Sunburst', () => ({ Sunburst: (props: SunburstProps) => <div>{props.items.map(item => <button key={item.id} onClick={() => props.onSelect(item.id)} onContextMenu={event => props.onContextMenu?.(item.id, event.clientX, event.clientY)}>Select {item.title}</button>)}<button onClick={() => props.onFocus('build')}>Focus Build</button><span>Mode {props.mode}</span></div> }));
+vi.mock('../ui/Sunburst', () => ({ Sunburst: (props: SunburstProps) => <div>{props.items.map(item => <button key={item.id} onClick={() => props.mode === 'Navigate' || props.mode === 'Omni' ? props.onSelect(item.id) : props.onHighlight?.(item.id)} onContextMenu={event => props.onContextMenu?.(item.id, event.clientX, event.clientY)}>Select {item.title}</button>)}<button onClick={() => props.onFocus('build')}>Focus Build</button><span>Mode {props.mode}</span></div> }));
 vi.mock('../ui/ItemPanel', () => ({ ItemPanel: (props: ItemPanelProps) => <div><h2>{props.item.title} details</h2><textarea aria-label="Notes" readOnly={props.readOnly} value={props.item.notes} onChange={event => props.onNotesChange(props.item.id, event.target.value)} /><button disabled={props.readOnly} onClick={() => void props.onCommand({ type: 'update', id: props.item.id, patch: { status: 'Done' } })}>Complete Item</button><button onClick={() => props.onSelect('build')}>Child Build</button>{!props.snapshotId && <button onClick={() => void props.onCommand({ type: 'delete', id: props.item.id })}>Delete</button>}</div> }));
 function fixture(): Workspace {
   return { dashboard: { periodId: 'period-1', snapshotId: null, revision: 0, items: [
@@ -232,9 +232,9 @@ it.each(['', '?view=kanban'])('does not dismiss details for card clicks or backg
   navigation.mockRestore();
 });
 
-it.each([null, 'tend'])('creates Kanban Items under the current scope (%s)', async focus => {
-  const {screen, current} = setup(`/?view=kanban${focus ? '&focus=' + focus : ''}`);
-  await screen.findByLabelText('Kanban board');
+it.each([['kanban', null], ['kanban', 'tend'], ['sunburst', null], ['sunburst', 'tend']])('creates %s Items under the current scope (%s)', async (view, focus) => {
+  const {screen, current} = setup(`/?${view === 'kanban' ? 'view=kanban&' : ''}${focus ? 'focus=' + focus : ''}`);
+  await screen.findByText('Select Tend');
   fireEvent.click(screen.getByRole('button', {name: '+ New'}));
   await screen.findByRole('dialog', {name: focus ? 'Add to Tend' : 'Add to Life'});
   fireEvent.change(screen.getByLabelText('Title'), {target: {value: 'New board task'}});
@@ -242,8 +242,8 @@ it.each([null, 'tend'])('creates Kanban Items under the current scope (%s)', asy
   await waitFor(() => expect(current.dashboard.items.find(item => item.title === 'New board task')).toMatchObject({parentId: focus, allocationAuto: true}));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
-it('disables Kanban creation in historical snapshots', async () => {
-  const {screen} = setup('/?view=kanban&snapshot=opening-1'); await screen.findByLabelText('Kanban board');
+it.each(['kanban', 'sunburst'])('disables %s creation in historical snapshots', async view => {
+  const {screen} = setup(`/?${view === 'kanban' ? 'view=kanban&' : ''}snapshot=opening-1`); await screen.findByText('Select Tend');
   expect((screen.getByRole('button', {name: '+ New'}) as HTMLButtonElement).disabled).toBe(true);
 });
 

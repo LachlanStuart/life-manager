@@ -212,7 +212,7 @@ export function LifeManagerPage() {
       </div>
       {!board && <><div className="lm-mode-picker" role="group" aria-label="Wheel mode">{(['Navigate', 'Omni', 'Importance', 'Effort', 'Create'] as WheelMode[]).map(value => <button key={value} aria-label={value} title={value} aria-pressed={mode === value} disabled={readOnly && ['Importance', 'Effort', 'Create'].includes(value)} onClick={() => setMode(value)}><Icon name={value} /><span className="lm-tool-text">{value}</span></button>)}</div>
         <button className="lm-show-all" aria-label="Show all" title={showAll ? 'Hide excluded Items' : 'Show all Items'} aria-pressed={showAll} onClick={() => setShowAll(value => !value)}><Icon name={showAll ? 'eye' : 'eye-off'} /></button></>}
-      {board && <button disabled={!workspace || busy || readOnly} onClick={() => setCreateParent(focusedItem?.id ?? null)}>+ New</button>}
+      <button disabled={!workspace || busy || readOnly} onClick={() => setCreateParent(focusedItem?.id ?? null)}>+ New</button>
       <SortControl value={viewSort} onChange={sort => setViewSorts(current => ({...current, [board ? 'kanban' : 'sunburst']: sort}))} />
       <PeriodControl workspace={workspace} snapshotId={route.snapshotId} busy={busy} onSelect={snapshotId => navigate({ ...routeRef.current, snapshotId })}
         onPlan={() => void run(async () => { await saveNotes(); await enqueue(async () => accept(await api<Workspace>('plan', { expectedRevision: latest.current!.dashboard.revision }))); })}
@@ -237,7 +237,7 @@ export function LifeManagerPage() {
         {board ? <div className="lm-board-layout">
           <aside className="lm-board-scope" aria-label="Board focus">
             <Sunburst sort={viewSort} items={items} selectedId={null} focusId={focusedItem?.id ?? null} showAll={false} compact mode="Navigate"
-              onSelect={focus} onFocus={focus} onAllocate={() => undefined} />
+              onSelect={select} onFocus={focus} onAllocate={() => undefined} />
             <nav aria-label="Focus branch">
               {focusedItem && <button onClick={() => focus(null)}>↑ Life</button>}
               {focusAncestors.map(item => <button key={item.id} onClick={() => focus(item.id)}>↑ {item.title}</button>)}
@@ -259,7 +259,7 @@ export function LifeManagerPage() {
         </div> : <>
 
         <div className="lm-wheel-space"><Sunburst sort={viewSort} items={items} selectedId={highlightId ?? route.itemId} focusId={route.focusId && items.some(item => item.id === route.focusId) ? route.focusId : null} showAll={showAll} mode={mode}
-          onSelect={id => { setHighlightId(id); if (mode === 'Navigate' || mode === 'Omni') select(id); }} onHighlight={setHighlightId} onFocus={focus} onCreate={beginCreate} onContextMenu={(id, x, y) => setContextItem({id, x, y})} disabled={readOnly || busy}
+          onSelect={id => { setHighlightId(id); select(id); }} onHighlight={setHighlightId} onFocus={focus} onShowHidden={() => setShowAll(true)} onCreate={beginCreate} onContextMenu={(id, x, y) => setContextItem({id, x, y})} disabled={readOnly || busy}
           onAllocate={(id, share) => void run(() => command({ type: 'allocate', id, share }))} onEffort={(id, effortOverride) => void run(() => command({ type: 'update', id, patch: { effortOverride } }))} /></div>
         </>}
       </section>

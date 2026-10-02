@@ -38,6 +38,7 @@ export interface SunburstSegment {
   followingShare: number;
   effort: number;
   hasDeeperChildren: boolean;
+  hasVisibleChildren: boolean;
   siblingCount: number;
   isLastSibling: boolean;
 }
@@ -272,6 +273,7 @@ export function buildSunburstLayout(
       precedingShare: entry.precedingShare,
       followingShare: entry.followingShare,
       effort: options.efforts[entry.item.id] ?? 0,
+      hasVisibleChildren: children.length > 0,
       hasDeeperChildren: entry.depth + 1 >= maxDepth && children.length > 0,
       siblingCount: entry.siblingCount,
       isLastSibling: entry.isLastSibling,
@@ -350,7 +352,7 @@ function pointerPosition(event: { clientX: number; clientY: number }, svg: SVGSV
 
 export function Sunburst({
   items, selectedId, focusId, showAll, onSelect, onHighlight, onFocus, onAllocate,
-  disabled = false, mode = 'Navigate', sort = 'Order', onEffort, onCreate, onContextMenu, compact = false,
+  disabled = false, mode = 'Navigate', sort = 'Order', onEffort, onCreate, onContextMenu, onShowHidden, compact = false,
 }: SunburstProps) {
   const clipPrefix = useId().replace(/:/g, '');
   const svgRef = useRef<SVGSVGElement>(null);
@@ -427,9 +429,12 @@ export function Sunburst({
   const zoomOut = () => { if (focus) onFocus(focus.parentId); };
   const activate = (id: string) => {
     if (suppressClick.current) { suppressClick.current = false; return; }
-    if (mode === 'Navigate' || mode === 'Omni' || disabled) onFocus(id);
+    if (mode === 'Navigate' || mode === 'Omni' || disabled) {
+      if (layout.find(segment => segment.id === id)?.hasVisibleChildren) onFocus(id);
+      else onSelect(id);
+    }
     else if (mode === 'Create') { if (!disabled) onCreate?.(id); }
-    else onSelect(id);
+    else onHighlight?.(id);
   };
   const handleKey = (event: KeyboardEvent<SVGElement>, segment: SunburstSegment, kind = mode) => {
     if (onContextMenu && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
@@ -528,10 +533,13 @@ export function Sunburst({
 
   return (
     <section className="lm-sunburst" aria-label="Intended attention sunburst">
-      <div className="lm-sunburst__stage">
+      {focus && !compact && <div className="lm-sunburst__navigation">
+        <button aria-label={parent ? `Return to ${parent.title}` : 'Return to overview'} onClick={zoomOut}>↑ {parent?.title ?? 'Life'}</button>
+      </div>}
+      <div className={`lm-sunburst__stage${layout.length === 0 ? ' lm-sunburst__stage--empty' : ''}`}>
         <svg ref={svgRef}
           className={`lm-sunburst__svg${omni ? ' lm-sunburst__svg--omni' : ''}${drag ? ` lm-sunburst__svg--dragging lm-sunburst__svg--${drag.kind.toLowerCase()}` : ''}`}
-          viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} role="tree"
+          viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} role="tree" aria-hidden={layout.length === 0 || undefined}
           aria-label={focus ? `${focus.title} allocation` : 'Life allocation overview'}
           onPointerMove={event => {
             const press = touchPress.current;
@@ -570,12 +578,13 @@ export function Sunburst({
                 role="treeitem" tabIndex={0}
                 aria-label={`${segment.title}, ${segment.status}, ${formatPercent(segment.actualShare)} share, ${formatPercent(layers.actual)} effort${segment.included ? '' : ', excluded'}`}
                 aria-selected={segment.id === selectedId}
+                aria-description={segment.hasVisibleChildren ? 'Zoom into branch. Long-press or double-click to open details.' : 'Open details.'}
                 onPointerEnter={(event) => { if (event.pointerType !== 'touch' && !dragRef.current) setHoveredId(segment.id); }}
                 onPointerDown={(event) => {
                   pointerType.current = event.pointerType || 'mouse';
                   touchSuppressClick.current = false;
                   cancelTouch();
-                  if (event.pointerType === 'touch' && !compact && (mode === 'Navigate' || omni)) {
+                  if (event.pointerType === 'touch' && (mode === 'Navigate' || omni)) {
                     cancelNavigation();
                     touchPress.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
                     touchTimer.current = setTimeout(() => {
@@ -610,6 +619,9 @@ export function Sunburst({
                   <defs><clipPath id={labelClip}><path d={annularSectorPath(
                     segment.startAngle, segment.endAngle, segment.innerRadius, segment.outerRadius, angularGap, 4,
                   )} /></clipPath></defs>
+                  {segment.hasVisibleChildren && !compact && label.fontSize * svgSize / VIEW_SIZE >= 8 && <text
+                    className="lm-sunburst__branch-hint" textAnchor={label.textAnchor} transform={label.transform}
+                    style={{ fontSize: label.fontSize * .8 }}><tspan x="0" y={-label.fontSize * .8}>›</tspan></text>}
                   <text className="lm-sunburst__label" data-orientation={label.radial ? 'radial' : 'tangential'} textAnchor={label.textAnchor}
                     transform={label.transform} style={{ fontSize: label.fontSize }}>
                     <tspan x="0" y={label.fontSize * .35}>{label.title}</tspan>
@@ -649,13 +661,13 @@ export function Sunburst({
           })}
           {focus && <g className="lm-sunburst__center lm-sunburst__center--zoomed"
             role={focus ? 'button' : undefined} tabIndex={focus ? 0 : undefined}
-            aria-label={focus ? parent ? `Return to ${parent.title}` : 'Return to overview' : undefined}
-            onClick={zoomOut} onDoubleClick={(event) => { event.stopPropagation(); }}
-            onKeyDown={(event) => { if (focus && ['Enter', ' '].includes(event.key)) { event.preventDefault(); zoomOut(); } }}>
+            aria-label={`Open ${focus.title} details`}
+            onClick={(event) => { event.stopPropagation(); onSelect(focus.id); }} onDoubleClick={(event) => { event.stopPropagation(); }}
+            onKeyDown={(event) => { if (focus && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); onSelect(focus.id); } }}>
             <circle cx={CENTER} cy={CENTER} r={focus ? 94 : 46} />
             <text x={CENTER} y={CENTER + (focus ? mode === 'Create' ? -64 : -12 : 8)} textAnchor="middle">
               <tspan className="lm-sunburst__center-title" x={CENTER}>{focus?.title.length && focus.title.length > 14 ? `${focus.title.slice(0, 13)}…` : focus?.title ?? 'Life'}</tspan>
-              {focus && <tspan className="lm-sunburst__center-hint" x={CENTER} dy="29">↑ Back</tspan>}
+              {focus && <tspan className="lm-sunburst__center-hint" x={CENTER} dy="29">Open details</tspan>}
             </text>
           </g>}
           {(mode === 'Create' || (omni && !disabled)) && layout.filter(segment => omni || createFits(segment)).map((segment) => {
@@ -680,9 +692,14 @@ export function Sunburst({
           <span>{itemById.get(drag.id)?.title} · {drag.kind === 'Importance' ? 'Importance' : 'Effort'}</span>
           <strong>{formatPercent(drag.value)}</strong>
         </output>}
-        {layout.length === 0 && <div className="lm-sunburst__empty" role="status">
-          <strong>{showAll ? 'No children here' : 'No included children'}</strong>
-          {!showAll && <span>Show all to see hidden Items.</span>}
+        {layout.length === 0 && <div className="lm-sunburst__empty">
+          <strong>{focus?.title ?? 'Life'}</strong>
+          <span role="status">{items.some(item => item.parentId === (focus?.id ?? null)) ? 'No included children' : focus ? 'No children yet' : 'No Items yet'}</span>
+          <div className="lm-sunburst__empty-actions">
+            {focus && <button onClick={() => onSelect(focus.id)}>Open details</button>}
+            {focus && !disabled && onCreate && <button onClick={() => onCreate(focus.id)}>+ Add child</button>}
+            {!showAll && onShowHidden && items.some(item => item.parentId === (focus?.id ?? null)) && <button onClick={onShowHidden}>Show hidden children</button>}
+          </div>
         </div>}
       </div>
       {fallbackCreates.length > 0 && <div className="lm-sunburst__create-list" aria-label="Add children to small slices">

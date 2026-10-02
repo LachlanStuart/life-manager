@@ -13,6 +13,7 @@ export interface SunburstProps {
   compact?: boolean;
   onEffort?: (id: string, effort: number) => void;
   onCreate?: (parentId: string) => void;
+  onShowHidden?: () => void;
   onContextMenu?: (id: string, x: number, y: number) => void;
 }
 export interface NotesEditorProps {
