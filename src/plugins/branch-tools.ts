@@ -1,5 +1,6 @@
 import type { WidgetDefinition } from '../widgets';
-import type { Workspace } from '../types';
+import type { ItemPatch, Workspace } from '../types';
+import { workspaceSettings } from '../properties';
 
 function escapeHtml(value: string): string {
   return value
@@ -70,13 +71,21 @@ document.querySelector('#reset').addEventListener('click',()=>send('reset-branch
       input: z.object({}).strict(),
       run(_value, context) {
         const ids = branchIds(context.workspace, context.itemId);
+        const settings = workspaceSettings(context.workspace);
+        const lifecycle = settings.properties.find(property => property.id === settings.lifecyclePropertyId);
+        const patch: ItemPatch = { effortOverride: null };
+        if (lifecycle?.id === 'status') patch.status = lifecycle.defaultValue;
+        else if (lifecycle) patch.properties = { [lifecycle.id]: lifecycle.defaultValue };
+        const resetLabel = lifecycle?.options.find(option => option.id === lifecycle.defaultValue)?.label ?? lifecycle?.unsetLabel;
         const workspace = context.mutate({
           type: 'bulk',
           ids,
-          patch: { status: 'Later', effortOverride: null },
+          patch,
         });
         return {
-          message: `Reset ${ids.length} Item${ids.length === 1 ? '' : 's'} to Later and cleared manual effort.`,
+          message: lifecycle
+            ? `Reset ${lifecycle.name} to ${resetLabel} and cleared manual effort for ${ids.length} Item${ids.length === 1 ? '' : 's'}.`
+            : `Cleared manual effort for ${ids.length} Item${ids.length === 1 ? '' : 's'}.`,
           result: { revision: workspace.dashboard.revision, itemCount: ids.length },
         };
       },

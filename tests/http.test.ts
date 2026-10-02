@@ -196,3 +196,19 @@ describe('standalone HTTP application', () => {
     expect(sendToAgent).toHaveBeenCalledTimes(1);
   });
 });
+
+it('saves enum configuration and Unset values through HTTP with revision and reference checks', async () => {
+  const { get, post } = await setup();
+  const initial = await json<Workspace>(await get('/api/workspace'));
+  const settings = structuredClone(initial.settings!);
+  settings.name = 'HTTP workspace';
+  settings.properties.push({ id: 'priority', name: 'Priority', unsetLabel: 'Unset', unsetColor: '#aabbcc', defaultValue: 'high', options: [{ id: 'high', label: 'High', color: '#ff0000' }] });
+  const configured = await json<Workspace>(await post('/api/settings', { settings, expectedRevision: 0 }));
+  expect(configured.settings).toEqual(settings);
+  expect(configured.dashboard.revision).toBe(1);
+  const updated = await json<Workspace>(await post('/api/mutate', { command: { type: 'update', id: 'build', patch: { status: null, properties: { priority: 'high' } } } }));
+  expect(updated.dashboard.items.find(item => item.id === 'build')).toMatchObject({ status: null, properties: { priority: 'high' } });
+  expect((await post('/api/settings', { settings, expectedRevision: 0 })).status).toBe(409);
+  expect((await post('/api/mutate', { command: { type: 'update', id: 'build', patch: { properties: { priority: 'unknown' } } } })).status).toBe(400);
+  expect((await post('/api/settings', { settings, snapshotId: initial.snapshots[0]!.id })).status).toBe(400);
+});

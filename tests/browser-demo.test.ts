@@ -105,3 +105,19 @@ describe('browser-only demo', () => {
     expect(parseRoute(new URL('https://example.github.io/life-manager/'), true).itemId).toBeNull();
   });
 });
+
+it('persists enum settings and Unset assignments through browser reload without changing snapshots', async () => {
+  const { api, db, lock, workspace } = await setup();
+  const initial = await workspace();
+  const settings = structuredClone(initial.settings!);
+  settings.name = 'Browser workspace';
+  settings.properties.push({ id: 'priority', name: 'Priority', unsetLabel: 'Unset', unsetColor: '#aabbcc', defaultValue: 'high', options: [{ id: 'high', label: 'High', color: '#ff0000' }] });
+  await api('settings', { settings, expectedRevision: initial.dashboard.revision });
+  await api('mutate', { command: { type: 'create', id: 'property-demo', parentId: 'build', title: 'Browser property' } });
+  await api('mutate', { command: { type: 'update', id: 'property-demo', patch: { status: null, properties: { priority: null } } } });
+  const restored = await createDemoApi(SQL, db, lock)('workspace') as Workspace;
+  expect(restored.settings).toEqual(settings);
+  expect(restored.dashboard.items.find(item => item.id === 'property-demo')).toMatchObject({ status: null, properties: { priority: null } });
+  expect((await api(`workspace?snapshotId=${initial.snapshots[0]!.id}`) as Workspace).settings?.name).toBe('Life');
+  await expect(api('settings', { settings, expectedRevision: 0 })).rejects.toThrow(/Revision conflict/);
+});

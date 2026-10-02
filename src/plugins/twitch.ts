@@ -750,7 +750,6 @@ export function createTwitchWidget(options: TwitchWidgetOptions): WidgetDefiniti
             parentId: context.itemId,
             title: stream.user_name,
             patch: {
-              status: 'Later',
               included: true,
               notes: `[${stream.user_name} on Twitch](${url})`,
             },

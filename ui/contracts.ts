@@ -1,10 +1,11 @@
-import type { AgentReply, Item, ItemCommand, WidgetSummary, WidgetRenderInput, WidgetActionInput, WidgetRenderResult, WidgetActionResult, PromptTemplate } from '../src/types';
+import type { AgentReply, Item, ItemCommand, WorkspaceSettings, WidgetSummary, WidgetRenderInput, WidgetActionInput, WidgetRenderResult, WidgetActionResult, PromptTemplate } from '../src/types';
 
 import type { ViewSort } from './view-sort';
 
 export type WheelMode = 'Navigate' | 'Omni' | 'Importance' | 'Effort' | 'Create';
 
 export interface SunburstProps {
+  settings?: WorkspaceSettings; colorPropertyId?: string | null;
   items: Item[]; selectedId: string | null; focusId: string | null; showAll: boolean;
   onSelect: (id: string) => void; onHighlight?: (id: string) => void; onFocus: (id: string | null) => void;
   onAllocate: (id: string, share: number) => void; disabled?: boolean;
@@ -26,7 +27,7 @@ export interface NotesEditorProps {
   onOpenItem: (id: string) => void;
 }
 export interface ItemPanelProps extends Omit<NotesEditorProps, 'itemId' | 'value' | 'onChange'> {
-  item: Item; items: Item[]; showAll: boolean;
+  item: Item; items: Item[]; showAll: boolean; settings?: WorkspaceSettings; propertyId?: string | null;
   onCommand: (command: ItemCommand) => Promise<void>;
   onSelect: (id: string) => void;
   onNotesChange: (id: string, markdown: string) => void;

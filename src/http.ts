@@ -91,6 +91,7 @@ export function createHttpHandler(options: {
         catch (error) { if (error instanceof HttpError) throw error; throw new HttpError(400, 'Invalid JSON.'); }
         switch (url.pathname) {
           case '/api/mutate': json(actions.mutate(body as Parameters<LifeManagerActions['mutate']>[0])); return;
+          case '/api/settings': json(actions.saveSettings(body as Parameters<LifeManagerActions['saveSettings']>[0])); return;
           case '/api/plan': json(actions.plan(body as Parameters<LifeManagerActions['plan']>[0])); return;
           case '/api/rollover': json(actions.rollover(body as Parameters<LifeManagerActions['rollover']>[0])); return;
           case '/api/widgets/render': json(await widgets.render(widgetRenderInputSchema.parse(body))); return;

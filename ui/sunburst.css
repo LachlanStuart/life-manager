@@ -51,13 +51,6 @@
   outline: none;
 }
 
-.lm-sunburst__segment--later { --segment-color: var(--lm-muted); }
-.lm-sunburst__segment--now { --segment-color: #c88d51; }
-.lm-sunburst__segment--doing { --segment-color: #658baa; }
-.lm-sunburst__segment--blocked { --segment-color: #c78369; }
-.lm-sunburst__segment--done { --segment-color: #719477; }
-.lm-sunburst__segment--skip { --segment-color: #a9a48f; }
-.lm-sunburst__segment--cut { --segment-color: #a2929b; }
 
 .lm-sunburst__sector {
   fill: color-mix(in srgb, var(--segment-color) 24%, var(--lm-surface));

@@ -10,6 +10,7 @@ export interface StoreDatabase {
 }
 
 import { mutateItems, seedItems } from './domain.js';
+import { DEFAULT_WORKSPACE_SETTINGS, propertyValue, validateSettings } from './properties.js';
 import type {
   Checkpoint,
   Item,
@@ -20,6 +21,8 @@ import type {
   ViewInput,
   WidgetSummary,
   Workspace,
+  WorkspaceSettings,
+  SaveSettingsInput,
 } from './types.js';
 
 export const STORE_MIGRATIONS = [
@@ -76,6 +79,12 @@ export function initializeDatabase(db: StoreDatabase): void {
     if (!columns.has('default_prompt_id')) db.exec('ALTER TABLE items ADD COLUMN default_prompt_id TEXT');
     if (!columns.has('allocation_auto')) db.exec('ALTER TABLE items ADD COLUMN allocation_auto INTEGER NOT NULL DEFAULT 0');
     if (!columns.has('resource_uri')) db.exec('ALTER TABLE items ADD COLUMN resource_uri TEXT');
+    if (!columns.has('properties_json')) db.exec("ALTER TABLE items ADD COLUMN properties_json TEXT NOT NULL DEFAULT '{}'");
+    const snapshotColumns = new Set((db.prepare('PRAGMA table_info(snapshots)').all() as Array<{ name: string }>).map(column => column.name));
+    if (!snapshotColumns.has('settings_json')) db.exec('ALTER TABLE snapshots ADD COLUMN settings_json TEXT');
+    const defaults = JSON.stringify(DEFAULT_WORKSPACE_SETTINGS);
+    db.prepare('UPDATE snapshots SET settings_json = ? WHERE settings_json IS NULL').run(defaults);
+    db.prepare("INSERT OR IGNORE INTO life_manager_meta(key, value) VALUES ('workspace_settings', ?)").run(defaults);
   })();
 }
 
@@ -84,7 +93,9 @@ interface ItemRow {
   parent_id: string | null;
   sibling_order: number;
   title: string;
-  status: Item['status'];
+  /** Empty SQL sentinel preserves compatibility with the legacy NOT NULL column. */
+  status: string;
+  properties_json: string;
   notes: string;
   included: number;
   weight: number;
@@ -109,9 +120,10 @@ interface SnapshotRow {
   updated_at: string;
   revision: number;
   items_json: string;
+  settings_json: string;
 }
 
-type SnapshotSummaryRow = Omit<SnapshotRow, 'items_json'>;
+type SnapshotSummaryRow = Omit<SnapshotRow, 'items_json' | 'settings_json'>;
 
 export interface StoreResult {
   workspace: Workspace;
@@ -126,14 +138,16 @@ export interface ExportedLifeManagerData {
     periodId: string;
     revision: number;
     items: Item[];
+    settings: WorkspaceSettings;
   };
   periods: Period[];
-  snapshots: Array<SnapshotSummary & { revision: number; items: Item[] }>;
+  snapshots: Array<SnapshotSummary & { revision: number; items: Item[]; settings: WorkspaceSettings }>;
 }
 
 export interface LifeManagerStore {
   workspace(input?: ViewInput, widgets?: WidgetSummary[]): Workspace;
   mutate(input: MutationInput, widgets?: WidgetSummary[]): StoreResult;
+  saveSettings(input: SaveSettingsInput, widgets?: WidgetSummary[]): StoreResult;
   plan(expectedRevision?: number, widgets?: WidgetSummary[]): StoreResult;
   rollover(
     input?: { name?: string; expectedRevision?: number },
@@ -151,7 +165,8 @@ function toItem(row: ItemRow): Item {
     parentId: row.parent_id,
     order: row.sibling_order,
     title: row.title,
-    status: row.status,
+    status: row.status || null,
+    properties: JSON.parse(row.properties_json),
     notes: row.notes,
     included: row.included === 1,
     weight: row.weight,
@@ -187,6 +202,7 @@ function sameItem(left: Item, right: Item): boolean {
     && left.order === right.order
     && left.title === right.title
     && left.status === right.status
+    && JSON.stringify(left.properties ?? {}) === JSON.stringify(right.properties ?? {})
     && left.notes === right.notes
     && left.included === right.included
     && left.weight === right.weight
@@ -216,23 +232,24 @@ export function createLifeManagerStore(
   `);
   const listItemsStatement = db.prepare(`
     SELECT id, parent_id, sibling_order, title, status, notes, included, weight,
-           effort_override, default_prompt_id, resource_uri, allocation_auto
+           effort_override, default_prompt_id, resource_uri, allocation_auto, properties_json
     FROM items
     ORDER BY sibling_order, id
   `);
   const insertItemStatement = db.prepare(`
     INSERT INTO items(
       id, parent_id, sibling_order, title, status, notes, included, weight,
-      effort_override, default_prompt_id, resource_uri, allocation_auto
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      effort_override, default_prompt_id, resource_uri, allocation_auto, properties_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateItemStatement = db.prepare(`
     UPDATE items
     SET parent_id = ?, sibling_order = ?, title = ?, status = ?, notes = ?,
-        included = ?, weight = ?, effort_override = ?, default_prompt_id = ?, resource_uri = ?, allocation_auto = ?
+        included = ?, weight = ?, effort_override = ?, default_prompt_id = ?, resource_uri = ?, allocation_auto = ?, properties_json = ?
     WHERE id = ?
   `);
   const deleteItemStatement = db.prepare('DELETE FROM items WHERE id = ?');
+  const updatePropertiesStatement = db.prepare('UPDATE items SET status = ?, properties_json = ? WHERE id = ?');
   const listTemplatesStatement = db.prepare('SELECT id, name, prompt FROM prompt_templates ORDER BY name, id');
   const getTemplateStatement = db.prepare('SELECT id, name, prompt FROM prompt_templates WHERE id = ?');
   const saveTemplateStatement = db.prepare(`INSERT INTO prompt_templates(id, name, prompt) VALUES (?, ?, ?)
@@ -259,22 +276,22 @@ export function createLifeManagerStore(
     ORDER BY captured_at, rowid
   `);
   const listSnapshotsWithItemsStatement = db.prepare(`
-    SELECT id, period_id, kind, captured_at, updated_at, revision, items_json
+    SELECT id, period_id, kind, captured_at, updated_at, revision, items_json, settings_json
     FROM snapshots
     ORDER BY captured_at, rowid
   `);
   const getSnapshotStatement = db.prepare(`
-    SELECT id, period_id, kind, captured_at, updated_at, revision, items_json
+    SELECT id, period_id, kind, captured_at, updated_at, revision, items_json, settings_json
     FROM snapshots WHERE id = ?
   `);
   const getCheckpointStatement = db.prepare(`
-    SELECT id, period_id, kind, captured_at, updated_at, revision, items_json
+    SELECT id, period_id, kind, captured_at, updated_at, revision, items_json, settings_json
     FROM snapshots WHERE period_id = ? AND kind = ?
   `);
   const insertSnapshotStatement = db.prepare(`
     INSERT INTO snapshots(
-      id, period_id, kind, captured_at, updated_at, revision, items_json
-    ) VALUES (?, ?, ?, ?, ?, 0, ?)
+      id, period_id, kind, captured_at, updated_at, revision, items_json, settings_json
+    ) VALUES (?, ?, ?, ?, ?, 0, ?, ?)
   `);
   const updateSnapshotStatement = db.prepare(`
     UPDATE snapshots
@@ -292,6 +309,7 @@ export function createLifeManagerStore(
     if (!id) throw new Error('Life Manager has no current period.');
     return id;
   };
+  const currentSettings = (): WorkspaceSettings => JSON.parse(getMeta('workspace_settings') ?? JSON.stringify(DEFAULT_WORKSPACE_SETTINGS));
   const currentRevision = () => Number.parseInt(getMeta('current_revision') ?? '0', 10);
   const listItems = (): Item[] => (listItemsStatement.all() as ItemRow[]).map(toItem);
   const listPeriods = (): Period[] => (listPeriodsStatement.all() as PeriodRow[]).map(toPeriod);
@@ -305,7 +323,7 @@ export function createLifeManagerStore(
       item.parentId,
       item.order,
       item.title,
-      item.status,
+      item.status ?? '',
       item.notes,
       item.included ? 1 : 0,
       item.weight,
@@ -313,6 +331,7 @@ export function createLifeManagerStore(
       item.defaultPromptId ?? null,
       item.resourceUri ?? null,
       item.allocationAuto ? 1 : 0,
+      JSON.stringify(item.properties ?? {}),
     );
   };
   const captureSnapshot = (periodId: string, kind: Checkpoint, items: Item[], at: string) => {
@@ -323,6 +342,7 @@ export function createLifeManagerStore(
       at,
       at,
       JSON.stringify(items),
+      JSON.stringify(currentSettings()),
     );
   };
 
@@ -331,9 +351,6 @@ export function createLifeManagerStore(
     const at = now().toISOString();
     const periodId = `period-${makeId()}`;
     const initialItems = seedItems();
-    if (initialItems.length !== 4) {
-      throw new Error(`Life Manager must seed exactly four Topics; received ${initialItems.length}.`);
-    }
     insertPeriodStatement.run(periodId, 'Period 1', at);
     for (const item of initialItems) insertItem(item);
     setMeta('current_period_id', periodId);
@@ -352,6 +369,7 @@ export function createLifeManagerStore(
       const snapshot = getSnapshotStatement.get(input.snapshotId) as SnapshotRow | undefined;
       if (!snapshot) throw new Error(`No snapshot with id ${input.snapshotId}.`);
       return {
+        settings: JSON.parse(snapshot.settings_json),
         dashboard: {
           items: parseItems(snapshot.items_json),
           periodId: snapshot.period_id,
@@ -365,6 +383,7 @@ export function createLifeManagerStore(
       };
     }
     return {
+      settings: currentSettings(),
       dashboard: {
         items: listItems(),
         periodId: currentPeriodId(),
@@ -386,7 +405,7 @@ export function createLifeManagerStore(
       );
     }
     const before = listItems();
-    const after = mutateItems(before, input.command);
+    const after = mutateItems(before, input.command, currentSettings());
     for (const item of after) {
       if (item.defaultPromptId && !getTemplateStatement.get(item.defaultPromptId)) {
         throw new Error(`Unknown prompt template: ${item.defaultPromptId}`);
@@ -412,7 +431,7 @@ export function createLifeManagerStore(
           item.parentId,
           item.order,
           item.title,
-          item.status,
+          item.status ?? '',
           item.notes,
           item.included ? 1 : 0,
           item.weight,
@@ -420,6 +439,7 @@ export function createLifeManagerStore(
           item.defaultPromptId ?? null,
           item.resourceUri ?? null,
           item.allocationAuto ? 1 : 0,
+          JSON.stringify(item.properties ?? {}),
           item.id,
         );
         changed = true;
@@ -441,7 +461,7 @@ export function createLifeManagerStore(
       );
     }
     const before = parseItems(snapshot.items_json);
-    const after = mutateItems(before, input.command);
+    const after = mutateItems(before, input.command, JSON.parse(snapshot.settings_json));
     const changed = before.length !== after.length
       || before.some((item, index) => !after[index] || !sameItem(item, after[index]));
     if (!changed) return false;
@@ -458,6 +478,46 @@ export function createLifeManagerStore(
   function mutate(input: MutationInput, widgets: WidgetSummary[] = []): StoreResult {
     const changed = input.snapshotId ? mutateSnapshot(input) : mutateCurrent(input);
     return { workspace: workspace(input, widgets), changed };
+  }
+
+  const updateSettings = db.transaction((input: SaveSettingsInput): boolean => {
+    const revision = currentRevision();
+    if (input.expectedRevision !== undefined && input.expectedRevision !== revision) {
+      throw new Error(`Revision conflict: expected ${input.expectedRevision}, current revision is ${revision}.`);
+    }
+    validateSettings(input.settings);
+    const previous = currentSettings();
+    const settings = input.settings;
+    for (const [propertyId, replacements] of Object.entries(input.replacements ?? {})) {
+      const oldProperty = previous.properties.find(property => property.id === propertyId);
+      const property = settings.properties.find(property => property.id === propertyId);
+      if (!oldProperty || !property) throw new Error(`Replacement property is invalid: ${propertyId}`);
+      for (const [removedId, replacement] of Object.entries(replacements)) {
+        if (!oldProperty.options.some(option => option.id === removedId) || property.options.some(option => option.id === removedId)) throw new Error(`Replacement source is not a removed option: ${removedId}`);
+        if (replacement !== null && !property.options.some(option => option.id === replacement)) throw new Error(`Replacement value is invalid: ${replacement}`);
+      }
+    }
+    if (JSON.stringify(settings) === JSON.stringify(previous)) return false;
+    for (const item of listItems()) {
+      const properties: Record<string, string | null> = {};
+      let status: string | null = null;
+      for (const property of settings.properties) {
+        let value = propertyValue(item, property.id);
+        if (value !== null && !property.options.some(option => option.id === value)) {
+          value = input.replacements?.[property.id]?.[value] ?? null;
+        }
+        if (property.id === 'status') status = value;
+        else if (Object.hasOwn(item.properties ?? {}, property.id)) properties[property.id] = value;
+      }
+      updatePropertiesStatement.run(status ?? '', JSON.stringify(properties), item.id);
+    }
+    setMeta('workspace_settings', JSON.stringify(settings));
+    setMeta('current_revision', revision + 1);
+    return true;
+  });
+  function saveSettings(input: SaveSettingsInput, widgets: WidgetSummary[] = []): StoreResult {
+    const changed = updateSettings(input);
+    return { workspace: workspace({}, widgets), changed };
   }
 
   const capturePlanned = db.transaction((expectedRevision?: number): boolean => {
@@ -523,12 +583,14 @@ export function createLifeManagerStore(
         periodId: currentPeriodId(),
         revision: currentRevision(),
         items: listItems(),
+        settings: currentSettings(),
       },
       periods: listPeriods(),
       snapshots: listSnapshotsWithItems().map((row) => ({
         ...toSummary(row),
         revision: row.revision,
         items: parseItems(row.items_json),
+        settings: JSON.parse(row.settings_json),
       })),
     };
   }
@@ -559,5 +621,5 @@ export function createLifeManagerStore(
     }
   });
 
-  return { workspace, mutate, plan, rollover, exportData, listPromptTemplates, savePromptTemplate, deletePromptTemplate };
+  return { workspace, mutate, saveSettings, plan, rollover, exportData, listPromptTemplates, savePromptTemplate, deletePromptTemplate };
 }

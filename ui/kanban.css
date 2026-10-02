@@ -24,17 +24,10 @@
   flex-direction: column;
   min-width: 200px;
   min-height: 120px;
-  border: 1px solid #e2e4da;
+  border: 1px solid color-mix(in srgb, var(--lm-kanban-column-color) 28%, #e2e4da);
   border-radius: 10px;
-  background: #f0f1eb;
+  background: color-mix(in srgb, var(--lm-kanban-column-color) 10%, #fafaf6);
 }
-.lm-kanban__column[data-kanban-column='Now'] { background: #faf0e5; border-color: #e8d3bb; }
-.lm-kanban__column[data-kanban-column='Doing'] { background: #ecf2f7; border-color: #cedde9; }
-.lm-kanban__column[data-kanban-column='Blocked'] { background: #fbf1eb; border-color: #eedbd1; }
-.lm-kanban__column[data-kanban-column='Done'] { background: #eef5f0; border-color: #d8e6dc; }
-.lm-kanban__column[data-kanban-column='Later'] { background: #f1f3f0; border-color: #dfe3dd; }
-.lm-kanban__column[data-kanban-column='Skip'] { background: #f5f2ee; border-color: #e6ddd3; }
-.lm-kanban__column[data-kanban-column='Cut'] { background: #f5eeee; border-color: #e7d8d8; }
 .lm-kanban__column-header {
   display: flex;
   align-items: baseline;
@@ -62,7 +55,8 @@
   padding: 6px 7px;
   border: 1px solid #dfe4d9;
   border-radius: 8px;
-  background: #fffefb;
+  background: color-mix(in srgb, var(--lm-kanban-card-color, #7b8178) 9%, #fffefb);
+  border-left: 3px solid var(--lm-kanban-card-color, #7b8178);
   box-shadow: 0 1px 2px #33443712;
   cursor: grab;
   touch-action: none;

@@ -2,7 +2,8 @@
 import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Item, Status } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
+import type { Item, WorkspaceSettings } from '../src/types';
 import Kanban from '../ui/Kanban';
 import {
   branchRelativeShares,
@@ -93,7 +94,7 @@ describe('kanban model', () => {
 
   it('keeps requested status order and visually groups cards by their immediate parent path', () => {
     const model = buildKanbanModel(branchItems, 'root');
-    expect(model.columns.map((column) => column.status)).toEqual(['Now', 'Doing', 'Blocked', 'Done', 'Later', 'Skip', 'Cut']);
+    expect(model.columns.map((column) => column.status)).toEqual(['Now', 'Doing', 'Blocked', 'Done', 'Later', 'Skip', 'Cut', null]);
     expect(model.columns[0]?.groups).toEqual([]);
     expect(model.columns[1]?.groups[0]?.parentPath.map((entry) => entry.title)).toEqual(['Build', 'Alpha']);
     expect(model.columns[4]?.groups[0]?.cards.map((card) => card.item.id)).toEqual(['b']);
@@ -282,4 +283,67 @@ it('sizes board cards by automatic shares through the full hierarchy', () => {
   expect(shares.get('b')).toBe(.3);
   expect(shares.get('nested')).toBe(.3);
   expect(shares.get('c')).toBe(.3);
+});
+
+const categorySettings: WorkspaceSettings = {
+  ...DEFAULT_WORKSPACE_SETTINGS,
+  properties: [...DEFAULT_WORKSPACE_SETTINGS.properties, {
+    id: 'category', name: 'Category', unsetLabel: 'Uncategorised', unsetColor: '#aaaaaa', defaultValue: null,
+    options: [{ id: 'reading', label: 'Reading', color: '#123456' }, { id: 'making', label: 'Making', color: '#654321' }],
+  }],
+};
+
+describe('configurable Kanban properties', () => {
+  const cards = [
+    { ...item('a', null, { status: 'Now' }), properties: { category: 'reading' } },
+    { ...item('b', null, { status: 'Done' }), properties: { category: 'making' } },
+    { ...item('c', null), status: null },
+  ];
+  function mountBoard(extra: Partial<React.ComponentProps<typeof Kanban>> = {}) {
+    const onCommand = vi.fn(async () => undefined);
+    const view = render(<Kanban items={cards} focusId={null} selectedId={null} disabled={false}
+      settings={categorySettings} groupPropertyId="category" colorPropertyId="status"
+      onSelect={vi.fn()} onCommand={onCommand} {...extra} />);
+    return { ...view, onCommand };
+  }
+
+  it('groups by configured values with an explicit unset column and colors independently', () => {
+    const model = buildKanbanModel(cards, null, 'Order', categorySettings, 'category');
+    expect(model.columns.map(column => [column.label, column.groups.flatMap(group => group.cards.map(card => card.item.id))]))
+      .toEqual([['Reading', ['a']], ['Making', ['b']], ['Uncategorised', ['c']]]);
+    mountBoard();
+    expect(screen.getByRole('button', { name: 'a, Reading' }).style.getPropertyValue('--lm-kanban-card-color')).toBe('#c88d51');
+    expect(screen.getByRole('button', { name: 'c, Uncategorised' }).style.getPropertyValue('--lm-kanban-card-color')).toBe('#b4b8ae');
+  });
+
+  it('dragging changes only the grouped custom property, including clearing its value', async () => {
+    const { onCommand } = mountBoard();
+    dragFromTo(screen.getByRole('button', { name: 'a, Reading' }), screen.getByRole('listitem', { name: /^Making:/ }));
+    await waitFor(() => expect(onCommand).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: 'a', patch: { properties: { category: 'making' } } }));
+    onCommand.mockClear();
+    dragFromTo(screen.getByRole('button', { name: 'b, Making' }), screen.getByRole('listitem', { name: /^Uncategorised:/ }), 8);
+    await waitFor(() => expect(onCommand).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: 'b', patch: { properties: { category: null } } }));
+  });
+
+  it('clears scalar status when dropping into its unset column', async () => {
+    const { onCommand } = mountBoard({ groupPropertyId: 'status' });
+    dragFromTo(screen.getByRole('button', { name: 'a, Now' }), screen.getByRole('listitem', { name: /^Unset:/ }));
+    await waitFor(() => expect(onCommand).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: 'a', patch: { status: null } }));
+  });
+
+  it('renders one neutral Items column without fields and keeps saved card ordering', () => {
+    const settings: WorkspaceSettings = { name: 'Archive', properties: [], lifecyclePropertyId: null };
+    mountBoard({ settings, groupPropertyId: null, colorPropertyId: null });
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Items' })).toBeTruthy();
+    expect(screen.getAllByRole('button').map(card => card.textContent)).toEqual(['a', 'b', 'c']);
+    expect(screen.getByRole('button', { name: 'a' }).style.getPropertyValue('--lm-kanban-card-color')).toBe('#7b8178');
+  });
+
+  it('uses snapshot option names and colors on read-only cards', () => {
+    const settings = structuredClone(categorySettings);
+    settings.properties[1]!.options[0] = { id: 'reading', label: 'Books last year', color: '#abcdef' };
+    mountBoard({ settings, disabled: true, colorPropertyId: 'category' });
+    expect(screen.getByRole('button', { name: 'a, Books last year' }).style.getPropertyValue('--lm-kanban-card-color')).toBe('#abcdef');
+  });
 });

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { Item, Status } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
+import type { Item, Status, WorkspaceSettings } from '../src/types';
 import { SunburstDisplaySettings } from '../ui/SunburstDisplaySettings';
 import Sunburst, {
   annularSectorPath,
@@ -586,4 +587,47 @@ it('replaces an emptied branch with actions without navigating or inventing hidd
   expect(screen.queryByRole('button', {name: '+ Add child'})).toBeNull();
   expect(screen.getByRole('button', {name: 'Open details'})).toBeTruthy();
   expect(screen.getByText('No children yet')).toBeTruthy();
+});
+
+describe('configurable sunburst colors', () => {
+  const settings: WorkspaceSettings = { ...DEFAULT_WORKSPACE_SETTINGS, name: 'Studio', properties: [
+    ...DEFAULT_WORKSPACE_SETTINGS.properties,
+    { id: 'category', name: 'Category', options: [{ id: 'book', label: 'Reading', color: '#123456' }],
+      unsetLabel: 'Uncategorised', unsetColor: '#abcdef', defaultValue: null },
+  ] };
+  const items = [
+    { ...item('a1', null, 1, true, 40), properties: { category: 'book' } },
+    { ...item('a2', null, 3, true, 150), properties: { category: null } },
+  ];
+
+  it('uses configured option and unset colors without changing allocation or effort geometry', () => {
+    const view = mount(items, { settings, colorPropertyId: 'category' });
+    const slices = screen.getAllByRole('treeitem');
+    expect(slices[0]!.getAttribute('aria-label')).toBe('Item a1, Reading, 25% share, 40% effort');
+    expect(slices[1]!.getAttribute('aria-label')).toBe('Item a2, Uncategorised, 75% share, 150% effort');
+    expect(slices[0]!.style.getPropertyValue('--segment-color')).toBe('#123456');
+    expect(slices[1]!.style.getPropertyValue('--segment-color')).toBe('#abcdef');
+    const paths = Array.from(view.container.querySelectorAll('.lm-sunburst__sector, .lm-sunburst__effort')).map(path => path.getAttribute('d'));
+    view.rerender(<Sunburst items={items} settings={settings} colorPropertyId="status" selectedId={null} focusId={null} showAll={false}
+      onSelect={vi.fn()} onFocus={vi.fn()} onAllocate={vi.fn()} />);
+    expect(Array.from(view.container.querySelectorAll('.lm-sunburst__sector, .lm-sunburst__effort')).map(path => path.getAttribute('d'))).toEqual(paths);
+  });
+
+  it('shows snapshot names in overview and back controls and uses its colors in the minimap', () => {
+    const history = { ...settings, name: 'Studio 2025' };
+    const view = mount(items, { settings: history, colorPropertyId: 'category', disabled: true });
+    expect(screen.getByRole('tree', { name: 'Studio 2025 allocation overview' })).toBeTruthy();
+    view.rerender(<Sunburst items={items} settings={history} colorPropertyId="category" selectedId={null} focusId="a1" showAll={false}
+      onSelect={vi.fn()} onFocus={vi.fn()} onAllocate={vi.fn()} disabled />);
+    expect(screen.getByRole('button', { name: 'Return to overview' }).textContent).toContain('Studio 2025');
+    expect(view.container.querySelector<SVGElement>('.lm-sunburst__minimap-sector')!.style.getPropertyValue('--segment-color')).toBe('#123456');
+  });
+
+  it('renders neutral slices without a property channel', () => {
+    mount(items.map(item => ({ ...item, status: null, properties: {} })), {
+      settings: { name: 'Notebook', properties: [], lifecyclePropertyId: null }, colorPropertyId: null,
+    });
+    expect(screen.getAllByRole('treeitem')[0]!.getAttribute('aria-label')).toBe('Item a1, 25% share, 40% effort');
+    expect(screen.getAllByRole('treeitem')[0]!.style.getPropertyValue('--segment-color')).toBe('#7b8178');
+  });
 });

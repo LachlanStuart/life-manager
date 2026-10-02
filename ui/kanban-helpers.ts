@@ -1,6 +1,8 @@
 import { childrenOf, siblingShares } from '../src/domain';
 import { STATUS_ORDER, viewComparator, type ViewSort } from './view-sort';
-import type { Item, Status } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
+import { NEUTRAL_PROPERTY_COLOR, presentationProperty } from './property-presentation';
+import type { Item, WorkspaceSettings } from '../src/types';
 
 /** The board keeps the working states together and leaves archival states at the end. */
 export const KANBAN_STATUS_ORDER = STATUS_ORDER;
@@ -28,7 +30,9 @@ export interface KanbanGroup {
 }
 
 export interface KanbanColumn {
-  status: Status;
+  status: string | null;
+  label: string;
+  color: string;
   groups: KanbanGroup[];
 }
 
@@ -74,8 +78,8 @@ function pathToParent(
  * Parents remain navigation/grouping context; childless or fully deferred branches
  * appear as cards themselves. The focused Item itself is not a card.
  */
-export function kanbanItems(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order'): Item[] {
-  const compare = viewComparator(items, sort);
+export function kanbanItems(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, propertyId?: string | null): Item[] {
+  const compare = viewComparator(items, sort, settings, propertyId);
   const byId = itemIndex(items);
   const roots = focusId === null
     ? childrenOf(items, null)
@@ -124,10 +128,11 @@ export function branchRelativeShares(items: readonly Item[], focusId: string | n
 }
 
 /** Build the visual columns and parent-path groups used by the board. */
-export function buildKanbanModel(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order'): KanbanBoardModel {
+export function buildKanbanModel(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId?: string | null): KanbanBoardModel {
   const byId = itemIndex(items);
   const shares = branchRelativeShares(items, focusId);
-  const visible = kanbanItems(items, focusId, sort);
+  const property = presentationProperty(settings, groupPropertyId);
+  const visible = kanbanItems(items, focusId, sort, settings, groupPropertyId);
   const cards = visible.map((item): KanbanCard => {
     const share = Math.max(0, Math.min(1, shares.get(item.id) ?? 0));
     return {
@@ -138,14 +143,20 @@ export function buildKanbanModel(items: readonly Item[], focusId: string | null,
       parentPath: pathToParent(byId, item.parentId, focusId),
     };
   });
-  const byStatus = new Map<Status, KanbanCard[]>();
-  for (const status of KANBAN_STATUS_ORDER) byStatus.set(status, []);
-  for (const card of cards) byStatus.get(card.item.status)!.push(card);
+  const columns = property
+    ? [...property.options.map(option => ({ status: option.id as string | null, label: option.label, color: option.color })),
+      { status: null, label: property.unsetLabel, color: property.unsetColor }]
+    : [{ status: null, label: 'Items', color: NEUTRAL_PROPERTY_COLOR }];
+  const byStatus = new Map<string | null, KanbanCard[]>(columns.map(column => [column.status, []]));
+  for (const card of cards) {
+    const value = property ? propertyValue(card.item, property.id) : null;
+    (byStatus.get(value) ?? byStatus.get(null)!).push(card);
+  }
   return {
     cards,
-    columns: KANBAN_STATUS_ORDER.map((status) => {
+    columns: columns.map((column) => {
       const groups = new Map<string, KanbanGroup>();
-      for (const card of byStatus.get(status)!) {
+      for (const card of byStatus.get(column.status)!) {
         const parentId = card.item.parentId;
         const key = parentId ?? '__top-level__';
         let group = groups.get(key);
@@ -160,7 +171,7 @@ export function buildKanbanModel(items: readonly Item[], focusId: string | null,
         }
         group.cards.push(card);
       }
-      return { status, groups: [...groups.values()] };
+      return { ...column, groups: [...groups.values()] };
     }),
   };
 }

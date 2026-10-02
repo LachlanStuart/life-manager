@@ -10,13 +10,13 @@ The database is `life-manager.sqlite` inside the configured data directory (`.da
 
 [src/store.ts](../src/store.ts) owns the schema and additive migrations. [src/types.ts](../src/types.ts) defines the corresponding application records:
 
-- `items`: `id`, `parent_id`, `sibling_order`, `title`, `status`, Markdown `notes`, `included`, `weight`, `allocation_auto` (default false for existing Items), nullable `effort_override`, nullable `default_prompt_id`, nullable `resource_uri`.
+- `items`: `id`, `parent_id`, `sibling_order`, `title`, `status`, `properties_json`, Markdown `notes`, `included`, `weight`, `allocation_auto` (default false for existing Items), nullable `effort_override`, nullable `default_prompt_id`, nullable `resource_uri`.
 - `prompt_templates`: `id`, `name`, `prompt`. An Item's unset default inherits from its nearest configured ancestor.
-- `periods`, `snapshots`, `life_manager_meta`: period boundaries, complete Item snapshots and the current revision. A snapshot stores its Item records as JSON, including notes and hidden Items.
+- `periods`, `snapshots`, `life_manager_meta`: period boundaries, complete Item snapshots, workspace settings and the current revision. A snapshot stores its Item records in `items_json`, including notes and hidden Items, and its workspace configuration in `settings_json`. Current configuration is the `workspace_settings` metadata value.
 
-`resource_uri` is a specific saved file/folder reference for the video widget; it is not a generic property system. Prompt defaults and resource references are included in snapshots. Templates are current application configuration; deleting a template clears current defaults without rewriting historical Item records.
+`resource_uri` is a specific saved file/folder reference for the video widget, separate from single-choice properties. Prompt defaults and resource references are included in snapshots. Templates are current application configuration; deleting a template clears current defaults without rewriting historical Item records.
 
-Call `initializeDatabase(db)` before `createLifeManagerStore(db)`. New stores seed the Topic IDs `tend`, `build`, `learn`, `enjoy`. There is no built-in importer. Use the shared API or prepare an offline migration into a new data directory when bringing in existing material.
+Call `initializeDatabase(db)` before `createLifeManagerStore(db)`. New stores seed the Topic IDs `tend`, `build`, `learn`, `enjoy` as an editable starting template. Roots are ordinary Items with `parentId: null`; there are no required root names or fixed root count. There is no built-in importer. Use the shared API or prepare an offline migration into a new data directory when bringing in existing material.
 
 ## Shared API
 
@@ -24,12 +24,13 @@ All paths are relative to the running server. POST requests use `Content-Type: a
 
 | Endpoint | Input / result |
 | --- | --- |
-| `GET /api/workspace` | Current Items, periods, snapshot summaries, widgets and prompt templates. Add `?snapshotId=<id>` for a checkpoint. |
+| `GET /api/workspace` | Current Items, workspace settings, periods, snapshot summaries, widgets and prompt templates. Add `?snapshotId=<id>` for a checkpoint. |
 | `GET /api/items/<id>` | Item, immediate children, ancestors, revision and period context. Supports `snapshotId`. |
 | `POST /api/mutate` | `{command, expectedRevision?, snapshotId?}`; returns the updated workspace. |
+| `POST /api/settings` | `{settings, expectedRevision?, replacements?}`; saves current workspace configuration and returns the workspace. |
 | `POST /api/plan` | `{expectedRevision?}` |
 | `POST /api/rollover` | `{name?, expectedRevision?}` |
-| `GET /api/export` | Complete current/historical data and templates as JSON. |
+| `GET /api/export` | Complete current/historical Items, workspace settings, and templates as JSON. |
 | `GET /api/templates` | Saved templates. |
 | `POST /api/templates/save` | `{id, name, prompt}` |
 | `POST /api/templates/delete` | `{id}` |
@@ -39,6 +40,18 @@ All paths are relative to the running server. POST requests use `Content-Type: a
 | `POST /api/attachments` | Raw PNG/JPEG/GIF/WebP bytes, image content type and `X-Life-Manager: 1`; returns `{url}`. Maximum 20 MB. |
 
 Commands support create, update, delete, delete-many, move, reorder, allocate and bulk updates. New Items default to automatic allocation unless an explicit `patch.weight` or optional creation `share` is supplied. Creation `share` applies a local percentage atomically with the new Item. `allocate` with `share: null` enables automatic allocation; blanks equally divide the remainder after included explicit shares. With included blanks, manual weights represent percentages; without them, weights retain proportional normalization. The additive optional `allocationAuto` field is retained in checkpoint and export Items (schema version 2); absent means manual, preserving older exports and snapshots. `delete-many` accepts `ids` and removes all selected subtrees atomically while preserving historical snapshots. See [the agent skill](../skills/life-manager/SKILL.md) for examples. Revision conflicts return HTTP 409. Other invalid operations return an error string. Browser clients receive change notifications over `/api/events` and refresh current server state.
+
+## Workspace settings and properties
+
+`settings` is `{name, properties, lifecyclePropertyId}`. Each property is `{id, name, options, unsetLabel, unsetColor, defaultValue}`; each option is `{id, label, color, behavior?}`. Arrays define property and option order. Colours are six-digit hex values. IDs are stable when labels change. `defaultValue` is an option ID or `null`; `lifecyclePropertyId` is a property ID or `null`.
+
+The reserved property ID `status` stores its value in `Item.status`; other fields use `Item.properties[propertyId]`. Values are option IDs or `null`, and a missing custom field is unset. Updates and bulk patches merge supplied `properties` entries, preserving other fields. For example, `{properties: {priority: "high"}}` changes only Priority; `{properties: {priority: null}}` clears it. Creation applies configured defaults only for omitted fields. Adding a property or changing its default never fills existing Items.
+
+`POST /api/settings` replaces the complete configuration atomically. Removed option values become unset unless `replacements[propertyId][removedOptionId]` names a retained option or explicitly supplies `null`. Removing a property removes its current values. Settings edits increment the current revision and leave historical snapshots unchanged.
+
+The designated lifecycle property's option `behavior` is `normal` (also the omitted default), `complete`, or `skip`. Complete gives leaf Items 100% calculated effort; skip gives an Item 0% calculated effort even if it has children. Manual overrides take precedence. Default Status maps Done to complete and Skip/Cut to skip. Hide finished uses complete/skip independently of manual effort. Color by and Group by are independent presentation choices and do not designate lifecycle behaviour.
+
+Snapshots preserve their workspace name, property definitions and lifecycle role alongside Item values. Historical reads and mutations use that saved configuration. Existing databases gain the default Status definition and snapshot metadata through additive migration. Exports retain schema version 2 with the additional settings and property fields.
 
 ## Widgets
 
@@ -57,7 +70,7 @@ The visual editor renders the block and provides its configuration text. Source 
 
 [src/widgets.ts](../src/widgets.ts) contains trusted widget definitions. A definition returns HTML and registers named, validated server actions. The HTML runs in a sandboxed iframe and can call `window.lifeManager.action(name, input)`. Widgets can call `window.lifeManager.refresh()` to request newly rendered HTML; reloading the iframe alone would replay its old document. Its server action receives the owning Item, config, workspace, shared `mutate` operations and a `runCommand(executable, args)` helper. Command definitions are code; the HTTP API does not expose a general shell endpoint. Restart after editing definitions.
 
-The included Branch tools widget demonstrates Item creation and a bulk reset. Activity definitions live in `src/plugins/`. Historical widgets cannot execute host commands, and their UI action bridge is disabled while viewing a snapshot.
+The included Branch tools widget demonstrates Item creation using configured defaults and a bulk reset to the designated lifecycle property’s creation default, while clearing manual effort. Activity definitions live in `src/plugins/`. Historical widgets cannot execute host commands, and their UI action bridge is disabled while viewing a snapshot.
 
 ### Local videos
 
@@ -75,7 +88,7 @@ The `local-video` block lists only immediate regular files and folders. Dotfiles
 ```
 ````
 
-Refresh rereads that one directory. Create Item adds a child of the widget owner, with the file stem or folder name, Later status, inclusion enabled and a saved file URL. A current reference anywhere in the hierarchy suppresses the entry unless all referencing Items are Done or Cut. Hidden Items still count. Folders produce one Item and are never recursively imported. Playback and file moves remain external.
+Refresh rereads that one directory. Create Item adds a child of the widget owner, with the file stem or folder name, configured property defaults, inclusion enabled and a saved file URL. A current reference anywhere in the hierarchy suppresses the entry unless every referencing Item has complete lifecycle behaviour or the built-in Cut value while Status is the lifecycle property. Skip alone does not release a reference. Hidden Items still count. Folders produce one Item and are never recursively imported. Playback and file moves remain external.
 
 ### Twitch
 

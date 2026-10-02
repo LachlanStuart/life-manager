@@ -7,7 +7,8 @@ export interface Item {
   parentId: string | null;
   order: number;
   title: string;
-  status: Status;
+  status: string | null;
+  properties?: Record<string, string | null>;
   /** Markdown, including embedded widget directives and managed attachment links. */
   notes: string;
   /** A null or absent default inherits the nearest ancestor’s configured prompt. */
@@ -21,7 +22,7 @@ export interface Item {
   allocationAuto?: boolean;
   effortOverride: number | null;
 }
-export type ItemPatch = Partial<Pick<Item, 'title' | 'status' | 'notes' | 'included' | 'weight' | 'effortOverride' | 'defaultPromptId' | 'resourceUri'>>;
+export type ItemPatch = Partial<Pick<Item, 'title' | 'status' | 'properties' | 'notes' | 'included' | 'weight' | 'effortOverride' | 'defaultPromptId' | 'resourceUri'>>;
 export type ItemCommand =
   | { type: 'create'; id?: string; parentId: string | null; title: string; patch?: ItemPatch; share?: number | null }
   | { type: 'update'; id: string; patch: ItemPatch }
@@ -41,7 +42,11 @@ export interface AgentReply {
   message: string;
   url?: string;
 }
-export interface Workspace { dashboard: Dashboard; periods: Period[]; snapshots: SnapshotSummary[]; widgets: WidgetSummary[]; promptTemplates: PromptTemplate[] }
+export interface EnumOption { id: string; label: string; color: string; behavior?: 'normal' | 'complete' | 'skip' }
+export interface EnumProperty { id: string; name: string; options: EnumOption[]; unsetLabel: string; unsetColor: string; defaultValue: string | null }
+export interface WorkspaceSettings { name: string; properties: EnumProperty[]; lifecyclePropertyId: string | null }
+export interface SaveSettingsInput { settings: WorkspaceSettings; expectedRevision?: number; replacements?: Record<string, Record<string, string | null>> }
+export interface Workspace { settings?: WorkspaceSettings; dashboard: Dashboard; periods: Period[]; snapshots: SnapshotSummary[]; widgets: WidgetSummary[]; promptTemplates: PromptTemplate[] }
 export interface ViewInput { snapshotId?: string }
 export interface MutationInput extends ViewInput { expectedRevision?: number; command: ItemCommand }
 export interface WidgetContext { itemId: string; snapshotId?: string; config?: Record<string, unknown> }

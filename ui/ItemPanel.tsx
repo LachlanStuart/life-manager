@@ -1,13 +1,13 @@
 import * as React from 'react';
-import { STATUSES, type Item, type ItemCommand } from '../src/types';
+import type { Item, ItemCommand } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS, lifecycleBehavior, propertyValue } from '../src/properties';
+import { PropertySelect, propertyPatch, selectedProperty } from './PropertySelect';
 import { childrenOf, computeEfforts, effectiveIncluded, localShare, allocationLimit } from '../src/domain';
 import type { ItemPanelProps } from './contracts';
 import { NotesEditor } from './NotesEditor';
 import { ItemControls } from './ItemControls';
 import { Icon } from './Icons';
 import './item-panel.css';
-
-const FINISHED = new Set<Item['status']>(['Done', 'Skip', 'Cut']);
 
 function ancestorTrail(items: Item[], item: Item): Item[] {
   const byId = new Map(items.map((candidate) => [candidate.id, candidate]));
@@ -42,8 +42,10 @@ function descendantsOf(items: Item[], rootId: string): Set<string> {
 export function ItemPanel({
   item, items, showAll, readOnly = false, snapshotId, widgets, renderWidget, actWidget,
   uploadImage, onOpenItem, onCommand, onSelect, onNotesChange, notesStatus,
-  promptTemplates = [], onSendToAgent,
+  promptTemplates = [], onSendToAgent, settings, propertyId,
 }: ItemPanelProps) {
+  const configuration = settings ?? DEFAULT_WORKSPACE_SETTINGS;
+  const property = selectedProperty(configuration, propertyId);
   const [titleDraft, setTitleDraft] = React.useState(item.title);
   const cancelTitle = React.useRef(false);
   const titleDirty = React.useRef(false);
@@ -61,7 +63,7 @@ export function ItemPanel({
   const dragRef = React.useRef<{ id: string; target: string; pointerId: number } | null>(null);
   const listRef = React.useRef<HTMLUListElement>(null);
   const children = React.useMemo(() => childrenOf(items, item.id), [items, item.id]);
-  const efforts = React.useMemo(() => computeEfforts(items), [items]);
+  const efforts = React.useMemo(() => computeEfforts(items, configuration), [items, configuration]);
   const trail = React.useMemo(() => ancestorTrail(items, item), [items, item]);
   const descendants = React.useMemo(() => descendantsOf(items, item.id), [items, item.id]);
   const parentOptions = React.useMemo(() => items
@@ -73,7 +75,7 @@ export function ItemPanel({
     ancestor.defaultPromptId && promptTemplates.some((template) => template.id === ancestor.defaultPromptId))?.defaultPromptId;
   const [templateId, setTemplateId] = React.useState(defaultId ?? promptTemplates[0]?.id ?? '');
   const locked = readOnly;
-  const finishedIds = children.filter((child) => child.included && FINISHED.has(child.status)).map((child) => child.id);
+  const finishedIds = children.filter((child) => child.included && lifecycleBehavior(child, configuration) !== 'normal').map((child) => child.id);
 
   React.useEffect(() => { setTitleDraft(item.title); titleDirty.current = false; }, [item.id, item.title]);
   React.useEffect(() => {
@@ -200,7 +202,8 @@ export function ItemPanel({
     hidden={!effectiveIncluded(items, target.id)} allocation={localShare(items, target.id)} allocationAutomatic={Boolean(target.allocationAuto)} allocationMax={allocationLimit(items, target.id)}
     effort={efforts[target.id] ?? 0} disabled={locked || deleting} allocationDisabled={showAll || !target.included}
     onIncluded={included => void issue({ type: 'update', id: target.id, patch: { included } })}
-    onStatus={status => void issue({ type: 'update', id: target.id, patch: { status } })}
+    settings={settings} propertyId={propertyId}
+    onProperty={(id, value) => void issue({ type: 'update', id: target.id, patch: propertyPatch(id, value) })}
     onAllocation={share => void issue({ type: 'allocate', id: target.id, share })}
     onEffort={effortOverride => void issue({ type: 'update', id: target.id, patch: { effortOverride } })}
     onDelete={snapshotId ? undefined : () => remove(target)} />;
@@ -235,6 +238,15 @@ export function ItemPanel({
       </nav>
       {controls(item, true)}
       </header>
+      {configuration.properties.length > 0 && <details className="lm-item-panel__settings lm-item-panel__properties">
+        <summary>Properties</summary>
+        <div className="lm-item-panel__settings-fields">
+          {configuration.properties.map(property => <label key={property.id}><span>{property.name}</span>
+            <PropertySelect property={property} value={propertyValue(item, property.id)} label={`Property ${property.name}`} disabled={locked || deleting}
+              onChange={value => void issue({ type: 'update', id: item.id, patch: propertyPatch(property.id, value) })} />
+          </label>)}
+        </div>
+      </details>}
       {currentLink?.error && <p className="lm-item-panel__error" role="alert">{currentLink.error}</p>}
       <details className="lm-item-panel__settings">
         <summary>Item settings</summary>
@@ -242,7 +254,7 @@ export function ItemPanel({
         <div className="lm-item-panel__settings-fields">
           <label><span>Parent</span><select aria-label="Parent item" value={item.parentId ?? ''} disabled={locked}
             onChange={(event) => { const parentId = event.target.value || null; if (parentId !== item.parentId) void issue({ type: 'move', id: item.id, parentId }); }}>
-            <option value="">Top level</option>{parentOptions.map((parent) => <option key={parent.id} value={parent.id}>{parent.label}</option>)}
+            <option value="">{configuration.name}</option>{parentOptions.map((parent) => <option key={parent.id} value={parent.id}>{parent.label}</option>)}
           </select></label>
           <label><span>Default agent prompt</span><select aria-label="Default agent prompt" value={item.defaultPromptId ?? ''} disabled={locked}
             onChange={(event) => void issue({ type: 'update', id: item.id, patch: { defaultPromptId: event.target.value || null } })}>
@@ -274,9 +286,12 @@ export function ItemPanel({
               ref={(node) => { if (node) node.indeterminate = selected.size > 0 && selected.size < children.length; }}
               onChange={(event) => setSelected(event.target.checked ? new Set(children.map((child) => child.id)) : new Set())} />
               {selected.size ? `${selected.size} selected` : 'Select all'}</label>
-            <select aria-label="Selected children status" value="" disabled={locked || !selected.size} onChange={(event) => bulk({ status: event.target.value as Item['status'] })}>
-              <option value="" disabled>Status…</option>{STATUSES.map((status) => <option key={status}>{status}</option>)}
-            </select>
+            {property && <select aria-label={settings ? `Selected children ${property.name}` : 'Selected children status'} value={'\0'} disabled={locked || !selected.size}
+              onChange={event => bulk(propertyPatch(property.id, event.target.value || null))}>
+              <option value={'\0'} disabled>{property.name}…</option>
+              <option value="">{property.unsetLabel}</option>
+              {property.options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>}
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ included: true })}>Include</button>
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ included: false })}>Hide</button>
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ effortOverride: null })}>Clear effort</button>

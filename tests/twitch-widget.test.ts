@@ -5,6 +5,8 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { mutateItems } from '../src/domain.js';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties.js';
 import { createTwitchWidget } from '../src/plugins/twitch.js';
 import type { WidgetActionContext, WidgetDefinition } from '../src/widgets.js';
 import type { Item, Workspace } from '../src/types.js';
@@ -275,10 +277,11 @@ describe('Twitch live follows widget', () => {
     });
     const widget = createTwitchWidget({ dataDir: directory, fetch: fetcher });
     const value = workspace([rootItem()]);
-    const mutate = vi.fn((command) => ({ ...value, dashboard: { ...value.dashboard, revision: value.dashboard.revision + 1, items: [...value.dashboard.items, {
-      id: 'new-item', parentId: command.type === 'create' ? command.parentId : null, order: 1, title: command.type === 'create' ? command.title : '', status: 'Later' as const,
-      notes: command.type === 'create' ? command.patch?.notes || '' : '', included: true, weight: 1, effortOverride: null,
-    }] } }));
+    value.settings = structuredClone(DEFAULT_WORKSPACE_SETTINGS);
+    value.settings.properties[0]!.defaultValue = 'Now';
+    const mutate = vi.fn((command) => ({ ...value, dashboard: { ...value.dashboard, revision: value.dashboard.revision + 1,
+      items: mutateItems(value.dashboard.items, command, value.settings),
+    } }));
     const actionContext = context(value);
     actionContext.mutate = mutate;
     const definition = widget.actions['create-item']!;
@@ -287,8 +290,9 @@ describe('Twitch live follows widget', () => {
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({
       type: 'create', parentId: 'enjoy', title: 'Alice',
-      patch: { status: 'Later', included: true, notes: '[Alice on Twitch](https://www.twitch.tv/alice_login)' },
+      patch: { included: true, notes: '[Alice on Twitch](https://www.twitch.tv/alice_login)' },
     }));
+    expect(mutate.mock.results[0]!.value.dashboard.items.find((item: Item) => item.parentId === 'enjoy')?.status).toBe('Now');
     await expect(definition.run(definition.input.parse({ userName: 'not-followed' }), actionContext)).rejects.toThrow('no longer');
     expect(mutate).toHaveBeenCalledTimes(1);
   });

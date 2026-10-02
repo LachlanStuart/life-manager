@@ -9,7 +9,7 @@ Use the running server URL supplied with the task, normally `http://localhost:43
 
 ## Read
 
-`GET /api/items/<id>` returns the Item, its immediate children, ancestors and the current revision. `GET /api/workspace` returns the whole current hierarchy with period/snapshot summaries and saved prompt templates. Add `?snapshotId=<id>` to read a historical checkpoint. `GET /api/export` returns all current and historical data without truncating notes.
+`GET /api/items/<id>` returns the Item, its immediate children, ancestors and the current revision. `GET /api/workspace` returns the whole current hierarchy with workspace settings, period/snapshot summaries and saved prompt templates. Read `settings.properties` for valid field and option IDs; labels are editable and must not be treated as IDs. Add `?snapshotId=<id>` to read a historical checkpoint. `GET /api/export` returns all current and historical data without truncating notes.
 
 ```sh
 curl --fail-with-body http://localhost:4317/api/items/build
@@ -32,11 +32,11 @@ Send JSON to `POST /api/mutate` with the headers `Content-Type: application/json
 | `allocate` | `id`, `share` as a local percentage, or `null` for automatic allocation |
 | `bulk` | `ids`, `patch` |
 
-A patch may contain `title`, `status`, `notes`, `included`, `weight`, `effortOverride`, `defaultPromptId`, or `resourceUri`. New Items default to Later, included, and automatic allocation. Optional creation `share` applies an explicit local percentage atomically; explicit `patch.weight` retains manual weight semantics. Prefer `allocate` for changing a share. `share: null` makes it automatic: included blanks divide the remainder after explicit shares equally. While other included blanks remain, numeric edits preserve explicit siblings and cannot exceed the available remainder. With no other included blanks, numeric allocation proportionally scales the other included siblings. Descendants are unchanged. On the first clear in a legacy sibling group, weights are converted to percentage units while preserving existing proportions, including hidden sibling ratios. The returned optional `allocationAuto` flag persists through checkpoints; use `allocate` rather than patching that flag.
+A patch may contain `title`, `status`, `properties`, `notes`, `included`, `weight`, `effortOverride`, `defaultPromptId`, or `resourceUri`. New Items use configured property defaults, inclusion enabled, and automatic allocation. Defaults apply only to omitted fields during creation; explicit `null` leaves a property unset. Optional creation `share` applies an explicit local percentage atomically; explicit `patch.weight` retains manual weight semantics. Prefer `allocate` for changing a share. `share: null` makes it automatic: included blanks divide the remainder after explicit shares equally. While other included blanks remain, numeric edits preserve explicit siblings and cannot exceed the available remainder. With no other included blanks, numeric allocation proportionally scales the other included siblings. Descendants are unchanged. On the first clear in a legacy sibling group, weights are converted to percentage units while preserving existing proportions, including hidden sibling ratios. The returned optional `allocationAuto` flag persists through checkpoints; use `allocate` rather than patching that flag.
 
-Status is one of Later, Now, Doing, Blocked, Done, Skip, Cut. Status and inclusion are independent. Cut retains an abandoned Item. Delete is not reversible through a recycle bin; only do it when the task authorizes removal. Historical snapshots survive deletion of current Items.
+The property with ID `status` uses the scalar `Item.status`; other properties use `Item.properties[propertyId]`. Values are configured option IDs or `null`. A patch such as `{properties: {priority: "high"}}` merges that one field without replacing other properties or status; `null` clears it. Property values and inclusion are independent. The starting Status options are Later, Now, Doing, Blocked, Done, Skip and Cut; Cut retains an abandoned Item. Delete is not reversible through a recycle bin; only do it when the task authorizes removal. Historical snapshots survive deletion of current Items.
 
-`effortOverride` is a non-negative percentage with no 190% storage cap. Set it to `null` to restore calculation. Effort concerns this period's intent, not total project completion or elapsed time. It aggregates upward only.
+`effortOverride` is a non-negative percentage with no 190% storage cap. Set it to `null` to restore calculation. Effort concerns this period's intent, not total project completion or elapsed time. It aggregates upward only. Use `settings.lifecyclePropertyId` and option `behavior` to interpret lifecycle: `complete` gives a leaf 100%, `skip` gives an Item 0% even with children, and manual overrides take precedence. A view’s colour or grouping property does not change the lifecycle role.
 
 To update Markdown, retain existing content unless replacement is requested. Write complex request bodies to a temporary JSON file and use `curl --data-binary @file`; avoid interpolating notes or shell-sensitive prompt text into a command string.
 
@@ -46,11 +46,17 @@ curl --fail-with-body http://localhost:4317/api/mutate \
   --data-binary @/tmp/life-manager-request.json
 ```
 
+## Workspace configuration
+
+`POST /api/settings` accepts `{settings, expectedRevision?, replacements?}` and returns the updated workspace. `settings` contains `name`, ordered `properties`, and nullable `lifecyclePropertyId`. Each property has `{id,name,options,unsetLabel,unsetColor,defaultValue}`; options have `{id,label,color,behavior?}`. Preserve stable IDs when renaming labels. See [the configuration reference](../../docs/REFERENCE.md#workspace-settings-and-properties) for the full contract.
+
+Changing defaults does not fill existing Items. Removing an option clears its current values unless `replacements[propertyId][removedOptionId]` supplies a retained option ID; deleting a property removes its current values. Historical definitions and values remain unchanged. Top-level Items use ordinary Item commands with `parentId: null`; the four starting roots are not mandatory.
+
 ## Periods and history
 
-`POST /api/plan` with `{expectedRevision}` captures Planned. `POST /api/rollover` with `{expectedRevision, name?}` captures Closing and the next Opening, preserving all current values. Only perform these when requested. There is no automatic recurrence or time tracking.
+`POST /api/plan` with `{expectedRevision}` captures Planned. `POST /api/rollover` with `{expectedRevision, name?}` captures Closing and the next Opening, preserving current Item values and workspace configuration. Only perform these when requested. There is no automatic recurrence or time tracking.
 
-Historical corrections require an explicit `snapshotId` in a mutation and apply only to that snapshot. Never silently choose a historical target or rewrite later snapshots to match a correction.
+Historical checkpoints retain their own property definitions, workspace name and lifecycle role. Historical corrections require an explicit `snapshotId` in a mutation and apply only to that snapshot. Never silently choose a historical target or rewrite later snapshots to match a correction.
 
 ## Widget and prompt operations
 

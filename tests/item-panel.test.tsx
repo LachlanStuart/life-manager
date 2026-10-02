@@ -3,7 +3,7 @@ import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Item, ItemCommand } from '../src/types';
+import type { Item, ItemCommand, WorkspaceSettings } from '../src/types';
 import type { NotesEditorProps } from '../ui/contracts';
 
 vi.mock('../ui/NotesEditor', () => ({
@@ -16,6 +16,9 @@ vi.mock('../ui/NotesEditor', () => ({
   ),
 }));
 import { ItemPanel } from '../ui/ItemPanel';
+import { ItemContextMenu } from '../ui/ItemContextMenu';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
+import { mutateItems } from '../src/domain';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 function makeItem(overrides: Partial<Item> & Pick<Item, 'id' | 'title'>): Item {
@@ -357,4 +360,71 @@ it('clears allocations to automatic mode in both detail and child controls', asy
   const allocation = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Intended attention percent' });
   await user.clear(allocation); fireEvent.blur(allocation);
   await waitFor(() => expect(props.onCommand).toHaveBeenCalledWith({ type: 'allocate', id: 'project', share: null }));
+});
+
+const customSettings: WorkspaceSettings = {
+  ...DEFAULT_WORKSPACE_SETTINGS, name: 'My pursuits', lifecyclePropertyId: 'priority',
+  properties: [
+    { ...DEFAULT_WORKSPACE_SETTINGS.properties[0]!, name: 'Stage' },
+    { id: 'priority', name: 'Priority', unsetLabel: 'No priority', unsetColor: '#888888', defaultValue: 'high', options: [
+      { id: 'high', label: 'Urgent', color: '#cc4400' },
+      { id: 'settled', label: 'Settled', color: '#448800', behavior: 'complete' },
+      { id: 'irrelevant', label: 'Irrelevant', color: '#aaaaaa', behavior: 'skip' },
+    ] },
+    { id: 'context', name: 'Context', unsetLabel: 'No context', unsetColor: '#aaaaaa', defaultValue: null,
+      options: [{ id: 'home', label: 'Home', color: '#778899' }] },
+  ],
+};
+
+it('edits configured properties and bulk values without replacing other fields or lifecycle status', async () => {
+  const user = userEvent.setup();
+  const configuredItems = items.map(item => ({ ...item, properties: { priority: null, context: 'home' } }));
+  const { props } = renderPanel({ items: configuredItems, item: configuredItems[1]!, settings: customSettings, propertyId: 'priority' });
+  expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Priority' }).value).toBe('');
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Priority' }), 'high');
+  expect(props.onCommand).toHaveBeenCalledWith({ type: 'update', id: 'project', patch: { properties: { priority: 'high' } } });
+  await user.click(screen.getByRole('checkbox', { name: 'Select all children' }));
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Selected children Priority' }), 'high');
+  const command: ItemCommand = { type: 'bulk', ids: ['done', 'hidden'], patch: { properties: { priority: 'high' } } };
+  expect(props.onCommand).toHaveBeenCalledWith(command);
+  const changed = mutateItems(configuredItems, command, customSettings);
+  expect(changed.find(item => item.id === 'done')).toMatchObject({ status: 'Done', properties: { context: 'home', priority: 'high' } });
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Selected children Priority' }), '');
+  expect(props.onCommand).toHaveBeenCalledWith({ ...command, patch: { properties: { priority: null } } });
+  await user.click(screen.getByText('Properties'));
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Property Stage' }), 'Now');
+  expect(props.onCommand).toHaveBeenCalledWith({ type: 'update', id: 'project', patch: { status: 'Now' } });
+  await user.click(screen.getByText('Item settings'));
+  expect(screen.getByRole('option', { name: 'My pursuits' })).toBeTruthy();
+});
+
+it('hides finished children according to the designated property behaviors even with a manual effort override', async () => {
+  const user = userEvent.setup();
+  const configuredItems = items.map(item => ({ ...item, included: true, effortOverride: 13,
+    properties: { priority: item.id === 'hidden' ? 'settled' : 'high' } }));
+  const { props } = renderPanel({ items: configuredItems, item: configuredItems[1]!, settings: customSettings, propertyId: 'status' });
+  await user.click(screen.getByRole('button', { name: 'Hide finished' }));
+  expect(props.onCommand).toHaveBeenCalledWith({ type: 'bulk', ids: ['hidden'], patch: { included: false } });
+});
+
+it('keeps every configured property read only in historical details', async () => {
+  const user = userEvent.setup();
+  const { props } = renderPanel({ settings: customSettings, propertyId: 'priority', readOnly: true, snapshotId: 'history' });
+  await user.click(screen.getByText('Properties'));
+  for (const name of ['Priority', 'Property Priority', 'Property Stage', 'Property Context', 'Selected children Priority']) {
+    expect(screen.getByRole<HTMLSelectElement>('combobox', { name }).disabled).toBe(true);
+  }
+  expect(props.onCommand).not.toHaveBeenCalled();
+});
+
+it('uses configured labels and nullable values in the context menu', () => {
+  const onProperty = vi.fn();
+  const item = { ...items[1]!, properties: { priority: 'high' } };
+  render(<ItemContextMenu item={item} x={10} y={10} disabled={false} settings={customSettings} propertyId="priority"
+    onProperty={onProperty} onOpen={vi.fn()} onClose={vi.fn()} />);
+  const urgent = screen.getByRole('menuitemradio', { name: /Urgent/ });
+  expect(urgent.getAttribute('aria-checked')).toBe('true');
+  expect(urgent.querySelector('i')?.style.backgroundColor).toBe('rgb(204, 68, 0)');
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'No priority' }));
+  expect(onProperty).toHaveBeenCalledWith('priority', null);
 });

@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 import type { LifeManagerStore } from './store.js';
-import { STATUSES, MAX_NOTES_CHARS } from './types.js';
+import { MAX_NOTES_CHARS } from './types.js';
 import type {
   MutationInput,
+  SaveSettingsInput,
   PromptTemplate,
   ViewInput,
   WidgetActionInput,
@@ -17,12 +18,13 @@ import type {
 const idSchema = z.string().trim().min(1).max(200);
 const resourceUriSchema = z.string().trim().min(1).max(8192).refine(value => !value.includes('\0'));
 const nullableParentSchema = idSchema.nullable();
-const statusSchema = z.enum(STATUSES);
+const statusSchema = idSchema.nullable();
 const finiteNonNegativeSchema = z.number().finite().nonnegative();
 
 export const itemPatchSchema = z.object({
   title: z.string().trim().min(1).max(500).optional(),
   status: statusSchema.optional(),
+  properties: z.record(idSchema, idSchema.nullable()).optional(),
   notes: z.string().max(MAX_NOTES_CHARS).optional(),
   included: z.boolean().optional(),
   weight: finiteNonNegativeSchema.optional(),
@@ -67,6 +69,7 @@ const itemSchema = z.object({
   order: z.number().int(),
   title: z.string(),
   status: statusSchema,
+  properties: z.record(idSchema, idSchema.nullable()).optional(),
   notes: z.string(),
   included: z.boolean(),
   weight: finiteNonNegativeSchema,
@@ -105,7 +108,27 @@ export const promptTemplateSchema = z.object({
 }).strict();
 export const deletePromptTemplateInputSchema = z.object({ id: idSchema }).strict();
 
+export const workspaceSettingsSchema = z.object({
+  name: z.string().trim().min(1).max(500),
+  lifecyclePropertyId: idSchema.nullable(),
+  properties: z.array(z.object({
+    id: idSchema, name: z.string().trim().min(1).max(500),
+    unsetLabel: z.string().trim().min(1).max(500), unsetColor: z.string().regex(/^#[0-9a-f]{6}$/i),
+    defaultValue: idSchema.nullable(),
+    options: z.array(z.object({
+      id: idSchema, label: z.string().trim().min(1).max(500), color: z.string().regex(/^#[0-9a-f]{6}$/i),
+      behavior: z.enum(['normal', 'complete', 'skip']).optional(),
+    }).strict()).max(500),
+  }).strict()).max(100),
+}).strict();
+export const saveSettingsInputSchema = z.object({
+  settings: workspaceSettingsSchema,
+  expectedRevision: z.number().int().nonnegative().optional(),
+  replacements: z.record(idSchema, z.record(idSchema, idSchema.nullable())).optional(),
+}).strict();
+
 export const workspaceSchema = z.object({
+  settings: workspaceSettingsSchema,
   dashboard: z.object({
     items: z.array(itemSchema),
     periodId: idSchema,
@@ -150,6 +173,7 @@ const widgetActionResultSchema = z.object({
 export const rpcContract = {
   workspace: { input: viewInputSchema, output: workspaceSchema },
   mutate: { input: mutationInputSchema, output: workspaceSchema },
+  saveSettings: { input: saveSettingsInputSchema, output: workspaceSchema },
   plan: { input: planInputSchema, output: workspaceSchema },
   rollover: { input: rolloverInputSchema, output: workspaceSchema },
   widget_render: { input: widgetRenderInputSchema, output: widgetRenderResultSchema },
@@ -168,6 +192,7 @@ export interface WidgetRegistrySurface {
 export interface LifeManagerActions {
   workspace(input?: ViewInput): Workspace;
   mutate(input: MutationInput): Workspace;
+  saveSettings(input: SaveSettingsInput): Workspace;
   plan(input?: { expectedRevision?: number }): Workspace;
   rollover(input?: { name?: string; expectedRevision?: number }): Workspace;
   exportData(): ReturnType<LifeManagerStore['exportData']>;
@@ -194,6 +219,11 @@ export function createLifeManagerActions(
           snapshotId: result.workspace.dashboard.snapshotId,
         });
       }
+      return result.workspace;
+    },
+    saveSettings(input) {
+      const result = store.saveSettings(saveSettingsInputSchema.parse(input), getWidgets());
+      if (result.changed) publish({ operation: 'saveSettings', revision: result.workspace.dashboard.revision });
       return result.workspace;
     },
     plan(input = {}) {

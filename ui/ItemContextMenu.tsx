@@ -1,10 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { STATUSES, type Item } from '../src/types';
+import type { Item, WorkspaceSettings } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
+import { selectedProperty } from './PropertySelect';
 
-export function ItemContextMenu({ item, x, y, disabled, onStatus, onOpen, onClose }: {
+export function ItemContextMenu({ item, x, y, disabled, settings, propertyId, onProperty, onStatus, onOpen, onClose }: {
   item: Item; x: number; y: number; disabled: boolean;
-  onStatus: (status: Item['status']) => void; onOpen: () => void; onClose: () => void;
+  settings?: WorkspaceSettings; propertyId?: string | null; onProperty?: (propertyId: string, value: string | null) => void;
+  onStatus?: (status: Item['status']) => void; onOpen: () => void; onClose: () => void;
 }) {
+  const property = selectedProperty(settings ?? DEFAULT_WORKSPACE_SETTINGS, propertyId);
+  const value = property ? propertyValue(item, property.id) : null;
+  const options = property ? [{ id: null, label: property.unsetLabel, color: property.unsetColor }, ...property.options] : [];
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: x, top: y });
   useLayoutEffect(() => {
@@ -27,7 +33,9 @@ export function ItemContextMenu({ item, x, y, disabled, onStatus, onOpen, onClos
     }
   }}>
     <strong>{item.title}</strong>
-    {STATUSES.map(status => <button key={status} type="button" role="menuitemradio" aria-checked={item.status === status} disabled={disabled} onClick={() => onStatus(status)}><i className={`lm-status-dot lm-status-${status.toLowerCase()}`} />{status}<span aria-hidden="true">{item.status === status ? '✓' : ''}</span></button>)}
+    {options.map(option => <button key={option.id ?? ''} type="button" role="menuitemradio" aria-checked={value === option.id} disabled={disabled}
+      onClick={() => { if (onProperty) onProperty(property!.id, option.id); else if (property?.id === 'status') onStatus?.(option.id); }}>
+      <i className="lm-status-dot" style={{ backgroundColor: option.color }} />{option.label}<span aria-hidden="true">{value === option.id ? '✓' : ''}</span></button>)}
     <button type="button" role="menuitem" className="lm-item-menu__open" onClick={onOpen}>Open details</button>
   </div>;
 }

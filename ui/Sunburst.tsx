@@ -1,12 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
 import {
   computeEfforts,
   siblingShares,
   allocationLimit,
   mutateItems,
 } from '../src/domain';
-import type { Item, Status } from '../src/types';
+import type { Item } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
+import { presentationProperty, propertyPresentation } from './property-presentation';
 import type { SunburstProps } from './contracts';
 import { DEFAULT_SUNBURST_DISPLAY, useSunburstDisplay, type SunburstDisplay } from './sunburst-display';
 import { viewComparator } from './view-sort';
@@ -23,7 +25,7 @@ export interface SunburstSegment {
   id: string;
   parentId: string | null;
   title: string;
-  status: Status;
+  status: Item['status'];
   included: boolean;
   depth: number;
   startAngle: number;
@@ -281,10 +283,6 @@ export function buildSunburstLayout(
   });
 }
 
-function statusClass(status: Status) {
-  return `lm-sunburst__segment--${status.toLowerCase()}`;
-}
-
 export function segmentLabel(segment: SunburstSegment, display: SunburstDisplay, svgSize: number, compactTopic = false) {
   const angle = (segment.startAngle + segment.endAngle) / 2;
   const scale = VIEW_SIZE / svgSize;
@@ -352,8 +350,9 @@ function pointerPosition(event: { clientX: number; clientY: number }, svg: SVGSV
 
 export function Sunburst({
   items, selectedId, focusId, showAll, onSelect, onHighlight, onFocus, onAllocate,
-  disabled = false, mode = 'Navigate', sort = 'Order', onEffort, onCreate, onContextMenu, onShowHidden, compact = false,
+  disabled = false, mode = 'Navigate', sort = 'Order', onEffort, onCreate, onContextMenu, onShowHidden, compact = false, settings = DEFAULT_WORKSPACE_SETTINGS, colorPropertyId,
 }: SunburstProps) {
+  const colorProperty = presentationProperty(settings, colorPropertyId);
   const clipPrefix = useId().replace(/:/g, '');
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -396,11 +395,11 @@ export function Sunburst({
     if (drag?.kind === 'Effort') return items.map((item) => item.id === drag.id
       ? { ...item, effortOverride: drag.value } : item);
     return preview && !showAll
-      ? mutateItems(items, { type: 'allocate', id: preview.id, share: preview.share }) : items;
-  }, [disabled, drag, items, preview?.id, preview?.share, showAll]);
+      ? mutateItems(items, { type: 'allocate', id: preview.id, share: preview.share }, settings) : items;
+  }, [disabled, drag, items, preview?.id, preview?.share, showAll, settings]);
   // Use committed values while dragging so sorted slices do not jump under the pointer.
-  const compareItems = useMemo(() => viewComparator(items, sort), [items, sort]);
-  const efforts = useMemo(() => computeEfforts(displayedItems), [displayedItems]);
+  const compareItems = useMemo(() => viewComparator(items, sort, settings, colorPropertyId), [items, sort, settings, colorPropertyId]);
+  const efforts = useMemo(() => computeEfforts(displayedItems, settings), [displayedItems, settings]);
   const layout = useMemo(() => buildSunburstLayout(displayedItems, {
     focusId, showAll, efforts, compareItems, maxDepth: compact ? 2 : display.maxDepth, ringWeights: display.ringWeights,
     // The compact Topic sectors include the origin rather than reserving a
@@ -534,13 +533,13 @@ export function Sunburst({
   return (
     <section className="lm-sunburst" aria-label="Intended attention sunburst">
       {focus && !compact && <div className="lm-sunburst__navigation">
-        <button aria-label={parent ? `Return to ${parent.title}` : 'Return to overview'} onClick={zoomOut}>↑ {parent?.title ?? 'Life'}</button>
+        <button aria-label={parent ? `Return to ${parent.title}` : 'Return to overview'} onClick={zoomOut}>↑ {parent?.title ?? settings.name}</button>
       </div>}
       <div className={`lm-sunburst__stage${layout.length === 0 ? ' lm-sunburst__stage--empty' : ''}`}>
         <svg ref={svgRef}
           className={`lm-sunburst__svg${omni ? ' lm-sunburst__svg--omni' : ''}${drag ? ` lm-sunburst__svg--dragging lm-sunburst__svg--${drag.kind.toLowerCase()}` : ''}`}
           viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} role="tree" aria-hidden={layout.length === 0 || undefined}
-          aria-label={focus ? `${focus.title} allocation` : 'Life allocation overview'}
+          aria-label={focus ? `${focus.title} allocation` : `${settings.name} allocation overview`}
           onPointerMove={event => {
             const press = touchPress.current;
             if (press && press.id === event.pointerId && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8) {
@@ -569,14 +568,16 @@ export function Sunburst({
             const labelClip = `${clipPrefix}-slice-${segmentIndex}`;
             const thickness = segment.outerRadius - segment.innerRadius;
             const angularGap = Math.min(0.012, 2.2 / Math.max(1, segment.innerRadius));
+            const appearance = propertyPresentation(itemById.get(segment.id)!, colorProperty);
             const selectedClass = segment.id === selectedId ? ' lm-sunburst__segment--selected' : '';
             const ghostClass = !segment.included ? ' lm-sunburst__segment--ghost' : '';
             return (
               <g key={segment.id}
-                className={`lm-sunburst__segment ${statusClass(segment.status)}${selectedClass}${ghostClass}`}
+                className={`lm-sunburst__segment${selectedClass}${ghostClass}`}
+                style={{ '--segment-color': appearance.color } as CSSProperties}
                 onContextMenu={event => { if (pointerType.current === 'touch' && (mode === 'Navigate' || omni)) { event.preventDefault(); return; } if (onContextMenu) { event.preventDefault(); event.stopPropagation(); cancelNavigation(); onContextMenu(segment.id, event.clientX, event.clientY); } }}
                 role="treeitem" tabIndex={0}
-                aria-label={`${segment.title}, ${segment.status}, ${formatPercent(segment.actualShare)} share, ${formatPercent(layers.actual)} effort${segment.included ? '' : ', excluded'}`}
+                aria-label={`${segment.title}${appearance.label ? `, ${appearance.label}` : ''}, ${formatPercent(segment.actualShare)} share, ${formatPercent(layers.actual)} effort${segment.included ? '' : ', excluded'}`}
                 aria-selected={segment.id === selectedId}
                 aria-description={segment.hasVisibleChildren ? 'Zoom into branch. Long-press or double-click to open details.' : 'Open details.'}
                 onPointerEnter={(event) => { if (event.pointerType !== 'touch' && !dragRef.current) setHoveredId(segment.id); }}
@@ -608,7 +609,7 @@ export function Sunburst({
                   if (!compact && pointerType.current !== 'touch' && (mode === 'Navigate' || omni)) onSelect(segment.id);
                 }}
                 onKeyDown={(event) => handleKey(event, segment)}>
-                <title>{`${segment.title}\n${segment.status} · ${formatPercent(segment.actualShare)} intended share · ${formatPercent(layers.actual)} effort${segment.included ? '' : '\nExcluded — temporary Show all geometry'}`}</title>
+                <title>{`${segment.title}\n${appearance.label ? `${appearance.label} · ` : ''}${formatPercent(segment.actualShare)} intended share · ${formatPercent(layers.actual)} effort${segment.included ? '' : '\nExcluded — temporary Show all geometry'}`}</title>
                 <path className="lm-sunburst__sector"
                   d={annularSectorPath(segment.startAngle, segment.endAngle, segment.innerRadius, segment.outerRadius, angularGap, 1.5)} />
                 {layers.base > 0 && <path className="lm-sunburst__effort lm-sunburst__effort--base"
@@ -666,7 +667,7 @@ export function Sunburst({
             onKeyDown={(event) => { if (focus && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); onSelect(focus.id); } }}>
             <circle cx={CENTER} cy={CENTER} r={focus ? 94 : 46} />
             <text x={CENTER} y={CENTER + (focus ? mode === 'Create' ? -64 : -12 : 8)} textAnchor="middle">
-              <tspan className="lm-sunburst__center-title" x={CENTER}>{focus?.title.length && focus.title.length > 14 ? `${focus.title.slice(0, 13)}…` : focus?.title ?? 'Life'}</tspan>
+              <tspan className="lm-sunburst__center-title" x={CENTER}>{focus?.title.length && focus.title.length > 14 ? `${focus.title.slice(0, 13)}…` : focus?.title ?? settings.name}</tspan>
               {focus && <tspan className="lm-sunburst__center-hint" x={CENTER} dy="29">Open details</tspan>}
             </text>
           </g>}
@@ -683,7 +684,8 @@ export function Sunburst({
             transform="translate(24 24) scale(.14)">
             <circle className="lm-sunburst__minimap-bg" cx={CENTER} cy={CENTER} r="488" />
             {overview.map((segment) => <path key={segment.id}
-              className={`lm-sunburst__minimap-sector ${statusClass(segment.status)}${focusTrail.has(segment.id) ? ' lm-sunburst__minimap-sector--focus' : ''}${!segment.included ? ' lm-sunburst__segment--ghost' : ''}`}
+              style={{ '--segment-color': propertyPresentation(itemById.get(segment.id)!, colorProperty).color } as CSSProperties}
+              className={`lm-sunburst__minimap-sector${focusTrail.has(segment.id) ? ' lm-sunburst__minimap-sector--focus' : ''}${!segment.included ? ' lm-sunburst__segment--ghost' : ''}`}
               d={annularSectorPath(segment.startAngle, segment.endAngle, segment.innerRadius, segment.outerRadius, .018, 4)} />)}
             <circle className="lm-sunburst__minimap-center" cx={CENTER} cy={CENTER} r="48" />
           </g>}
@@ -693,7 +695,7 @@ export function Sunburst({
           <strong>{formatPercent(drag.value)}</strong>
         </output>}
         {layout.length === 0 && <div className="lm-sunburst__empty">
-          <strong>{focus?.title ?? 'Life'}</strong>
+          <strong>{focus?.title ?? settings.name}</strong>
           <span role="status">{items.some(item => item.parentId === (focus?.id ?? null)) ? 'No included children' : focus ? 'No children yet' : 'No Items yet'}</span>
           <div className="lm-sunburst__empty-actions">
             {focus && <button onClick={() => onSelect(focus.id)}>Open details</button>}

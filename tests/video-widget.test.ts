@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { mutateItems } from '../src/domain.js';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties.js';
 import type { WidgetActionContext } from '../src/widgets.js';
 import { parseVideoWidgetConfig, videoWidget } from '../src/plugins/video.js';
 import type { Item, Workspace } from '../src/types.js';
@@ -54,7 +55,7 @@ function actionContext(initial: Workspace, config: Record<string, unknown>, snap
         dashboard: {
           ...current.dashboard,
           revision: current.dashboard.revision + 1,
-          items: mutateItems(current.dashboard.items, command),
+          items: mutateItems(current.dashboard.items, command, current.settings),
         },
       };
       return current;
@@ -149,7 +150,7 @@ describe('local video widget', () => {
     expect(reply.message).toContain('Movie');
     expect(context.commands).toHaveLength(1);
     expect(context.commands[0]).toMatchObject({ type: 'create', parentId: 'owner', title: 'Movie', patch: {
-      status: 'Later', included: true, notes: '', resourceUri: pathToFileURL(join(canonicalRoot, 'Movie.mp4')).href,
+      included: true, notes: '', resourceUri: pathToFileURL(join(canonicalRoot, 'Movie.mp4')).href,
     } });
     const created = context.current().dashboard.items.find(candidate => candidate.parentId === 'owner' && candidate.title === 'Movie');
     expect(created).toMatchObject({ status: 'Later', included: true, resourceUri: pathToFileURL(join(canonicalRoot, 'Movie.mp4')).href });
@@ -207,4 +208,34 @@ describe('local video widget', () => {
       { kind: 'file', name: 'README.txt', path: 'README.txt' },
     ]));
   });
+});
+
+it('uses configured defaults for new video Items', async () => {
+  const root = await tempMedia();
+  const initial = workspace([item('owner', null)]);
+  initial.settings = structuredClone(DEFAULT_WORKSPACE_SETTINGS);
+  initial.settings.properties[0]!.defaultValue = 'Now';
+  const { context, current } = actionContext(initial, { root });
+  await videoWidget.actions['create-item']!.run({ path: 'Movie.mp4' }, context);
+  expect(current().dashboard.items.find(item => item.parentId === 'owner')?.status).toBe('Now');
+});
+
+it('releases completed custom lifecycle references while skipped references still suppress listings', async () => {
+  const root = await tempMedia();
+  const initial = workspace([
+    item('owner', null),
+    item('complete', 'owner', { properties: { workflow: 'finished' }, resourceUri: pathToFileURL(join(root, 'Movie.mp4')).href }),
+    item('skip', 'owner', { status: 'Cut', properties: { workflow: 'skipped' }, resourceUri: pathToFileURL(join(root, 'README.txt')).href }),
+  ]);
+  initial.settings = structuredClone(DEFAULT_WORKSPACE_SETTINGS);
+  initial.settings.properties.push({ id: 'workflow', name: 'Workflow', defaultValue: null, unsetLabel: 'Unset', unsetColor: '#aabbcc', options: [
+    { id: 'finished', label: 'Finished', color: '#00ff00', behavior: 'complete' },
+    { id: 'skipped', label: 'Skipped', color: '#ff0000', behavior: 'skip' },
+  ] });
+  initial.settings.lifecyclePropertyId = 'workflow';
+  const html = await videoWidget.render({ widgetId: 'local-video', itemId: 'owner', config: { root } }, initial);
+  expect(html).toContain('Movie.mp4');
+  expect(html).not.toContain('README.txt');
+  const legacySkip = workspace([item('owner', null), item('skip', 'owner', { status: 'Skip', resourceUri: pathToFileURL(join(root, 'Movie.mp4')).href })]);
+  expect(await videoWidget.render({ widgetId: 'local-video', itemId: 'owner', config: { root } }, legacySkip)).not.toContain('Movie.mp4');
 });

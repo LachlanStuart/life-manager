@@ -1,6 +1,6 @@
-import { MAX_NOTES_CHARS, STATUSES, type Item, type ItemCommand, type ItemPatch } from './types';
+import { MAX_NOTES_CHARS, type Item, type ItemCommand, type ItemPatch, type WorkspaceSettings } from './types';
 
-const statusSet = new Set<string>(STATUSES);
+import { DEFAULT_WORKSPACE_SETTINGS, defaultPropertyValues, lifecycleBehavior, validatePropertyValue } from './properties';
 
 function fail(message: string): never {
   throw new Error(message);
@@ -22,7 +22,7 @@ function assertNonNegativeFinite(value: unknown, label: string): asserts value i
   }
 }
 
-function assertPatch(patch: unknown, label = 'patch'): asserts patch is ItemPatch {
+function assertPatch(patch: unknown, label = 'patch', settings?: WorkspaceSettings): asserts patch is ItemPatch {
   if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
     fail(`${label} must be an object`);
   }
@@ -33,9 +33,17 @@ function assertPatch(patch: unknown, label = 'patch'): asserts patch is ItemPatc
       fail(`${label}.title must be a nonempty string`);
     }
   }
-  if ('status' in candidate &&
-      (typeof candidate.status !== 'string' || !statusSet.has(candidate.status))) {
-    fail(`${label}.status is invalid`);
+  if ('status' in candidate) {
+    if (candidate.status !== null && typeof candidate.status !== 'string') fail(`${label}.status is invalid`);
+    if (settings) validatePropertyValue(settings, 'status', candidate.status);
+  }
+  if ('properties' in candidate) {
+    if (!candidate.properties || typeof candidate.properties !== 'object' || Array.isArray(candidate.properties)) fail(`${label}.properties must be an object`);
+    for (const [id, value] of Object.entries(candidate.properties as Record<string, unknown>)) {
+      if (id === 'status') fail('Use the status field for the status property');
+      if (value !== null && typeof value !== 'string') fail(`${label}.properties.${id} is invalid`);
+      if (settings) validatePropertyValue(settings, id, value);
+    }
   }
   if ('notes' in candidate && (typeof candidate.notes !== 'string' || candidate.notes.length > MAX_NOTES_CHARS)) {
     fail(`${label}.notes must be a string of at most ${MAX_NOTES_CHARS} characters`);
@@ -68,7 +76,7 @@ function itemIndex(items: readonly Item[]): Map<string, Item> {
   return byId;
 }
 
-function validateItems(items: readonly Item[]): Map<string, Item> {
+function validateItems(items: readonly Item[], settings?: WorkspaceSettings): Map<string, Item> {
   const byId = itemIndex(items);
 
   for (const item of items) {
@@ -82,8 +90,7 @@ function validateItems(items: readonly Item[]): Map<string, Item> {
     if (typeof item.title !== 'string' || item.title.trim() === '') {
       fail(`title for ${item.id} must be nonempty`);
     }
-    if (!statusSet.has(item.status)) fail(`status for ${item.id} is invalid`);
-    assertPatch(item, `item ${item.id}`);
+    assertPatch(item, `item ${item.id}`, settings);
     if (typeof item.included !== 'boolean') fail(`included for ${item.id} must be a boolean`);
     assertNonNegativeFinite(item.weight, `weight for ${item.id}`);
     if (item.allocationAuto !== undefined && typeof item.allocationAuto !== 'boolean') fail(`allocationAuto for ${item.id} must be a boolean`);
@@ -170,8 +177,8 @@ export function localShare(items: readonly Item[], id: string): number {
 }
 
 /** Calculate every local branch, including branches suppressed by an excluded ancestor. */
-export function computeEfforts(items: readonly Item[]): Record<string, number> {
-  validateItems(items);
+export function computeEfforts(items: readonly Item[], settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS): Record<string, number> {
+  validateItems(items, settings);
   const children = new Map<string | null, Item[]>();
   for (const item of items) {
     const siblings = children.get(item.parentId) ?? [];
@@ -187,12 +194,12 @@ export function computeEfforts(items: readonly Item[]): Record<string, number> {
     let effort: number;
     if (item.effortOverride !== null) {
       effort = item.effortOverride;
-    } else if (item.status === 'Skip' || item.status === 'Cut') {
+    } else if (lifecycleBehavior(item, settings) === 'skip') {
       effort = 0;
     } else {
       const includedChildren = (children.get(item.id) ?? []).filter((child) => child.included);
       if (includedChildren.length === 0) {
-        effort = item.status === 'Done' ? 100 : 0;
+        effort = lifecycleBehavior(item, settings) === 'complete' ? 100 : 0;
       } else {
         const shares = siblingShares(includedChildren);
         effort = includedChildren.reduce((sum, child) => sum + calculate(child) * shares.get(child.id)! / 100, 0);
@@ -231,8 +238,8 @@ function assertIds(ids: unknown, label: string): asserts ids is string[] {
 }
 
 /** Apply one validated hierarchy command without mutating the input array or Items. */
-export function mutateItems(items: readonly Item[], command: ItemCommand): Item[] {
-  const byId = validateItems(items);
+export function mutateItems(items: readonly Item[], command: ItemCommand, settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS): Item[] {
+  const byId = validateItems(items, settings);
   if (command === null || typeof command !== 'object') fail('command must be an object');
 
   let result: Item[];
@@ -243,35 +250,37 @@ export function mutateItems(items: readonly Item[], command: ItemCommand): Item[
       if (typeof command.title !== 'string' || command.title.trim() === '') {
         fail('title must be nonempty');
       }
-      if (command.patch !== undefined) assertPatch(command.patch);
+      if (command.patch !== undefined) assertPatch(command.patch, 'patch', settings);
       const id = command.id ?? generatedId(items);
       assertId(id, 'id');
       if (byId.has(id)) fail(`Duplicate item id: ${id}`);
+      const defaults = defaultPropertyValues(settings);
       const created: Item = {
         id,
         parentId: command.parentId,
         order: nextOrder(items, command.parentId),
         title: command.title,
-        status: 'Later',
+        ...defaults,
         notes: '',
         included: true,
         weight: 1,
         allocationAuto: command.patch?.weight === undefined,
         effortOverride: null,
         ...command.patch,
+        properties: { ...defaults.properties, ...command.patch?.properties },
       };
       result = [...items, created];
       if (command.share != null) {
         // Explicit creation uses the same allocation rules atomically.
-        const automatic = mutateItems(items, { ...command, id, share: undefined });
-        return mutateItems(automatic, { type: 'allocate', id, share: command.share });
+        const automatic = mutateItems(items, { ...command, id, share: undefined }, settings);
+        return mutateItems(automatic, { type: 'allocate', id, share: command.share }, settings);
       }
       break;
     }
     case 'update': {
       requireItem(byId, command.id);
-      assertPatch(command.patch);
-      result = items.map((item) => item.id === command.id ? { ...item, ...command.patch } : item);
+      assertPatch(command.patch, 'patch', settings);
+      result = items.map((item) => item.id === command.id ? { ...item, ...command.patch, ...(command.patch.properties ? { properties: { ...item.properties, ...command.patch.properties } } : {}) } : item);
       break;
     }
     case 'delete':
@@ -376,10 +385,10 @@ export function mutateItems(items: readonly Item[], command: ItemCommand): Item[
     }
     case 'bulk': {
       assertIds(command.ids, 'bulk ids');
-      assertPatch(command.patch);
+      assertPatch(command.patch, 'patch', settings);
       for (const id of command.ids) requireItem(byId, id);
       const selected = new Set(command.ids);
-      result = items.map((item) => selected.has(item.id) ? { ...item, ...command.patch } : item);
+      result = items.map((item) => selected.has(item.id) ? { ...item, ...command.patch, ...(command.patch.properties ? { properties: { ...item.properties, ...command.patch.properties } } : {}) } : item);
       break;
     }
     default:
@@ -407,7 +416,7 @@ export function mutateItems(items: readonly Item[], command: ItemCommand): Item[
         ? { ...item, weight: item.weight * 100 / explicitTotal } : item);
     }
   }
-  validateItems(result);
+  validateItems(result, settings);
   return result;
 }
 

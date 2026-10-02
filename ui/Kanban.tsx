@@ -1,13 +1,18 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { type Item, type ItemCommand, type Status } from '../src/types';
+import { type Item, type ItemCommand, type WorkspaceSettings } from '../src/types';
 import { buildKanbanModel, reorderedSiblingIds, type KanbanDropPosition } from './kanban-helpers';
+import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
+import { presentationProperty, propertyPresentation } from './property-presentation';
 import type { ViewSort } from './view-sort';
 import './kanban.css';
 
 export interface KanbanProps {
   items: Item[];
   sort?: ViewSort;
+  settings?: WorkspaceSettings;
+  groupPropertyId?: string | null;
+  colorPropertyId?: string | null;
   focusId: string | null;
   selectedId: string | null;
   disabled: boolean;
@@ -16,9 +21,9 @@ export interface KanbanProps {
 }
 
 type DropTarget =
-  | { kind: 'column'; status: Status }
-  | { kind: 'group'; status: Status; parentId: string | null }
-  | { kind: 'card'; status: Status; targetId: string; position: KanbanDropPosition };
+  | { kind: 'column'; status: string | null }
+  | { kind: 'group'; status: string | null; parentId: string | null }
+  | { kind: 'card'; status: string | null; targetId: string; position: KanbanDropPosition };
 
 type DragState = {
   id: string;
@@ -31,16 +36,6 @@ type DragState = {
   fontSize: number;
 };
 
-const statusDescription: Record<Status, string> = {
-  Now: 'Current work',
-  Doing: 'In progress',
-  Blocked: 'Waiting on something',
-  Done: 'Finished',
-  Later: 'Reconsider later',
-  Skip: 'Not relevant this period',
-  Cut: 'Intentionally abandoned',
-};
-
 function cardDropTarget(element: Element | null, clientY: number): DropTarget | null {
   const card = element?.closest<HTMLElement>('[data-lm-kanban-card]');
   if (card) {
@@ -48,7 +43,7 @@ function cardDropTarget(element: Element | null, clientY: number): DropTarget | 
     const midpoint = rect.top + rect.height / 2;
     return {
       kind: 'card',
-      status: card.dataset.kanbanStatus as Status,
+      status: card.dataset.kanbanStatus || null,
       targetId: card.dataset.kanbanCard ?? '',
       position: clientY < midpoint ? 'before' : 'after',
     };
@@ -57,12 +52,12 @@ function cardDropTarget(element: Element | null, clientY: number): DropTarget | 
   if (group) {
     return {
       kind: 'group',
-      status: group.dataset.kanbanStatus as Status,
+      status: group.dataset.kanbanStatus || null,
       parentId: group.dataset.kanbanParent || null,
     };
   }
   const column = element?.closest<HTMLElement>('[data-lm-kanban-column]');
-  if (column) return { kind: 'column', status: column.dataset.kanbanColumn as Status };
+  if (column) return { kind: 'column', status: column.dataset.kanbanColumn || null };
   return null;
 }
 
@@ -86,11 +81,13 @@ function columnTargetAtPoint(board: HTMLElement | null, clientX: number, clientY
     const rect = candidate.getBoundingClientRect();
     return clientX >= rect.left && clientX <= rect.right;
   });
-  return column ? { kind: 'column', status: column.dataset.kanbanColumn as Status } : null;
+  return column ? { kind: 'column', status: column.dataset.kanbanColumn || null } : null;
 }
 
-export function Kanban({ items, focusId, selectedId, disabled, onSelect, onCommand, sort = 'Order' }: KanbanProps) {
-  const model = React.useMemo(() => buildKanbanModel(items, focusId, sort), [items, focusId, sort]);
+export function Kanban({ items, focusId, selectedId, disabled, onSelect, onCommand, sort = 'Order', settings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId, colorPropertyId }: KanbanProps) {
+  const groupProperty = presentationProperty(settings, groupPropertyId);
+  const colorProperty = presentationProperty(settings, colorPropertyId);
+  const model = React.useMemo(() => buildKanbanModel(items, focusId, sort, settings, groupPropertyId), [items, focusId, sort, settings, groupPropertyId]);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const suppressClick = React.useRef(false);
   const dragRef = React.useRef<DragState | null>(null);
@@ -123,7 +120,7 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
     if (!dragRef.current) return;
     // Changing the focused branch changes the board underneath the pointer.
     cancelDrag();
-  }, [focusId, sort, cancelDrag]);
+  }, [focusId, sort, settings, groupPropertyId, cancelDrag]);
 
   React.useEffect(() => {
     if (!drag) return;
@@ -203,8 +200,9 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
     if (!target || !moving || target.kind === 'card' && target.targetId === moving.id) return;
     const commands: ItemCommand[] = [];
     const targetStatus = target.status;
-    if (targetStatus !== moving.status) {
-      commands.push({ type: 'update', id: moving.id, patch: { status: targetStatus } });
+    if (groupProperty && targetStatus !== propertyValue(moving, groupProperty.id)) {
+      commands.push({ type: 'update', id: moving.id, patch: groupProperty.id === 'status'
+        ? { status: targetStatus } : { properties: { [groupProperty.id]: targetStatus } } });
     }
     if (sort === 'Order' && target.kind === 'card' && target.targetId !== moving.id) {
       const ids = reorderedSiblingIds(items, moving.id, target.targetId, target.position);
@@ -247,18 +245,19 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
 
   return (
     <section className="lm-kanban" aria-label="Kanban board">
-      <div className="lm-kanban__board" ref={boardRef} role="list" aria-label="Items by status">
+      <div className="lm-kanban__board" ref={boardRef} role="list" aria-label={groupProperty ? `Items by ${groupProperty.name.toLowerCase()}` : 'Items'}>
         {model.columns.map((column) => (
           <section
             className="lm-kanban__column"
             data-lm-kanban-column="true"
-            data-kanban-column={column.status}
-            key={column.status}
-            aria-label={`${column.status}: ${statusDescription[column.status]}`}
+            data-kanban-column={column.status ?? ''}
+            key={column.status === null ? 'unset' : `value:${column.status}`}
+            aria-label={`${column.label}: ${column.groups.reduce((count, group) => count + group.cards.length, 0)} Items`}
+            style={{ '--lm-kanban-column-color': column.color } as React.CSSProperties}
             role="listitem"
           >
             <header className="lm-kanban__column-header">
-              <h2>{column.status}</h2><span>{column.groups.reduce((count, group) => count + group.cards.length, 0)}</span>
+              <h2>{column.label}</h2><span>{column.groups.reduce((count, group) => count + group.cards.length, 0)}</span>
             </header>
             <div className="lm-kanban__column-dropzone">
               {column.groups.map((group) => (
@@ -266,7 +265,7 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
                   className="lm-kanban__group"
                   data-lm-kanban-group="true"
                   data-kanban-group={group.key}
-                  data-kanban-status={column.status}
+                  data-kanban-status={column.status ?? ''}
                   data-kanban-parent={group.parentId ?? ''}
                   key={group.key}
                   aria-label={`${group.parentPath.map((parent) => parent.title).join(' / ') || 'Top level'} group`}
@@ -285,13 +284,13 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
                           className={`lm-kanban__card${selectedId === card.item.id ? ' lm-kanban__card--selected' : ''}${isDragging ? ' lm-kanban__card--dragging' : ''}${dropPosition ? ` lm-kanban__card--drop-${dropPosition}` : ''}`}
                           data-lm-kanban-card="true"
                           data-kanban-card={card.item.id}
-                          data-kanban-status={card.item.status}
+                          data-kanban-status={column.status ?? ''}
                           key={card.item.id}
                           role="button"
                           tabIndex={0}
                           aria-current={selectedId === card.item.id ? 'true' : undefined}
-                          aria-label={`${card.item.title}, ${card.item.status}`}
-                          style={{ '--lm-kanban-card-height': `${card.height}px`, '--lm-kanban-card-font-size': `${card.fontSize}px` } as React.CSSProperties}
+                          aria-label={`${card.item.title}${groupProperty ? `, ${column.label}` : ''}`}
+                          style={{ '--lm-kanban-card-color': propertyPresentation(card.item, colorProperty).color, '--lm-kanban-card-height': `${card.height}px`, '--lm-kanban-card-font-size': `${card.fontSize}px` } as React.CSSProperties}
                           onPointerDown={event => beginDrag(event, card.item.id, card.fontSize)}
                           onPointerMove={setDropTargetFromPointer}
                           onPointerUp={event => finishDrag(event)}
@@ -319,7 +318,7 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
       </div>
       {drag?.active && createPortal(<div className="lm-kanban__card lm-kanban__drag-preview" aria-hidden="true"
         style={{ left: drag.left + drag.x - drag.startX, top: drag.top + drag.y - drag.startY,
-          width: drag.width, minHeight: drag.height, '--lm-kanban-card-font-size': `${drag.fontSize}px` } as React.CSSProperties}>
+          width: drag.width, minHeight: drag.height, '--lm-kanban-card-color': byId.has(drag.id) ? propertyPresentation(byId.get(drag.id)!, colorProperty).color : undefined, '--lm-kanban-card-font-size': `${drag.fontSize}px` } as React.CSSProperties}>
         <span className="lm-kanban__card-title">{byId.get(drag.id)?.title}</span>
       </div>, document.body)}
       {model.cards.length === 0 && <p className="lm-kanban__empty-board">No included Items in this branch.</p>}

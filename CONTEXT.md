@@ -4,15 +4,23 @@ Life Manager organises personal pursuits and supporting knowledge, makes intende
 
 ## Language
 
-**Topic**: One of the four broad personal efforts: Tend, Build, Learn, and Enjoy.
+**Workspace**: The named collection of Items, property definitions and planning history.
 
-**Item**: A place in the hierarchy with a lifecycle status, notes, and optional child Items.
+**Topic**: A top-level Item representing a broad area. The starting template provides Tend, Build, Learn, and Enjoy; these can be renamed, reordered, added or removed.
 
-**Lifecycle status**: An Item’s manually controlled annotation using Later, Now, Doing, Blocked, Done, Skip, or Cut.
+**Item**: A place in the hierarchy with single-choice properties, notes, and optional child Items.
 
-**Skip**: The status for a routine Item that is irrelevant for the current review.
+**Property**: A named single-choice field with ordered options, option colours, an explicit unset value and an optional default for new Items.
 
-**Cut**: The status for an Item intentionally abandoned.
+**Lifecycle property**: The optional property whose option behaviours affect calculated effort and identify finished Items. It is independent of the properties chosen for colouring or grouping.
+
+**Lifecycle status**: An Item’s value in the lifecycle property. The starting Status property offers Later, Now, Doing, Blocked, Done, Skip, and Cut.
+
+**Unset**: No selected option. Changing a creation default does not fill unset values on existing Items.
+
+**Skip**: The starting Status option for a routine Item that is irrelevant for the current review.
+
+**Cut**: The starting Status option for an Item intentionally abandoned.
 
 **Dashboard**: The selection and arrangement of Items expressing intended attention within a period.
 
@@ -30,7 +38,7 @@ _Avoid_: Project progress, overall completion, time spent.
 
 **Rollover**: The explicit closing of the current dashboard and creation of a new period with its state carried forward.
 
-**Snapshot**: A historical dashboard state retaining its checkpoint’s content and assessments independently of later current edits.
+**Snapshot**: A historical dashboard state retaining its checkpoint’s Items, assessments, workspace name, and property definitions independently of later current edits.
 
 **Opening**: The snapshot of a newly created period’s unchanged inherited dashboard.
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { Item } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
+import type { Item, WorkspaceSettings } from '../src/types';
 import { computeEfforts } from '../src/domain';
 import { viewComparator, type ViewSort } from '../ui/view-sort';
 import { buildSunburstLayout } from '../ui/Sunburst';
@@ -29,4 +30,23 @@ describe('temporary dashboard sorting', () => {
     const groups = board.columns.find(column => column.status === 'Now')!.groups;
     expect(groups.map(group => group.cards.map(card => card.item.id))).toEqual([['a0', 'a1'], ['b0', 'b1']]);
   });
+});
+
+it('sorts by the selected property option order with unset last and saved order breaking ties', () => {
+  const settings: WorkspaceSettings = { ...DEFAULT_WORKSPACE_SETTINGS, properties: [...DEFAULT_WORKSPACE_SETTINGS.properties, {
+    id: 'category', name: 'Category', unsetLabel: 'Unset', unsetColor: '#aaaaaa', defaultValue: null,
+    options: [{ id: 'book', label: 'Reading', color: '#123456' }, { id: 'code', label: 'Making', color: '#654321' }],
+  }] };
+  const custom = items.map((item, index) => ({ ...item, properties: { category: [null, 'code', 'book'][index]! } }));
+  expect([...custom].sort(viewComparator(custom, 'Status', settings, 'category')).map(item => item.id)).toEqual(['c', 'b', 'a']);
+  expect(buildKanbanModel(custom, null, 'Status', settings, 'category').cards.map(card => card.item.id)).toEqual(['c', 'b', 'a']);
+  expect([...custom].sort(viewComparator(custom, 'Status', settings, null)).map(item => item.id)).toEqual(['a', 'b', 'c']);
+});
+
+it('uses the supplied lifecycle configuration for effort sorting', () => {
+  const settings = structuredClone(DEFAULT_WORKSPACE_SETTINGS);
+  settings.properties[0]!.options.find(option => option.id === 'Now')!.behavior = 'complete';
+  settings.properties[0]!.options.find(option => option.id === 'Done')!.behavior = 'normal';
+  const automatic = items.map(item => ({ ...item, effortOverride: null }));
+  expect([...automatic].sort(viewComparator(automatic, 'Effort', settings)).map(item => item.id)).toEqual(['b', 'a', 'c']);
 });

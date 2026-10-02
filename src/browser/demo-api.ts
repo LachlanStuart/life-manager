@@ -1,7 +1,7 @@
 import type { SqlJsStatic } from 'sql.js';
 import { initializeDatabase, createLifeManagerStore } from '../store';
 import { createLifeManagerActions, widgetActionInputSchema, widgetRenderInputSchema } from '../rpc';
-import type { MutationInput, PromptTemplate } from '../types';
+import type { MutationInput, PromptTemplate, SaveSettingsInput } from '../types';
 import { seedDemo } from '../demo-seed';
 import { branchTools } from '../plugins/branch-tools';
 import { browserSqlite } from './sqlite';
@@ -25,6 +25,7 @@ export function createDemoApi(SQL: SqlJsStatic, storage: IDBDatabase,
       switch (url.pathname) {
         case '/workspace': result = actions.workspace(url.searchParams.has('snapshotId') ? { snapshotId: url.searchParams.get('snapshotId')! } : {}); break;
         case '/mutate': result = actions.mutate(input as MutationInput); changed = true; break;
+        case '/settings': result = actions.saveSettings(input as SaveSettingsInput); changed = true; break;
         case '/plan': result = actions.plan(input as { expectedRevision?: number }); changed = true; break;
         case '/rollover': result = actions.rollover(input as { name?: string; expectedRevision?: number }); changed = true; break;
         case '/templates': result = actions.listPromptTemplates(); break;

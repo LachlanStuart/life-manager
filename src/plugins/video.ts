@@ -1,3 +1,4 @@
+import { lifecycleBehavior, workspaceSettings } from '../properties';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
@@ -120,8 +121,9 @@ async function referencedPath(item: Item): Promise<string | null> {
 
 async function activeReferences(workspace: Workspace, historical: boolean): Promise<Set<string>> {
   if (historical) return new Set();
+  const settings = workspaceSettings(workspace);
   const references = await Promise.all(workspace.dashboard.items
-    .filter(item => item.status !== 'Done' && item.status !== 'Cut')
+    .filter(item => lifecycleBehavior(item, settings) !== 'complete' && !(settings.lifecyclePropertyId === 'status' && item.status === 'Cut'))
     .map(item => referencedPath(item)));
   return new Set(references.filter((value): value is string => value !== null));
 }
@@ -316,7 +318,6 @@ async function createItem(input: unknown, context: WidgetActionContext): Promise
     parentId: context.itemId,
     title: itemName(entry),
     patch: {
-      status: 'Later',
       included: true,
       notes: '',
       resourceUri: pathToFileURL(resolved.canonicalPath).href,

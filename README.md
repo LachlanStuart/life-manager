@@ -12,10 +12,11 @@ Use the sunburst to plan. Switch to Kanban when you're ready to act. Return to y
 
 - **See the whole picture.** Arrange areas, projects and tasks in a zoomable sunburst. Resize slices to express their relative importance.
 - **Keep today's choices manageable.** Hide inactive branches without losing their notes or next steps. Bring them back when your interests change.
-- **Work from a familiar board.** Drag cards between statuses, focus on one part of your life, and sort temporarily by importance, effort or status. Card size reflects intended attention.
+- **Work from a familiar board.** Group cards by a single-choice property, drag them between its options, and sort temporarily by importance, effort or property order. Card size reflects intended attention.
+- **Make the workspace yours.** Name your workspace, organise its top-level Items, and define properties with your own labels, colours and creation defaults.
 - **Keep tasks and knowledge together.** Every Item has children and rich Markdown notes, with checklists, images, links, tables and direct source editing.
 - **Reflect without a timer.** Record effort against your intention, including effort above 100%. For checklist-style projects, let completed children contribute automatically.
-- **Preserve each planning period.** Capture Opening, Planned and Closing snapshots, including titles, hierarchy, notes, visibility and allocations. Revisit a period as it was at the time.
+- **Preserve each planning period.** Capture Opening, Planned and Closing snapshots, including titles, hierarchy, notes, visibility, allocations and property configuration. Revisit a period as it was at the time.
 - **Bring activities into your notes.** Optional widgets list local media or live Twitch follows; turn an interesting entry into an Item when you want to keep it.
 - **Keep your workspace on your own machine.** Use desktop and phone browsers against one server. Your notes and history live in a local SQLite database, with JSON export available.
 
@@ -30,7 +31,7 @@ A fresh workspace starts with four areas:
 | **Learn** | Deliberate study and practice |
 | **Enjoy** | Leisure, entertainment and downtime |
 
-These are starting points: rename, add and reorganise Items to suit your life. The same Item can hold a short task, a long-running project or a page of ideas with children underneath it.
+These are starting points: use Settings → Top-level Items to rename, add, reorder or remove them. The same Item can hold a short task, a long-running project or a page of ideas with children underneath it.
 
 A slice's size means **intended share of attention**. Its fill means **effort spent relative to that intention in the current period**. Neither is a time estimate or an overall project-completion percentage. You can finish a productive session on an open-ended project without pretending the whole project is nearly done.
 
@@ -42,7 +43,9 @@ The Kanban board keeps the same hierarchy and focus. Related tasks stay grouped 
 
 ![Kanban board with related tasks grouped inside status columns](docs/media/kanban-board.png)
 
-Use **Now** for work you intend to tackle, **Doing** while it's underway, and **Blocked** when something is in the way. **Done** records completion, **Later** keeps a possibility for reconsideration, **Skip** means it isn't relevant this period, and **Cut** means you've intentionally abandoned it.
+The starting Status options use **Now** for work you intend to tackle, **Doing** while it's underway, and **Blocked** when something is in the way. **Done** records completion, **Later** keeps a possibility for reconsideration, **Skip** means it isn't relevant this period, and **Cut** means you've intentionally abandoned it.
+
+Choose **Group by** to organise columns by another property, and **Color by** to colour cards and the wheel independently. Each property includes an unset choice.
 
 Parents with included children stay off the board so the actionable children take the space. A parent with no included children can remain visible as a placeholder for work you still need to define.
 
@@ -82,7 +85,11 @@ This starts a separate workspace in `.data/`, with the four initial areas and no
 
 ## Configure your workspace
 
-The **Settings** cog contains display preferences and saved agent prompts. Adjust label sizes and padding for your screen; display preferences are saved in that browser. Tasks, notes and planning periods are saved on the server.
+Under **Settings → Workspace and properties**, edit the workspace name and add single-choice properties. Give each property ordered options, colours, an unset label, and a default for new Items. Defaults never fill existing Items retroactively. Edit an Item’s values under **Properties**, or use the inline and child bulk pickers.
+
+The optional **Lifecycle property** determines calculated effort: Completed gives leaves 100%; No calculated effort gives an Item 0% even when it has children. Manual effort overrides either behaviour. Status has this role initially; colouring and grouping by another property do not change it.
+
+Settings also contains top-level Items, saved agent prompts and sunburst display preferences. Workspace configuration, Items and history are saved on the server. Display preferences such as label sizes and padding are saved in that browser.
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
