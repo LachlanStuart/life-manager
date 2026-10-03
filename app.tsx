@@ -129,6 +129,10 @@ export function LifeManagerPage() {
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = setTimeout(() => { void saveNotes().catch(() => undefined); }, 650);
   }, [saveNotes]);
+  useEffect(() => {
+    window.lifeManagerFlush = async () => { await saveNotes(); await queue.current; };
+    return () => { delete window.lifeManagerFlush; };
+  }, [saveNotes]);
   const run = useCallback(async (operation: () => Promise<void>) => {
     setBusy(true);
     try { await operation(); setError(''); } catch (cause) { setError(message(cause)); }

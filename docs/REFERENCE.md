@@ -24,6 +24,7 @@ All paths are relative to the running server. POST requests use `Content-Type: a
 
 | Endpoint | Input / result |
 | --- | --- |
+| `GET /api/server` | Application identifier, desktop protocol version and running instance ID. Used to verify a connection before attaching. |
 | `GET /api/workspace` | Current Items, workspace settings, periods, snapshot summaries, widgets and prompt templates. Add `?snapshotId=<id>` for a checkpoint. |
 | `GET /api/items/<id>` | Item, immediate children, ancestors, revision and period context. Supports `snapshotId`. |
 | `POST /api/mutate` | `{command, expectedRevision?, snapshotId?}`; returns the updated workspace. |
@@ -130,6 +131,26 @@ npm run verify
 ```
 
 This runs strict TypeScript checks, domain/storage/HTTP/UI tests and the production build. HTTP tests bind temporary localhost ports.
+
+## Desktop operation
+
+The macOS arm64 app uses Electron with a sandboxed window displaying the server's ordinary HTTP UI. A Node utility process hosts local workspaces. The window has no Node access or privileged preload; a separate bundled connection-settings window exposes only configuration, directory selection and connection operations. External links allow HTTP, HTTPS, mail and Codex schemes.
+
+`src/server-runtime.ts` owns server startup and shutdown for both the CLI and desktop utility process. It accepts explicit data, asset and agent-context paths and reports the actual listening port. `src/server-discovery.ts` verifies application identity and protocol compatibility. The desktop can attach to the current standalone server, including one already serving its chosen local directory. Local port/sharing settings apply only when the desktop starts the server; an attached server retains its own settings.
+
+Each data directory has one owning server. A `proper-lockfile` heartbeat lock in `.server.lock` is acquired before opening SQLite. `.server.json` records the owner's URL and instance ID; attachment verifies these against the live server. Clean shutdown removes both records, closes change feeds and SQLite, and releases ownership. A crashed lock can be reclaimed after 30 seconds. Do not manually remove a live server's lock. This coordination applies to updated Life Manager servers; stop older versions before opening the same directory with the desktop app.
+
+Desktop configuration is stored in `~/Library/Application Support/Life Manager/connection.json`, with new workspaces under `workspace/` and diagnostics in `desktop.log`. The menu's **Open Log** opens that log. Browser display preferences remain specific to each browser or the desktop profile. `LIFE_MANAGER_DESKTOP_HOME` overrides the desktop profile directory for isolated testing; standalone `LIFE_MANAGER_DATA_DIR` still configures the CLI workspace.
+
+Before quitting or changing connections, the desktop waits for pending notes and queued edits to finish. A failed save prevents switching connections; Quit offers to keep the window open or explicitly discard unsaved edits. Closing the window normally hides it and lets autosave continue.
+
+Local hosting defaults to loopback and port 4317. An occupied port is reported rather than silently switching workspaces; choosing port 0 requests an available port. Enabling network access binds to all IPv4 interfaces. There is no authentication; use a trusted private network only. Closing the window hides it, while Quit shuts down an app-owned server. An unexpected utility-process exit is reported and can be recovered through Connection Settings. Switching workspaces stops the previous app-owned server. Connected external servers are never stopped by the desktop.
+
+Host integrations run where the server runs. Local media paths and widget commands refer to that computer. Codex links open on the viewing device; a desktop-hosted workspace supplies its data directory as the Codex working directory and the bundled API skill as context. Remote connections require a server exposing protocol version 1 at `/api/server`, reachable at an HTTP(S) origin without a subpath. TLS verification remains enabled.
+
+`npm run build:desktop` builds the web UI and bundles the desktop main process, settings preload and server worker with esbuild. It stages only application assets, the API skill and the installed SQLite dependency tree. Electron Packager rebuilds `better-sqlite3` in its copied staging directory, preserving the repository's native Node binary. The output is `release/Life Manager-darwin-arm64/Life Manager.app`. The build requires macOS arm64, Node.js 22.12+, Xcode Command Line Tools and network access for Electron/native build downloads. It sets `LSUIElement` so the app has no Dock icon. The app is intended for local installation; distribution signing, notarization and automatic updates are not configured.
+
+After building, `npm run test:desktop` launches the packaged app against temporary profiles and verifies window loading, the native database, live notifications, persistence across restart, automatic attachment to an existing workspace owner, and explicit server connections. It also verifies that Quit stops only app-owned servers. Use the same Node runtime used to install dependencies, as with `npm run verify`.
 
 ## Browser-only demo
 

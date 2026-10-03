@@ -186,7 +186,9 @@ Historical corrections are for fixing mistakes. A correction affects only its se
 
 ## Deployment and device access
 
-The application server and database run on a local host. Desktop and mobile browsers can access that server through a trusted network while it is running. Remote hosting and host-runner design are deferred and impose no current architecture or deployment requirements.
+The application runs as a standalone Node server or a macOS Apple Silicon Electron app. The desktop app lives in the menu bar with no Dock icon. It can host a local workspace or connect to an existing Life Manager server. Desktop and browser clients can use the same workspace simultaneously through one owning server; they do not maintain separate database copies.
+
+Closing a desktop window leaves the app and its local server running. Explicit Quit stops an app-owned server and leaves independently running servers alone. The connection screen selects a local data directory or an existing server address. New desktop workspaces use the OS application-data directory; existing workspace directories are opened in place. Local network access is opt-in. Desktop and mobile browsers can access a shared server through a trusted network while its host is awake. Public internet hosting, multi-user authentication and remote host-runner design remain outside scope.
 
 The iPhone-capable version must support the full application, including sunburst allocation, hierarchy and selection controls, rich notes, period operations, and widgets. Touch interactions may differ from desktop gestures while providing the same capabilities. A reduced mobile feature set is not the target.
 
@@ -255,6 +257,7 @@ The dashboard toolbar provides a temporary sort override for each view: Order, t
 
 ## Current phase
 
+- Desktop: personal macOS Apple Silicon app with a menu-bar presence, no Dock icon, local workspace hosting, existing-server connections and simultaneous browser access. Locally built application bundle; distribution signing and automatic updates are deferred.
 - Phase: public MIT-licensed application with a browser-only interactive demo for GitHub Pages. Workspace names, top-level Items and single-choice properties are configurable, with independent colouring/grouping and snapshot-preserved configuration.
 - Browser demo: reuse the SQLite planning model through WebAssembly and persist temporary changes in IndexedDB. Warn on entry that there is no export and browser storage may be cleared. Host integrations remain available only in the server application.
 - Publication boundary: keep runtime data, credentials and private imports out of source control. Documentation media uses only the synthetic demo workspace.

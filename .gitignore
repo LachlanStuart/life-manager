@@ -7,3 +7,5 @@ node_modules/
 .import-data*/
 .data-before-import-*/
 *.log
+.desktop-build/
+release/

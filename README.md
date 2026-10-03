@@ -63,7 +63,27 @@ Choose **Reset properties…** in the period menu to return effort and importanc
 
 [Try the interactive demo](https://lachlanstuart.com/life-manager/). The browser-only build lets you try the planner, boards, notes and snapshots with fictional sample projects. It stores changes in this browser only. **There is no data export, and browser storage can be cleared without warning: do not use the demo for anything you need to keep.** Local media, Twitch and agent launch need the self-hosted app below.
 
-## Install and try it
+## macOS menu-bar app
+
+On an Apple Silicon Mac, build a local desktop app from this checkout:
+
+```sh
+npm ci
+npm run build:desktop
+npm run desktop
+```
+
+Building requires Node.js 22.12 or newer and Xcode Command Line Tools. The resulting `release/Life Manager-darwin-arm64/Life Manager.app` includes its own runtime. Copy it to Applications if desired; running it does not require Node.js. This is a local, unsigned build with no automatic updates.
+
+Choose **Local workspace** to create a workspace or select an existing data directory, or **Connect to server** to use an independently running Life Manager server. Stop servers from older versions before opening their data directory. New desktop workspaces default to `~/Library/Application Support/Life Manager/workspace/`; existing data is used in place, not moved or copied.
+
+Life Manager lives in the menu bar, without a Dock icon. Closing its window keeps the local server running. The menu offers **Open Life Manager**, **Open in Browser**, **Connection Settings**, and **Quit Life Manager**. Quit stops a server started by the app and leaves an independently running server alone.
+
+Desktop and browser windows can use the same workspace simultaneously. Local hosting initially allows access only from this Mac. Enable **Allow access from other devices** for a trusted private network; the menu then lists addresses you can click to copy. Other devices need this Mac to remain awake. There is no sign-in, so do not expose the server directly to the public internet.
+
+Rebuild and replace the app to update it, quitting the old app first. Your workspace stays outside the application bundle. See [desktop operation](docs/REFERENCE.md#desktop-operation) for logs and connection details.
+
+## Install and try the standalone server
 
 You'll need **Node.js 22.12 or newer**, npm and Git. Use the same Node version for installation and execution.
 

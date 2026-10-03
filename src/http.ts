@@ -63,6 +63,7 @@ export function createHttpHandler(options: {
   publicDir: string;
   feed?: ReturnType<typeof createChangeFeed>;
   sendToAgent?: AgentSender;
+  serverIdentity?: import('./server-discovery.js').ServerIdentity;
 }) {
   const { actions, widgets } = options;
   return async (request: IncomingMessage, response: ServerResponse) => {
@@ -110,6 +111,7 @@ export function createHttpHandler(options: {
         }
       }
       if (request.method !== 'GET' && request.method !== 'HEAD') throw new HttpError(405, 'Method not allowed.');
+      if (url.pathname === '/api/server' && options.serverIdentity) { json(options.serverIdentity); return; }
       const view = url.searchParams.get('snapshotId') ? { snapshotId: url.searchParams.get('snapshotId')! } : {};
       if (url.pathname === '/api/workspace') { json(actions.workspace(view)); return; }
       if (url.pathname === '/api/templates') { json(actions.listPromptTemplates()); return; }

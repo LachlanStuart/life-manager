@@ -315,3 +315,15 @@ it('keeps sort overrides separate for each view without writing dashboard data',
   expect((screen.getByLabelText('Sort current view') as HTMLSelectElement).value).toBe('Effort');
   expect(mutations).toHaveLength(0);
 });
+
+it('flushes pending notes before the desktop disconnects, and reports save failures', async () => {
+  const { screen, current } = setup('/items/tend');
+  await screen.findByLabelText('Notes');
+  fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Save before quitting' } });
+  await window.lifeManagerFlush!();
+  expect(current.dashboard.items[0]!.notes).toBe('Save before quitting');
+  fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Keep this failed draft' } });
+  vi.mocked(fetch).mockImplementationOnce(async () => { throw new Error('Server unavailable'); });
+  await expect(window.lifeManagerFlush!()).rejects.toThrow('Server unavailable');
+  expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toBe('Keep this failed draft');
+});

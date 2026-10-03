@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Life Manager — Connection</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <main>
+    <h1>Life Manager</h1>
+    <p class="intro">Choose where your workspace lives.</p>
+    <form id="connection">
+      <fieldset id="controls">
+        <div class="modes">
+          <label><input type="radio" name="mode" value="local" checked> Local workspace</label>
+          <label><input type="radio" name="mode" value="remote"> Connect to server</label>
+        </div>
+        <section id="local">
+          <label for="directory">Workspace directory</label>
+          <div class="directory"><input id="directory" readonly><button id="choose" type="button">Choose…</button></div>
+          <p class="hint">Choose an existing data directory or a new folder. Your database, attachments and integration settings stay together.</p>
+          <label for="port">Server port</label>
+          <input id="port" type="number" min="0" max="65535" value="4317">
+          <p class="hint">Use 0 to choose an available port. A fixed port keeps browser bookmarks stable.</p>
+          <label class="share"><input id="share" type="checkbox"> Allow access from other devices</label>
+          <p class="hint">Use only on a trusted private network. There is no sign-in. This Mac must stay awake for other devices to connect.</p>
+        </section>
+        <section id="remote" hidden>
+          <label for="url">Server address</label>
+          <input id="url" type="url" placeholder="http://localhost:4317">
+          <p class="hint">Connect to an existing Life Manager server. Quitting this app leaves that server running. Local media and widget actions belong to the server’s computer.</p>
+        </section>
+        <p class="hint">Closing the window keeps Life Manager in the menu bar. Quit stops a server started by this app. Changing connections briefly disconnects its browser clients.</p>
+        <button class="primary" type="submit">Open workspace</button>
+      </fieldset>
+      <p id="status" role="status" aria-live="polite"></p>
+    </form>
+  </main>
+  <script src="settings.js"></script>
+</body>
+</html>
