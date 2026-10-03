@@ -77,7 +77,7 @@ Building requires Node.js 22.12 or newer and Xcode Command Line Tools. The resul
 
 Choose **Local workspace** to create a workspace or select an existing data directory, or **Connect to server** to use an independently running Life Manager server. Stop servers from older versions before opening their data directory. New desktop workspaces default to `~/Library/Application Support/Life Manager/workspace/`; existing data is used in place, not moved or copied.
 
-Life Manager lives in the menu bar, without a Dock icon. Closing its window keeps the local server running. The menu offers **Open Life Manager**, **Open in Browser**, **Connection Settings**, and **Quit Life Manager**. Quit stops a server started by the app and leaves an independently running server alone.
+Life Manager stays in the menu bar. Its Dock icon appears while a workspace or connection-settings window is open, including when minimized, and disappears when all windows are closed or hidden. Closing the workspace window keeps the local server running. The menu offers **Open Life Manager**, **Open in Browser**, **Connection Settings**, and **Quit Life Manager**. Quit stops a server started by the app and leaves an independently running server alone.
 
 Desktop and browser windows can use the same workspace simultaneously. Local hosting initially allows access only from this Mac. Enable **Allow access from other devices** for a trusted private network; the menu then lists addresses you can click to copy. Other devices need this Mac to remain awake. There is no sign-in, so do not expose the server directly to the public internet.
 

@@ -25,9 +25,28 @@ let origin: string | undefined;
 let connecting = false;
 let quitting = false;
 let allowQuit = false;
+let lastDockHide = 0;
+let dockHideTimer: ReturnType<typeof setTimeout> | undefined;
 
 function log(message: string) { appendFileSync(logPath, `${new Date().toISOString()} ${message}\n`); }
 function report(error: unknown) { lastError = error instanceof Error ? error.message : String(error); log(lastError); }
+
+async function updateDockVisibility() {
+  const dock = app.dock;
+  if (!dock) return;
+  clearTimeout(dockHideTimer);
+  const hasOpenWindow = () => BrowserWindow.getAllWindows().some(candidate => !candidate.isDestroyed() && (candidate.isVisible() || candidate.isMinimized()));
+  if (hasOpenWindow()) {
+    if (!dock.isVisible()) await dock.show();
+    // A window can close while the asynchronous Dock activation is completing.
+    if (!hasOpenWindow()) await updateDockVisibility();
+  } else if (dock.isVisible()) {
+    // Electron ignores repeated dock.hide() calls less than a second apart.
+    const delay = Math.max(0, lastDockHide + 1100 - Date.now());
+    if (delay) dockHideTimer = setTimeout(() => { void updateDockVisibility().catch(report); }, delay);
+    else { dock.hide(); lastDockHide = Date.now(); }
+  }
+}
 
 function trayImage() {
   const size = 36;
@@ -58,7 +77,7 @@ function secureWindow(target: BrowserWindow, allowed: (url: string) => boolean) 
 
 function showWorkspace() {
   if (!origin) { showSettings(); return; }
-  if (window && !window.isDestroyed()) { window.show(); window.focus(); return; }
+  if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); return; }
   const activeOrigin = origin;
   window = new BrowserWindow({ width: 1280, height: 860, minWidth: 700, minHeight: 500, show: false, title: 'Life Manager',
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
@@ -76,7 +95,7 @@ function showWorkspace() {
 }
 
 function showSettings() {
-  if (settings && !settings.isDestroyed()) { settings.show(); settings.focus(); return; }
+  if (settings && !settings.isDestroyed()) { if (settings.isMinimized()) settings.restore(); settings.show(); settings.focus(); return; }
   settings = new BrowserWindow({ width: 570, height: 730, resizable: false, show: false, title: 'Life Manager — Connection',
     webPreferences: { preload: join(resources, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true },
   });
@@ -205,6 +224,10 @@ ipcMain.handle('desktop:connect', async (event, input: unknown) => {
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
+  app.on('browser-window-created', (_event, created) => {
+    const update = () => { void updateDockVisibility().catch(report); };
+    created.on('show', update).on('hide', update).on('closed', update).on('minimize', update).on('restore', update);
+  });
   process.once('SIGTERM', () => app.quit());
   process.once('SIGINT', () => app.quit());
   app.on('second-instance', showWorkspace);
@@ -230,7 +253,7 @@ else {
     })().catch(error => { report(error); quitting = false; });
   });
   void app.whenReady().then(async () => {
-    app.dock?.hide();
+    await updateDockVisibility();
     tray = new Tray(trayImage());
     tray.setToolTip('Life Manager');
     Menu.setApplicationMenu(Menu.buildFromTemplate([
