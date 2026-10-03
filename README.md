@@ -103,7 +103,9 @@ To start your own workspace, stop the demo with **Ctrl+C**, then run:
 npm start
 ```
 
-This starts a separate workspace in `.data/`, with the four initial areas and no sample projects. Stop the server with Ctrl+C when you're finished.
+On macOS this uses `~/Library/Application Support/Life Manager/workspace/`, the same default as the desktop app. Other platforms use `.data/` in the checkout. A new workspace starts with the four initial areas and no sample projects. Stop the server with Ctrl+C when you're finished.
+
+If upgrading a macOS checkout with an existing `.data/` workspace, stop its server and move the entire directory to the new location, or set `LIFE_MANAGER_DATA_DIR` to continue using it in place. Startup reports an existing checkout-local workspace rather than silently creating a new one. Check that the destination does not already contain another workspace before moving data.
 
 ## Configure your workspace
 
@@ -117,7 +119,7 @@ Settings also contains top-level Items, saved agent prompts and sunburst display
 | --- | --- | --- |
 | `PORT` | `4317` | Choose the server port |
 | `HOST` | `0.0.0.0` | Network interface; use `127.0.0.1` for access from this computer only |
-| `LIFE_MANAGER_DATA_DIR` | `.data/` | Choose where your personal workspace is stored; the demo always uses `.demo-data/` |
+| `LIFE_MANAGER_DATA_DIR` | macOS: `~/Library/Application Support/Life Manager/workspace/`; other platforms: `.data/` | Choose where your personal workspace is stored; the demo always uses `.demo-data/` |
 
 For example, to keep access local to this computer on macOS or Linux:
 

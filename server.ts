@@ -1,11 +1,12 @@
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './src/server-runtime.js';
+import { resolveDataDirectory } from './src/data-directory.js';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 try {
   const server = await startServer({
-    dataDir: resolve(process.env.LIFE_MANAGER_DATA_DIR || resolve(directory, '.data')),
+    dataDir: resolveDataDirectory(directory, process.env.LIFE_MANAGER_DATA_DIR),
     publicDir: resolve(directory, 'dist'), cwd: directory,
     host: process.env.HOST || '0.0.0.0', port: Number(process.env.PORT || 4317),
   });
