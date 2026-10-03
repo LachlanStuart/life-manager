@@ -27,8 +27,8 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
     if (url === '/api/mutate') {
       mutations.push(input);
       if (input.expectedRevision !== state.dashboard.revision) return { ok: false, json: async () => ({ error: 'Revision conflict' }) };
-      if (input.command.type === 'create') {
-        state.dashboard.items = mutateItems(state.dashboard.items, input.command);
+      if (input.command.type === 'create' || input.command.type === 'bulk') {
+        state.dashboard.items = mutateItems(state.dashboard.items, input.command, state.settings);
       } else if (input.command.type === 'delete') {
         const removed = new Set<string>([input.command.id]);
         let changed = true;
@@ -54,6 +54,62 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
   return { screen: render(<LifeManagerPage />), current, historical, mutations };
 }
 beforeEach(() => { vi.stubGlobal('PointerEvent', MouseEvent); HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; });
+
+it('confirms period resets once for all Items, including hidden descendants, and preserves snapshots', async () => {
+  const { screen, current, historical, mutations } = setup('/', [
+    { id: 'hidden', parentId: 'build', order: 0, title: 'Hidden child', status: 'Done', notes: 'Keep notes', included: false, weight: 1, effortOverride: 60 },
+  ]);
+  await screen.findByText('Select Tend');
+  const before = structuredClone(historical);
+  fireEvent.click(screen.getByRole('button', { name: 'Dashboard period' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reset properties…' }));
+  expect(screen.getByRole('dialog', { name: 'Reset properties' })).toBeTruthy();
+  expect(mutations).toHaveLength(0);
+  fireEvent.click(screen.getByLabelText('Set Status to'));
+  fireEvent.click(screen.getByRole('button', { name: 'Apply resets to 3 Items' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Reset properties' })).toBeNull());
+  expect(mutations).toHaveLength(1);
+  expect(current.dashboard.items.every(item => item.allocationAuto && item.effortOverride === null && item.status === 'Later')).toBe(true);
+  expect(current.dashboard.items.find(item => item.id === 'hidden')).toMatchObject({ included: false, notes: 'Keep notes', parentId: 'build' });
+  expect(historical).toEqual(before);
+});
+
+it('discards reset selections on Cancel or Escape and reopens with checked Auto defaults', async () => {
+  const { screen, mutations } = setup();
+  await screen.findByText('Select Tend');
+  const open = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Dashboard period' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset properties…' }));
+  };
+  open();
+  fireEvent.click(screen.getByLabelText('Return effort to Auto'));
+  fireEvent.click(screen.getByLabelText('Set Status to'));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  open();
+  expect((screen.getByLabelText('Return effort to Auto') as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByLabelText('Set Status to') as HTMLInputElement).checked).toBe(false);
+  fireEvent(screen.getByRole('dialog', { name: 'Reset properties' }), new Event('cancel', { bubbles: true, cancelable: true }));
+  expect(screen.queryByRole('dialog', { name: 'Reset properties' })).toBeNull();
+  expect(mutations).toHaveLength(0);
+});
+
+it('keeps the reset dialog open on failure and disables reset in historical views', async () => {
+  const { screen } = setup();
+  await screen.findByText('Select Tend');
+  fireEvent.click(screen.getByRole('button', { name: 'Dashboard period' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reset properties…' }));
+  vi.mocked(fetch).mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Reset failed' }) } as Response);
+  fireEvent.click(screen.getByRole('button', { name: 'Apply resets to 2 Items' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Apply resets to 2 Items' }) as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByRole('dialog', { name: 'Reset properties' }).textContent).toContain('Reset failed');
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Dashboard period' }));
+  fireEvent.click(screen.getByRole('button', { name: /Opening/ }));
+  await waitFor(() => expect(window.location.search).toBe('?snapshot=opening-1'));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Dashboard period' }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Dashboard period' }));
+  expect((screen.getByRole('button', { name: 'Reset properties…' }) as HTMLButtonElement).disabled).toBe(true);
+});
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('standalone workspace', () => {

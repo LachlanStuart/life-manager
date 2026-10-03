@@ -60,6 +60,9 @@ function assertPatch(patch: unknown, label = 'patch', settings?: WorkspaceSettin
   if ('included' in candidate && typeof candidate.included !== 'boolean') {
     fail(`${label}.included must be a boolean`);
   }
+  if ('allocationAuto' in candidate && typeof candidate.allocationAuto !== 'boolean') {
+    fail(`${label}.allocationAuto must be a boolean`);
+  }
   if ('weight' in candidate) assertNonNegativeFinite(candidate.weight, `${label}.weight`);
   if ('effortOverride' in candidate && candidate.effortOverride !== null) {
     assertNonNegativeFinite(candidate.effortOverride, `${label}.effortOverride`);

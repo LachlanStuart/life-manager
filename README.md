@@ -57,6 +57,8 @@ Open an Item to edit its children and notes together. Record a blocker, paste a 
 
 When it's time to reconsider your priorities, use the period menu to capture your plan or begin the next period. Rollover preserves the previous period and carries your current work forward; it does not automatically reset tasks.
 
+Choose **Reset properties…** in the period menu to return effort and importance to Auto or bulk-set Status and other properties. Review the selected resets and affected Item counts before confirming; the reset includes hidden Items and descendants and preserves historical snapshots.
+
 ## Browser demo
 
 [Try the interactive demo](https://lachlanstuart.com/life-manager/). The browser-only build lets you try the planner, boards, notes and snapshots with fictional sample projects. It stores changes in this browser only. **There is no data export, and browser storage can be cleared without warning: do not use the demo for anything you need to keep.** Local media, Twitch and agent launch need the self-hosted app below.

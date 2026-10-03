@@ -24,6 +24,28 @@ function setup() {
 function item(items: Item[], id = 'build') { return items.find(value => value.id === id)!; }
 
 describe('configurable enum properties', () => {
+  it('resets effort, allocation and chosen properties atomically without changing snapshots', () => {
+    const { actions } = setup();
+    const config = settings(); config.properties.push(priority(), { ...priority(), id: 'energy' });
+    actions.saveSettings({ settings: config });
+    actions.mutate({ command: { type: 'create', id: 'hidden', parentId: 'build', title: 'Hidden child',
+      patch: { included: false, status: 'Done', effortOverride: 140, weight: 7, notes: 'Keep notes' } } });
+    actions.mutate({ command: { type: 'allocate', id: 'build', share: 70 } });
+    const rolled = actions.rollover();
+    const snapshotId = rolled.snapshots.find(snapshot => snapshot.periodId === rolled.dashboard.periodId && snapshot.kind === 'opening')!.id;
+    const historical = actions.workspace({ snapshotId });
+    const ids = rolled.dashboard.items.map(item => item.id);
+    const patch = { allocationAuto: true, effortOverride: null, status: config.properties[0]!.defaultValue, properties: { priority: null } };
+    expect(() => actions.mutate({ command: { type: 'bulk', ids: [...ids, 'missing'], patch } })).toThrow();
+    expect(actions.workspace()).toEqual(rolled);
+    const result = actions.mutate({ expectedRevision: rolled.dashboard.revision, command: { type: 'bulk', ids, patch } });
+    expect(result.dashboard.revision).toBe(rolled.dashboard.revision + 1);
+    expect(result.dashboard.items.every(item => item.allocationAuto && item.effortOverride === null && item.status === 'Later' && item.properties?.priority === null)).toBe(true);
+    expect(item(result.dashboard.items, 'hidden')).toMatchObject({ included: false, parentId: 'build', notes: 'Keep notes', properties: { energy: 'high' } });
+    expect(actions.workspace({ snapshotId })).toEqual(historical);
+    expect(actions.workspace().dashboard.items).toEqual(result.dashboard.items);
+  });
+
   it('keeps defaults distinct from Unset and merges partial patches, including bulk changes', () => {
     const { actions } = setup();
     const config = settings(); config.properties.push(priority(), { ...priority(), id: 'energy' });

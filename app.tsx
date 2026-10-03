@@ -9,6 +9,7 @@ import { propertyPatch } from './ui/PropertySelect';
 import { SortControl } from './ui/SortControl';
 import type { ViewSort } from './ui/view-sort';
 import { PeriodControl } from './ui/PeriodControl';
+import { PeriodResetForm } from './ui/PeriodResetForm';
 import { Sunburst } from './ui/Sunburst';
 import { CreateItemForm } from './ui/CreateItemForm';
 import { Kanban } from './ui/Kanban';
@@ -64,6 +65,7 @@ export function LifeManagerPage() {
   const [paneWidth, setPaneWidth] = useState(46);
   const [expanded, setExpanded] = useState(false);
   const [rolloverOpen, setRolloverOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [periodName, setPeriodName] = useState('');
   const [createParent, setCreateParent] = useState<string | null | undefined>(undefined);
   const [search, setSearch] = useState('');
@@ -232,7 +234,8 @@ export function LifeManagerPage() {
       <SortControl propertyName={settings.properties.find(property => property.id === editPropertyId)?.name} value={viewSort} onChange={sort => setViewSorts(current => ({...current, [board ? 'kanban' : 'sunburst']: sort}))} />
       <PeriodControl workspace={workspace} snapshotId={route.snapshotId} busy={busy} onSelect={snapshotId => navigate({ ...routeRef.current, snapshotId })}
         onPlan={() => void run(async () => { await saveNotes(); await enqueue(async () => accept(await api<Workspace>('plan', { expectedRevision: latest.current!.dashboard.revision }))); })}
-        onNext={() => { setPeriodName(''); setRolloverOpen(true); }} />
+        onNext={() => { setPeriodName(''); setRolloverOpen(true); }}
+        onReset={() => { setError(''); setResetOpen(true); }} />
       {historical && <button disabled={busy} onClick={() => void run(async () => { await saveNotes(); setCorrecting(value => !value); })}>{correcting ? 'Finish correction' : 'Correct this snapshot'}</button>}
       {historical && <span className="lm-snapshot-badge">{correcting ? 'Correcting snapshot' : 'Snapshot'}</span>}
     </div>
@@ -289,6 +292,15 @@ export function LifeManagerPage() {
           {noteStatus === 'Save error' && <button onClick={() => void run(saveNotes)}>Retry saving notes</button>}
         </section></>}
     </div>}
+    {resetOpen && !historical && workspace && <Modal error={error} title="Reset properties" onClose={() => !busy && setResetOpen(false)}>
+      <PeriodResetForm items={items} settings={settings} busy={busy} onCancel={() => setResetOpen(false)}
+        onApply={value => void run(async () => {
+          await saveNotes();
+          if (routeRef.current.snapshotId) throw new Error('Return to the current period to reset properties.');
+          await command(value);
+          setResetOpen(false);
+        })} />
+    </Modal>}
     {contextItem && items.some(item => item.id === contextItem.id) && <ItemContextMenu settings={settings} propertyId={editPropertyId} item={items.find(item => item.id === contextItem.id)!} x={contextItem.x} y={contextItem.y} disabled={readOnly || busy}
       onClose={() => setContextItem(null)} onOpen={() => { select(contextItem.id); setContextItem(null); }}
       onProperty={(propertyId, value) => { const id = contextItem.id; setContextItem(null); void run(() => command({type: 'update', id, patch: propertyPatch(propertyId, value)})); }}

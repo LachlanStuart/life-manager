@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Workspace } from '../src/types';
-export function PeriodControl({ workspace, snapshotId, busy, onSelect, onPlan, onNext }: {
-  workspace: Workspace | null; snapshotId?: string; busy: boolean; onSelect: (id?: string) => void; onPlan: () => void; onNext: () => void;
+export function PeriodControl({ workspace, snapshotId, busy, onSelect, onPlan, onNext, onReset }: {
+  workspace: Workspace | null; snapshotId?: string; busy: boolean; onSelect: (id?: string) => void; onPlan: () => void; onNext: () => void; onReset: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -28,6 +28,7 @@ export function PeriodControl({ workspace, snapshotId, busy, onSelect, onPlan, o
         <button type="button" aria-label="Planning is finished" title="Finish planning" aria-current={!snapshotId && planned ? 'step' : undefined} disabled={!workspace || busy || planned || !!snapshotId} onClick={onPlan}>Active</button><span aria-hidden="true">»</span>
         <button type="button" aria-label="Roll over" title="Start the next period" disabled={!workspace || busy || !!snapshotId} onClick={() => { setOpen(false); onNext(); }}>Next</button>
       </div>
+      <button type="button" disabled={!workspace || busy || !!snapshotId} onClick={() => { setOpen(false); button.current?.focus(); onReset(); }}>Reset properties…</button>
       <button type="button" aria-current={!snapshotId ? 'true' : undefined} onClick={() => choose()}>Current period</button>
       {workspace?.periods.map(period => <section key={period.id} aria-label={period.name}><strong>{period.name}</strong>
         {workspace.snapshots.filter(value => value.periodId === period.id).map(snapshot => <button type="button" key={snapshot.id} aria-current={snapshotId === snapshot.id ? 'true' : undefined} onClick={() => choose(snapshot.id)}>

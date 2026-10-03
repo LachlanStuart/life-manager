@@ -22,7 +22,7 @@ export interface Item {
   allocationAuto?: boolean;
   effortOverride: number | null;
 }
-export type ItemPatch = Partial<Pick<Item, 'title' | 'status' | 'properties' | 'notes' | 'included' | 'weight' | 'effortOverride' | 'defaultPromptId' | 'resourceUri'>>;
+export type ItemPatch = Partial<Pick<Item, 'title' | 'status' | 'properties' | 'notes' | 'included' | 'weight' | 'allocationAuto' | 'effortOverride' | 'defaultPromptId' | 'resourceUri'>>;
 export type ItemCommand =
   | { type: 'create'; id?: string; parentId: string | null; title: string; patch?: ItemPatch; share?: number | null }
   | { type: 'update'; id: string; patch: ItemPatch }

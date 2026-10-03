@@ -60,6 +60,14 @@ button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .lm-modal label :is(input, select, textarea) { width: 100%; padding: 9px 10px; border: 1px solid #dedfd5; border-radius: 6px; background: #fffefb; }
 .lm-modal textarea { font: 13px/1.6 ui-monospace, monospace; resize: vertical; }
 .lm-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.lm-period-reset fieldset { display: grid; gap: 18px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.lm-modal .lm-reset-option label { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.lm-modal .lm-reset-option input[type='checkbox'] { width: 16px; height: 16px; flex: 0 0 auto; margin: 0; padding: 0; accent-color: #55735d; }
+.lm-modal .lm-reset-option p { margin: 5px 0 4px 25px; }
+.lm-reset-option small { display: block; margin: 5px 0 0 25px; color: #737c6e; }
+.lm-reset-property { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.lm-reset-property select { flex: 1; min-width: 120px; max-width: 100%; }
+.lm-reset-property select:disabled { opacity: .6; }
 .lm-workspace .lm-primary { background: #486e59; border-color: #486e59; color: #fff; }
 .lm-workspace .lm-primary:hover:not(:disabled) { background: #355b45; }
 .lm-workspace .lm-danger { color: #a1483b; margin-right: auto; }

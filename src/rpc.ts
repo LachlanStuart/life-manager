@@ -28,6 +28,7 @@ export const itemPatchSchema = z.object({
   notes: z.string().max(MAX_NOTES_CHARS).optional(),
   included: z.boolean().optional(),
   weight: finiteNonNegativeSchema.optional(),
+  allocationAuto: z.boolean().optional(),
   effortOverride: finiteNonNegativeSchema.nullable().optional(),
   defaultPromptId: idSchema.nullable().optional(),
   resourceUri: resourceUriSchema.nullable().optional(),
