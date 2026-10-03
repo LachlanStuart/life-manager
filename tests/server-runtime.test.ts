@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
 import { startServer, WorkspaceInUseError } from '../src/server-runtime';
-import { discoverWorkspaceServer, identifyServer } from '../src/server-discovery';
+import { discoverWorkspaceServer, identifyServer, validateServerConnection } from '../src/server-discovery';
 import { parseConfig, externalLinkAllowed } from '../desktop/config';
 
 const cleanup: Array<() => Promise<unknown>> = [];
@@ -81,6 +81,35 @@ describe('server lifecycle', () => {
 });
 
 describe('desktop connection boundaries', () => {
+  it('connects to pre-desktop servers through the workspace API without weakening ownership checks', async () => {
+    const server = await serve(await workspace());
+    const legacy = createServer(async (request, response) => {
+      if (request.url === '/api/workspace') {
+        response.setHeader('Content-Type', 'application/json');
+        response.end(await (await fetch(`${server.origin}/api/workspace`)).text());
+      } else { response.writeHead(404); response.end('{"error":"No such API endpoint."}'); }
+    });
+    await new Promise<void>(done => legacy.listen(0, '127.0.0.1', done));
+    cleanup.push(() => new Promise<void>(done => legacy.close(() => done())));
+    const address = `http://127.0.0.1:${(legacy.address() as { port: number }).port}`;
+    await expect(validateServerConnection(address)).resolves.toBeUndefined();
+    await expect(identifyServer(address)).rejects.toThrow('HTTP 404');
+  });
+
+  it('reports the failing endpoint and rejects unrelated or malformed server responses', async () => {
+    let body = '<html>Another app</html>';
+    let status = 200;
+    const server = createServer((_request, response) => { response.writeHead(status); response.end(body); });
+    await new Promise<void>(done => server.listen(0, '127.0.0.1', done));
+    cleanup.push(() => new Promise<void>(done => server.close(() => done())));
+    const address = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    await expect(validateServerConnection(address)).rejects.toThrow('did not return a Life Manager workspace');
+    body = '{"dashboard":{},"periods":[]}';
+    await expect(validateServerConnection(address)).rejects.toThrow('did not return a Life Manager workspace');
+    status = 404;
+    await expect(validateServerConnection(address)).rejects.toThrow(`${address}/api/workspace (HTTP 404)`);
+  });
+
   it('validates local settings and canonicalizes server origins', () => {
     expect(parseConfig({ mode: 'local', dataDir: '/tmp/workspace', port: 0, shareNetwork: false })).toMatchObject({ port: 0 });
     expect(parseConfig({ mode: 'remote', url: 'https://example.test:443/' })).toEqual({ mode: 'remote', url: 'https://example.test' });

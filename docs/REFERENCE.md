@@ -24,7 +24,7 @@ All paths are relative to the running server. POST requests use `Content-Type: a
 
 | Endpoint | Input / result |
 | --- | --- |
-| `GET /api/server` | Application identifier, desktop protocol version and running instance ID. Used to verify a connection before attaching. |
+| `GET /api/server` | Application identifier, desktop protocol version and running instance ID. Used for automatic local workspace-owner attachment. |
 | `GET /api/workspace` | Current Items, workspace settings, periods, snapshot summaries, widgets and prompt templates. Add `?snapshotId=<id>` for a checkpoint. |
 | `GET /api/items/<id>` | Item, immediate children, ancestors, revision and period context. Supports `snapshotId`. |
 | `POST /api/mutate` | `{command, expectedRevision?, snapshotId?}`; returns the updated workspace. |
@@ -146,7 +146,7 @@ Before quitting or changing connections, the desktop waits for pending notes and
 
 Local hosting defaults to loopback and port 4317. An occupied port is reported rather than silently switching workspaces; choosing port 0 requests an available port. Enabling network access binds to all IPv4 interfaces. There is no authentication; use a trusted private network only. Closing the window hides it, while Quit shuts down an app-owned server. An unexpected utility-process exit is reported and can be recovered through Connection Settings. Switching workspaces stops the previous app-owned server. Connected external servers are never stopped by the desktop.
 
-Host integrations run where the server runs. Local media paths and widget commands refer to that computer. Codex links open on the viewing device; a desktop-hosted workspace supplies its data directory as the Codex working directory and the bundled API skill as context. Remote connections require a server exposing protocol version 1 at `/api/server`, reachable at an HTTP(S) origin without a subpath. TLS verification remains enabled.
+Host integrations run where the server runs. Local media paths and widget commands refer to that computer. Codex links open on the viewing device; a desktop-hosted workspace supplies its data directory as the Codex working directory and the bundled API skill as context. Explicit server connections validate `/api/workspace` and load the server's own UI, supporting releases that predate desktop hosting. The server must be reachable at an HTTP(S) origin without a subpath. `/api/server` and its instance ID are required only for automatic attachment to an existing local workspace owner. TLS verification remains enabled.
 
 `npm run build:desktop` builds the web UI and bundles the desktop main process, settings preload and server worker with esbuild. It stages only application assets, the API skill and the installed SQLite dependency tree. Electron Packager rebuilds `better-sqlite3` in its copied staging directory, preserving the repository's native Node binary. The output is `release/Life Manager-darwin-arm64/Life Manager.app`. The build requires macOS arm64, Node.js 22.12+, Xcode Command Line Tools and network access for Electron/native build downloads. It sets `LSUIElement` so the app has no Dock icon. The app is intended for local installation; distribution signing, notarization and automatic updates are not configured.
 

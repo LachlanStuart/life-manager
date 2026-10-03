@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { createServer, request, type Server } from 'node:http';
 import { resolve, join } from 'node:path';
 import { startServer } from '../src/server-runtime.js';
 import { identifyServer } from '../src/server-discovery.js';
@@ -15,6 +16,7 @@ console.log(`Temporary profile and logs: ${directory}`);
 const dataDir = join(directory, 'workspace');
 let child: ChildProcess | undefined;
 let external: Awaited<ReturnType<typeof startServer>> | undefined;
+let legacy: Server | undefined;
 let launchNumber = 0;
 
 async function waitFor<T>(read: () => Promise<T>, description: string): Promise<T> {
@@ -96,10 +98,28 @@ try {
   await quit();
   await identifyServer(external.origin);
   console.log('PASS: explicit server connection loads; Quit leaves external server running.');
+
+  legacy = createServer((incoming, outgoing) => {
+    if (incoming.url === '/api/server') { outgoing.writeHead(404); outgoing.end('{"error":"No such API endpoint."}'); return; }
+    const upstream = request(new URL(incoming.url!, external!.origin), { method: incoming.method, headers: incoming.headers }, response => {
+      outgoing.writeHead(response.statusCode!, response.headers);
+      response.pipe(outgoing);
+    });
+    upstream.on('error', () => outgoing.destroy());
+    outgoing.on('close', () => upstream.destroy());
+    incoming.pipe(upstream);
+  });
+  await new Promise<void>(done => legacy!.listen(0, '127.0.0.1', done));
+  const legacyOrigin = `http://127.0.0.1:${(legacy.address() as { port: number }).port}`;
+  await launch({ mode: 'remote', url: legacyOrigin });
+  await quit();
+  console.log('PASS: explicit connection supports servers without the desktop identity endpoint.');
+  await new Promise<void>(done => legacy!.close(() => done())); legacy = undefined;
   await external.stop(); external = undefined;
   await rm(directory, { recursive: true, force: true });
   console.log('All packaged desktop smoke checks passed.');
 } finally {
   await quit();
+  if (legacy) { legacy.closeAllConnections(); await new Promise<void>(done => legacy!.close(() => done())); }
   await external?.stop();
 }

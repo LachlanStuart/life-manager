@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { z } from 'zod';
 
 export interface ServerIdentity {
   application: 'life-manager';
@@ -25,6 +26,21 @@ export async function identifyServer(origin: string): Promise<ServerIdentity> {
     throw new Error('This address is not a compatible Life Manager server. Update the server and try again.');
   }
   return identity as ServerIdentity;
+}
+
+const remoteWorkspace = z.object({
+  dashboard: z.object({ periodId: z.string(), revision: z.number().int().nonnegative(), items: z.array(z.object({ id: z.string(), title: z.string() })) }),
+  periods: z.array(z.unknown()), snapshots: z.array(z.unknown()),
+  widgets: z.array(z.unknown()), promptTemplates: z.array(z.unknown()),
+});
+
+/** Explicit connections load the server's own UI, including pre-desktop releases. */
+export async function validateServerConnection(origin: string): Promise<void> {
+  const address = normalizeServerUrl(origin);
+  const response = await fetch(`${address}/api/workspace`, { signal: AbortSignal.timeout(5000), redirect: 'error' });
+  if (!response.ok) throw new Error(`Could not read the workspace at ${address}/api/workspace (HTTP ${response.status}). Check the server address.`);
+  const workspace: unknown = await response.json().catch(() => undefined);
+  if (!remoteWorkspace.safeParse(workspace).success) throw new Error('This address did not return a Life Manager workspace. Check the server address.');
 }
 
 /** Verify the live owner, rather than trusting an old port or PID from disk. */

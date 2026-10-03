@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { networkInterfaces } from 'node:os';
 import { parseConfig, externalLinkAllowed, type DesktopConfig } from './config.js';
-import { identifyServer } from '../src/server-discovery.js';
+import { validateServerConnection } from '../src/server-discovery.js';
 
 app.setName('Life Manager');
 if (process.env.LIFE_MANAGER_DESKTOP_HOME) app.setPath('userData', process.env.LIFE_MANAGER_DESKTOP_HOME);
@@ -168,7 +168,7 @@ async function connect(next: DesktopConfig, save: boolean) {
   connecting = true;
   try {
     // Validate external servers before interrupting the currently open workspace.
-    if (next.mode === 'remote') await identifyServer(next.url);
+    if (next.mode === 'remote') await validateServerConnection(next.url);
     await flushWorkspace();
     window?.destroy(); window = undefined;
     await stopBackend();
