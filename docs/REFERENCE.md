@@ -128,6 +128,8 @@ The selected prompt appears as an inline action at the right of the Notes headin
 
 Settings → Prompts → Prompt handling defaults to **Show prompt dialog**, with **Codex** available and **T3 Code (not yet supported)** disabled. The choice is stored in this client’s local storage (`life-manager.prompt-handling`), outside workspace snapshots and exports. Saved templates remain shared workspace configuration.
 
+T3 Code's [CLI](https://github.com/pingdotgg/t3code/blob/main/docs/user/install.md#open-a-project-from-a-terminal) can open a blank thread with `t3 app <path>` when its desktop app is already running. As of October 2026, no supported prompt-prefill argument or deep link was found; [the upstream discussion](https://github.com/pingdotgg/t3code/discussions/8433) proposes prompt input separately from the agent-facing MCP launch tools. Use the copy dialog to transfer prompts into T3 Code.
+
 For Codex, this is an ordinary browser link on every device, so the viewing device decides which app handles it. Preparation does not launch an application, submit a task, or enqueue work. Notes retain their usual autosave behavior. Manage templates under the global Settings cog → Prompts.
 
 The Codex link uses `codex://threads/new` with encoded `prompt` and `path` parameters. The [official deep-link reference](https://learn.chatgpt.com/docs/reference/commands#deep-links) describes a prefilled composer requiring Send and documents no new-task host selector. iPhone handling is an experiment; the link does not nominate a remote execution host. Host-local paths and the loopback API context are useful when the task runs on the application server.
