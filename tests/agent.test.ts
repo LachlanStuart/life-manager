@@ -8,6 +8,16 @@ const item = { ...seedItems()[0]!, id: 'special/id', title: 'My & project' };
 const template = { id: 'one', name: 'Next', prompt: 'Explore {{item.name}} at {{ item.url }}' };
 
 describe('Codex links', () => {
+  it('prepares T3 prompts without launching and uses reachable context for a desktop client', async () => {
+    const sender = createAgentSender({ cwd: '/server/workspace', apiOrigin: 'http://127.0.0.1:4317', skillPath: '/server/skill.md' });
+    const reply = await sender.send({ item, template, origin: 'https://remote.example', target: 't3', context: 'client' });
+    expect(reply.prompt).toContain('GET https://remote.example/api/items/special%2Fid');
+    expect(reply.prompt).toContain('https://github.com/LachlanStuart/life-manager/');
+    expect(reply.prompt).not.toContain('127.0.0.1');
+    expect(reply.prompt).not.toContain('/server/');
+    expect(reply.url).toBeUndefined();
+    expect(execFile).not.toHaveBeenCalled();
+  });
   it('prepares the complete prompt without an app link by default', async () => {
     const sender = createAgentSender({ cwd: '/workspace', apiOrigin: 'http://127.0.0.1:4317', skillPath: '/app/skills/life-manager/SKILL.md' });
     const reply = await sender.send({ item, template, origin: 'https://example.ts.net:4317' });

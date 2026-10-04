@@ -16,6 +16,7 @@ await rm(stage, { recursive: true, force: true });
 await mkdir(stage, { recursive: true });
 await build({ entryPoints: [join(root, 'desktop/main.ts')], outfile: join(stage, 'main.cjs'), bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] });
 await build({ entryPoints: [join(root, 'desktop/preload.ts')], outfile: join(stage, 'preload.cjs'), bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] });
+await build({ entryPoints: [join(root, 'desktop/workspace-preload.ts')], outfile: join(stage, 'workspace-preload.cjs'), bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] });
 await build({ entryPoints: [join(root, 'desktop/worker.ts')], outfile: join(stage, 'worker.mjs'), bundle: true, platform: 'node', format: 'esm', target: 'node24', external: ['better-sqlite3'],
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
 });

@@ -1,4 +1,4 @@
-import type { AgentReply, Item, ItemCommand, WorkspaceSettings, WidgetSummary, WidgetRenderInput, WidgetActionInput, WidgetRenderResult, WidgetActionResult, PromptTemplate, PromptHandling } from '../src/types';
+import type { AgentReply, Item, ItemCommand, WorkspaceSettings, WidgetSummary, WidgetRenderInput, WidgetActionInput, WidgetRenderResult, WidgetActionResult, PromptTemplate, PromptHandling, T3LaunchReply } from '../src/types';
 
 import type { ViewSort } from './view-sort';
 
@@ -35,4 +35,5 @@ export interface ItemPanelProps extends Omit<NotesEditorProps, 'itemId' | 'value
   promptTemplates?: PromptTemplate[];
   promptHandling?: PromptHandling;
   onSendToAgent?: (itemId: string, templateId: string) => Promise<AgentReply>;
+  onLaunchT3?: (prompt: string) => Promise<T3LaunchReply>;
 }

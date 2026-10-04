@@ -5,7 +5,7 @@ const key = 'life-manager.prompt-handling';
 export function readPromptHandling(): PromptHandling {
   try {
     const value = localStorage.getItem(key);
-    if (value === 'codex') return value;
+    if (value === 'codex' || value === 't3') return value;
   } catch { /* Storage may be disabled. */ }
   return 'modal';
 }

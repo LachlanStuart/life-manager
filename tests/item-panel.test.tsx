@@ -320,6 +320,34 @@ describe('ItemPanel', () => {
     expect(props.onCommand).not.toHaveBeenCalled();
   });
 
+  it('launches T3 only on click and reports both clipboard and conversation results', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    const user = userEvent.setup();
+    const launch = vi.fn().mockResolvedValue({ copied: true, opened: true, location: 'device' });
+    renderPanel({ promptHandling: 't3', onLaunchT3: launch });
+    const button = screen.getByRole('button', { name: 'Resume work' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    expect(launch).not.toHaveBeenCalled();
+    await user.click(button);
+    expect(launch).toHaveBeenCalledExactlyOnceWith('Full prompt');
+    expect(await screen.findByText('Prompt copied to this device’s clipboard.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'T3 Code' }).textContent).toContain('on this computer');
+    expect(screen.queryByRole('link', { name: 'Resume work' })).toBeNull();
+  });
+
+  it('retains copied status and offers the full prompt when T3 launch fails', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    const user = userEvent.setup();
+    renderPanel({ promptHandling: 't3', onLaunchT3: vi.fn().mockResolvedValue({ copied: true, opened: false, location: 'server', error: 'Start T3 Code first.' }) });
+    const button = screen.getByRole('button', { name: 'Resume work' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    await user.click(button);
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Start T3 Code first.');
+    expect(screen.getByText('Prompt copied to this device’s clipboard.')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Show prompt' }));
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Full prompt' }).value).toBe('Full prompt');
+  });
+
   it('keeps the full prompt available for manual copy when clipboard access fails', async () => {
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
     const user = userEvent.setup();

@@ -29,7 +29,8 @@ async function setup() {
   const actions = createLifeManagerActions(store, () => widgets.summaries());
   widgets = createWidgetRegistry(actions);
   const sendToAgent = vi.fn<AgentSender>(async () => ({ message: 'Codex link ready.', prompt: 'Full prompt', url: 'codex://threads/new?prompt=test' }));
-  const server = createServer(createHttpHandler({ actions, widgets, attachmentsDir, publicDir, sendToAgent }));
+  const launchT3 = vi.fn().mockResolvedValue(undefined);
+  const server = createServer(createHttpHandler({ actions, widgets, attachmentsDir, publicDir, sendToAgent, launchT3 }));
   cleanups.push(async () => {
     server.closeAllConnections();
     if (server.listening) await closeServer(server);
@@ -45,7 +46,7 @@ async function setup() {
   const post = (path: string, body: unknown, headers: Record<string, string> = {}) => get(path, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Life-Manager': '1', ...headers }, body: JSON.stringify(body),
   });
-  return { actions, store, get, post, origin, attachmentsDir, sendToAgent };
+  return { actions, store, get, post, origin, attachmentsDir, sendToAgent, launchT3 };
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -59,6 +60,20 @@ async function json<T>(response: Response, status = 200): Promise<T> {
 }
 
 const prompt: PromptTemplate = { id: 'launch', name: 'Launch selected Item', prompt: 'Open {{item.name}} at {{item.url}} ({{item.id}})' };
+
+it('only launches T3 on an explicit protected action, never while preparing a prompt', async () => {
+  const { post, get, launchT3, sendToAgent } = await setup();
+  await json(await post('/api/templates/save', prompt));
+  await json(await post('/api/agent/link', { itemId: 'build', templateId: prompt.id, target: 't3', context: 'client' }));
+  expect(sendToAgent).toHaveBeenCalledWith(expect.objectContaining({ target: 't3', context: 'client' }));
+  expect(launchT3).not.toHaveBeenCalled();
+  await json(await post('/api/agent/t3', {}, { Origin: 'https://foreign.example' }), 403);
+  await json(await get('/api/agent/t3', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }), 403);
+  await json(await post('/api/agent/t3', { cwd: '/arbitrary/path' }), 400);
+  expect(launchT3).not.toHaveBeenCalled();
+  expect(await json(await post('/api/agent/t3', {}))).toEqual({ opened: true });
+  expect(launchT3).toHaveBeenCalledExactlyOnceWith();
+});
 
 describe('standalone HTTP application', () => {
   it('reads the workspace and Item context and applies validated mutations over HTTP', async () => {
@@ -192,7 +207,7 @@ describe('standalone HTTP application', () => {
     expect(sendToAgent).toHaveBeenCalledExactlyOnceWith({ item, template: prompt, origin, target: 'modal' });
     await json(await post('/api/agent/link', { itemId: item.id, templateId: prompt.id, target: 'codex' }));
     expect(sendToAgent).toHaveBeenLastCalledWith({ item, template: prompt, origin, target: 'codex' });
-    await json(await post('/api/agent/link', { itemId: item.id, templateId: prompt.id, target: 't3' }), 400);
+    await json(await post('/api/agent/link', { itemId: item.id, templateId: prompt.id, target: 'unknown' }), 400);
     expect(sendToAgent).toHaveBeenCalledTimes(2);
     const after = await json<Workspace>(await get('/api/workspace'));
     expect(after.dashboard).toEqual(before.dashboard);

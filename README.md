@@ -139,7 +139,7 @@ Add widgets from the Notes editor and edit their configuration in Markdown:
 
 - **Local videos:** choose an absolute media-directory path and optional folder exclusions. The widget lists immediate files and folders on the server; it does not play or host videos.
 - **Twitch:** supply your own public Twitch Client ID, connect your account, and group followed channels however you like. No client secret is needed.
-- **Agent prompts:** save reusable prompts that include an Item's title, link and ID. The Notes action shows the full prompt in a copyable dialog by default. Settings → Prompts → Prompt handling can switch this client to Codex links. T3 Code currently uses the copy-and-paste workflow; direct launch is unavailable.
+- **Agent prompts:** save reusable prompts that include an Item's title, link and ID. The Notes action shows the full prompt in a copyable dialog by default. Settings → Prompts → Prompt handling can switch this client to Codex drafts or T3 Code. T3 copies the prompt and opens a blank conversation for you to paste into; T3 must already be running. Browser clients launch it on the server, while the Electron app launches it locally.
 
 See the [configuration reference](docs/REFERENCE.md#widgets) for widget examples and Twitch setup, or [agent prompts](docs/REFERENCE.md#agent-prompts) for the integration details. None of these integrations is required for ordinary planning and note-taking.
 

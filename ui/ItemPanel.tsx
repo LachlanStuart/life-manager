@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { Item, ItemCommand } from '../src/types';
+import type { Item, ItemCommand, T3LaunchReply } from '../src/types';
 import { DEFAULT_WORKSPACE_SETTINGS, lifecycleBehavior, propertyValue } from '../src/properties';
 import { PropertySelect, propertyPatch, selectedProperty } from './PropertySelect';
 import { childrenOf, computeEfforts, effectiveIncluded, localShare, allocationLimit } from '../src/domain';
@@ -8,6 +8,7 @@ import { NotesEditor } from './NotesEditor';
 import { ItemControls } from './ItemControls';
 import { Icon } from './Icons';
 import { PromptDialog } from './PromptDialog';
+import { Modal } from './Modal';
 import './item-panel.css';
 
 function ancestorTrail(items: Item[], item: Item): Item[] {
@@ -43,7 +44,7 @@ function descendantsOf(items: Item[], rootId: string): Set<string> {
 export function ItemPanel({
   item, items, showAll, readOnly = false, snapshotId, widgets, renderWidget, actWidget,
   uploadImage, onOpenItem, onCommand, onSelect, onNotesChange, notesStatus,
-  promptTemplates = [], promptHandling = 'modal', onSendToAgent, settings, propertyId,
+  promptTemplates = [], promptHandling = 'modal', onSendToAgent, onLaunchT3, settings, propertyId,
 }: ItemPanelProps) {
   const configuration = settings ?? DEFAULT_WORKSPACE_SETTINGS;
   const property = selectedProperty(configuration, propertyId);
@@ -61,6 +62,8 @@ export function ItemPanel({
   const [deleting, setDeleting] = React.useState(false);
   const [agentLink, setAgentLink] = React.useState<{ key: string; prompt?: string; url?: string; error?: string } | null>(null);
   const [promptOpen, setPromptOpen] = React.useState(false);
+  const launchingT3 = React.useRef(false);
+  const [t3Popup, setT3Popup] = React.useState<{ result?: T3LaunchReply; error?: string } | null>(null);
   const [drag, setDrag] = React.useState<{ id: string; target: string } | null>(null);
   const dragRef = React.useRef<{ id: string; target: string; pointerId: number } | null>(null);
   const listRef = React.useRef<HTMLUListElement>(null);
@@ -187,13 +190,23 @@ export function ItemPanel({
     // Preparation is side-effect free. Only following an app link opens it.
     void onSendToAgent(item.id, templateId).then((reply) => {
       if (!cancelled) setAgentLink({ key: linkKey, prompt: reply.prompt, url: reply.url,
-        error: (promptHandling === 'modal' ? reply.prompt : reply.url) ? undefined : reply.message });
+        error: (promptHandling === 'codex' ? reply.url : reply.prompt) ? undefined : reply.message });
     }).catch((cause) => {
       if (!cancelled) setAgentLink({ key: linkKey, error: cause instanceof Error ? cause.message : 'Could not prepare the prompt.' });
     });
     return () => { cancelled = true; };
   }, [linkKey, item.id, templateId, promptHandling, readOnly, onSendToAgent]);
   const currentLink = !readOnly && agentLink?.key === linkKey ? agentLink : null;
+  const openT3 = async () => {
+    if (!currentLink?.prompt || !onLaunchT3 || launchingT3.current) return;
+    launchingT3.current = true; setT3Popup({});
+    try {
+      const result = await onLaunchT3(currentLink.prompt);
+      setT3Popup(current => current ? { result } : null);
+    } catch (cause) {
+      setT3Popup(current => current ? { error: cause instanceof Error ? cause.message : 'Could not open T3 Code.' } : null);
+    } finally { launchingT3.current = false; }
+  };
 
   const remove = (target: Item) => {
     if (locked || snapshotId || deleting) return;
@@ -370,8 +383,8 @@ export function ItemPanel({
             {promptTemplates.length === 0 && <option value="">No prompt templates</option>}
             {promptTemplates.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
           </select>
-          {promptHandling === 'modal'
-            ? <button type="button" className="lm-prompt-action" disabled={!currentLink?.prompt} title={currentLink?.error ?? 'Show full prompt'} onClick={() => setPromptOpen(true)}>{template?.name ?? 'No prompt templates'}</button>
+          {promptHandling !== 'codex'
+            ? <button type="button" className="lm-prompt-action" disabled={!currentLink?.prompt || (promptHandling === 't3' && !onLaunchT3)} title={currentLink?.error ?? (promptHandling === 't3' ? 'Copy prompt and open T3 Code' : 'Show full prompt')} onClick={() => promptHandling === 't3' ? void openT3() : setPromptOpen(true)}>{template?.name ?? 'No prompt templates'}</button>
             : <a href={currentLink?.url} aria-disabled={!currentLink?.url} title={currentLink?.error ?? 'Open in Codex'}>{template?.name ?? 'No prompt templates'}</a>}
           <span className="lm-inline-chevron" aria-hidden="true">⌄</span>
         </span>
@@ -384,6 +397,12 @@ export function ItemPanel({
           onChange={(markdown) => { if (!readOnly) onNotesChange(item.id, markdown); }} />
       </section>
       {promptOpen && currentLink?.prompt && <PromptDialog prompt={currentLink.prompt} onClose={() => setPromptOpen(false)} />}
+      {t3Popup && <Modal title="T3 Code" onClose={() => setT3Popup(null)} error={t3Popup.error ?? t3Popup.result?.error}>
+        {!t3Popup.result && !t3Popup.error && <p role="status">Copying the prompt and opening T3 Code…</p>}
+        {t3Popup.result?.copied && <p>Prompt copied to this device’s clipboard.</p>}
+        {t3Popup.result?.opened && <p>A blank conversation has opened in T3 Code {t3Popup.result.location === 'server' ? 'on the Life Manager server' : 'on this computer'}. Paste the prompt and submit it when ready.</p>}
+        <div className="lm-modal-actions"><button type="button" onClick={() => { setT3Popup(null); setPromptOpen(true); }}>Show prompt</button><button type="button" onClick={() => setT3Popup(null)}>Close</button></div>
+      </Modal>}
     </section>
   );
 }

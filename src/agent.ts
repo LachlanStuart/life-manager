@@ -28,8 +28,11 @@ export function codexDeepLink(prompt: string, cwd: string): string {
 export function createAgentSender(options: { cwd: string; apiOrigin?: string; skillPath?: string }): { send: AgentSender } {
   if (!isAbsolute(options.cwd)) throw new Error('Agent working directory must be an absolute path.');
   return {
-    async send({ item, template, origin, target = 'modal' }) {
-      const prompt = materializePrompt(item, template, origin, options.cwd, options.apiOrigin, options.skillPath);
+    async send({ item, template, origin, target = 'modal', context }) {
+      const client = context === 'client';
+      const prompt = materializePrompt(item, template, origin, options.cwd,
+        client ? origin : options.apiOrigin,
+        client ? 'https://github.com/LachlanStuart/life-manager/blob/main/skills/life-manager/SKILL.md' : options.skillPath);
       if (target === 'codex') return { message: 'Codex link ready.', prompt, url: codexDeepLink(prompt, options.cwd) };
       return { message: 'Prompt ready.', prompt };
     },

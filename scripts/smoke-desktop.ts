@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createServer, request, type Server } from 'node:http';
 import { resolve, join } from 'node:path';
@@ -28,11 +28,11 @@ async function waitFor<T>(read: () => Promise<T>, description: string): Promise<
   }
   throw new Error(`Timed out: ${description}. ${lastError ?? ''}`);
 }
-async function launch(config: DesktopConfig) {
+async function launch(config: DesktopConfig, extraEnv: Record<string, string> = {}) {
   const profile = join(directory, `profile-${++launchNumber}`);
   await mkdir(profile);
   await writeFile(join(profile, 'connection.json'), JSON.stringify(config));
-  const env: NodeJS.ProcessEnv = { ...process.env, LIFE_MANAGER_DESKTOP_HOME: profile };
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extraEnv, LIFE_MANAGER_DESKTOP_HOME: profile };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.NODE_OPTIONS;
   child = spawn(executable, [], { env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -99,7 +99,24 @@ try {
   await identifyServer(external.origin);
   console.log('PASS: explicit server connection loads; Quit leaves external server running.');
 
+  let checkNativeLaunch = false;
+  let nativeResult: { copied?: boolean; opened?: boolean; location?: string; error?: string } | undefined;
   legacy = createServer((incoming, outgoing) => {
+    if (checkNativeLaunch && incoming.url === '/') {
+      outgoing.writeHead(200, { 'Content-Type': 'text/html' });
+      outgoing.end(`<script>
+        window.lifeManagerDesktop.launchT3('Desktop smoke prompt').then(result =>
+          fetch('/smoke-result', {method: 'POST', body: JSON.stringify(result)}))
+          .catch(error => fetch('/smoke-result', {method: 'POST', body: JSON.stringify({error: String(error)})}));
+      </script>`);
+      return;
+    }
+    if (checkNativeLaunch && incoming.url === '/smoke-result') {
+      let body = '';
+      incoming.on('data', chunk => { body += chunk; });
+      incoming.on('end', () => { nativeResult = JSON.parse(body); outgoing.end('ok'); });
+      return;
+    }
     if (incoming.url === '/api/server') { outgoing.writeHead(404); outgoing.end('{"error":"No such API endpoint."}'); return; }
     const upstream = request(new URL(incoming.url!, external!.origin), { method: incoming.method, headers: incoming.headers }, response => {
       outgoing.writeHead(response.statusCode!, response.headers);
@@ -114,6 +131,20 @@ try {
   await launch({ mode: 'remote', url: legacyOrigin });
   await quit();
   console.log('PASS: explicit connection supports servers without the desktop identity endpoint.');
+
+  const fakeT3 = join(directory, 't3');
+  const argumentsFile = join(directory, 't3-arguments');
+  await writeFile(fakeT3, '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$LIFE_MANAGER_T3_SMOKE_ARGUMENTS"\n');
+  await chmod(fakeT3, 0o700);
+  checkNativeLaunch = true;
+  const nativeProfile = await launch({ mode: 'remote', url: legacyOrigin }, { LIFE_MANAGER_T3_BIN: fakeT3, LIFE_MANAGER_T3_SMOKE_ARGUMENTS: argumentsFile });
+  await waitFor(async () => nativeResult, 'native clipboard and launch result');
+  assert.deepEqual(nativeResult, { copied: true, opened: true, location: 'device' });
+  assert.equal(await readFile(argumentsFile, 'utf8'), `app\n${join(nativeProfile, 'workspace')}\n`);
+  assert.equal(execFileSync('/usr/bin/pbpaste', { encoding: 'utf8' }), 'Desktop smoke prompt');
+  await quit();
+  console.log('PASS: sandboxed preload copies natively and launches locally for a remote connection.');
+
   await new Promise<void>(done => legacy!.close(() => done())); legacy = undefined;
   await external.stop(); external = undefined;
   await rm(directory, { recursive: true, force: true });

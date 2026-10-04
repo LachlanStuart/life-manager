@@ -5,6 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { networkInterfaces } from 'node:os';
 import { parseConfig, externalLinkAllowed, type DesktopConfig } from './config.js';
 import { validateServerConnection } from '../src/server-discovery.js';
+import { launchDesktopT3 } from './agent-launch.js';
+import type { T3LaunchReply } from '../src/types.js';
 
 app.setName('Life Manager');
 if (process.env.LIFE_MANAGER_DESKTOP_HOME) app.setPath('userData', process.env.LIFE_MANAGER_DESKTOP_HOME);
@@ -80,9 +82,10 @@ function showWorkspace() {
   if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); return; }
   const activeOrigin = origin;
   window = new BrowserWindow({ width: 1280, height: 860, minWidth: 700, minHeight: 500, show: false, title: 'Life Manager',
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+    webPreferences: { preload: join(resources, 'workspace-preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true },
   });
   const current = window;
+  current.webContents.setUserAgent(`${current.webContents.getUserAgent()} LifeManagerDesktop`);
   secureWindow(current, url => { try { return new URL(url).origin === activeOrigin; } catch { return false; } });
   current.on('close', event => { if (!allowQuit) { event.preventDefault(); current.hide(); } });
   current.on('closed', () => { if (window === current) window = undefined; });
@@ -210,6 +213,12 @@ function verifySettingsSender(event: Electron.IpcMainInvokeEvent) {
     throw new Error('This operation is only available in Connection Settings.');
   }
 }
+ipcMain.handle('workspace:launch-t3', async (event, prompt: unknown): Promise<T3LaunchReply> => {
+  if (!window || !origin || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || new URL(event.senderFrame.url).origin !== origin) {
+    throw new Error('This operation is only available in the workspace window.');
+  }
+  return launchDesktopT3(prompt, config, defaultDirectory);
+});
 ipcMain.handle('desktop:load', event => { verifySettingsSender(event); return { config, defaultDirectory, error: lastError }; });
 ipcMain.handle('desktop:directory', async event => {
   verifySettingsSender(event);

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Modal } from './Modal';
+import { copyPrompt } from './clipboard';
 
 export function PromptDialog({ prompt, onClose }: { prompt: string; onClose: () => void }) {
   const text = useRef<HTMLTextAreaElement>(null);
@@ -8,11 +9,7 @@ export function PromptDialog({ prompt, onClose }: { prompt: string; onClose: () 
   const copy = async () => {
     setError(''); setCopied(false);
     try {
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(prompt);
-      else {
-        text.current?.focus(); text.current?.select();
-        if (!document.execCommand('copy')) throw new Error('Copy unavailable');
-      }
+      await copyPrompt(prompt, text.current ?? undefined);
       setCopied(true);
     } catch {
       text.current?.focus(); text.current?.select();

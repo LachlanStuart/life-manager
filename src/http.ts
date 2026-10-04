@@ -9,7 +9,7 @@ import { widgetActionInputSchema, widgetRenderInputSchema } from './rpc.js';
 import type { AgentReply, Item, PromptHandling, PromptTemplate } from './types.js';
 
 export type { AgentReply } from './types.js';
-export type AgentSender = (input: { item: Item; template: PromptTemplate; origin: string; target?: PromptHandling }) => Promise<AgentReply>;
+export type AgentSender = (input: { item: Item; template: PromptTemplate; origin: string; target?: PromptHandling; context?: 'client' }) => Promise<AgentReply>;
 
 export function createChangeFeed() {
   const clients = new Set<ServerResponse>();
@@ -63,6 +63,7 @@ export function createHttpHandler(options: {
   publicDir: string;
   feed?: ReturnType<typeof createChangeFeed>;
   sendToAgent?: AgentSender;
+  launchT3?: () => Promise<void>;
   serverIdentity?: import('./server-discovery.js').ServerIdentity;
 }) {
   const { actions, widgets } = options;
@@ -100,12 +101,18 @@ export function createHttpHandler(options: {
           case '/api/templates/save': json(actions.savePromptTemplate(body as PromptTemplate)); return;
           case '/api/templates/delete': actions.deletePromptTemplate(body as { id: string }); json({ deleted: true }); return;
           case '/api/agent/link': {
-            const input = z.object({ itemId: z.string().min(1), templateId: z.string().min(1), target: z.enum(['modal', 'codex']).default('modal') }).strict().parse(body);
+            const input = z.object({ itemId: z.string().min(1), templateId: z.string().min(1), target: z.enum(['modal', 'codex', 't3']).default('modal'), context: z.literal('client').optional() }).strict().parse(body);
             const item = actions.workspace().dashboard.items.find(value => value.id === input.itemId);
             const template = actions.listPromptTemplates().find(value => value.id === input.templateId);
             if (!item || !template) throw new HttpError(404, 'The Item or prompt template no longer exists.');
             if (!options.sendToAgent) throw new HttpError(503, 'Agent prompts are not configured.');
-            json(await options.sendToAgent({ item, template, origin, target: input.target })); return;
+            json(await options.sendToAgent({ item, template, origin, target: input.target, ...(input.context ? { context: input.context } : {}) })); return;
+          }
+          case '/api/agent/t3': {
+            z.object({}).strict().parse(body);
+            if (!options.launchT3) throw new HttpError(503, 'T3 Code launch is not configured on this server.');
+            await options.launchT3();
+            json({ opened: true }); return;
           }
           default: throw new HttpError(404, 'No such action.');
         }
