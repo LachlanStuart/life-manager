@@ -38,8 +38,9 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof ItemPanel>> 
     renderWidget: vi.fn().mockResolvedValue({ html: '' }), actWidget: vi.fn().mockResolvedValue({}),
     onOpenItem: vi.fn(), onCommand: vi.fn<(command: ItemCommand) => Promise<void>>().mockResolvedValue(undefined),
     onSelect: vi.fn(), onNotesChange: vi.fn(),
+    promptHandling: 'codex',
     promptTemplates: [{ id: 'plan', name: 'Plan next steps', prompt: 'Plan for {{id}}' }, { id: 'resume', name: 'Resume work', prompt: 'Resume {{name}}' }],
-    onSendToAgent: vi.fn().mockResolvedValue({ message: 'Codex link ready.', url: 'codex://threads/new?prompt=test' }),
+    onSendToAgent: vi.fn().mockResolvedValue({ message: 'Codex link ready.', prompt: 'Full prompt', url: 'codex://threads/new?prompt=test' }),
     ...overrides,
   };
   return { ...render(<ItemPanel {...props} />), props };
@@ -298,6 +299,39 @@ describe('ItemPanel', () => {
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Codex unavailable');
     expect(screen.queryByRole('link', { name: 'Resume work' })).toBeNull();
     expect(props.onCommand).not.toHaveBeenCalled();
+  });
+
+  it('shows and copies the full prepared prompt by default, and closes on Escape', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    const user = userEvent.setup();
+    const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const prompt = 'Explore Life Manager\n\nLife Manager context: GET http://localhost/api/items/project';
+    const { props } = renderPanel({ promptHandling: undefined, onSendToAgent: vi.fn().mockResolvedValue({ message: 'Prompt ready.', prompt }) });
+    const button = screen.getByRole('button', { name: 'Resume work' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    await user.click(button);
+    const dialog = screen.getByRole('dialog', { name: 'Agent prompt' });
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Full prompt' }).value).toBe(prompt);
+    await user.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    expect(clipboard).toHaveBeenCalledWith(prompt);
+    expect(await screen.findByText('Copied')).toBeTruthy();
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(props.onCommand).not.toHaveBeenCalled();
+  });
+
+  it('keeps the full prompt available for manual copy when clipboard access fails', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Denied'));
+    renderPanel({ promptHandling: 'modal' });
+    const button = screen.getByRole('button', { name: 'Resume work' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    await user.click(button);
+    await user.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('copy it manually'));
+    const text = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Full prompt' });
+    expect(text.selectionEnd - text.selectionStart).toBe(text.value.length);
   });
 
   it('never exposes a previous prompt link while a new selection is preparing', async () => {

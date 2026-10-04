@@ -38,8 +38,10 @@ export interface SnapshotSummary { id: string; periodId: string; kind: Checkpoin
 export interface Dashboard { items: Item[]; periodId: string; snapshotId: string | null; revision: number }
 export interface WidgetSummary { id: string; title: string; description: string }
 export interface PromptTemplate { id: string; name: string; prompt: string }
+export type PromptHandling = 'modal' | 'codex';
 export interface AgentReply {
   message: string;
+  prompt: string;
   url?: string;
 }
 export interface EnumOption { id: string; label: string; color: string; behavior?: 'normal' | 'complete' | 'skip' }

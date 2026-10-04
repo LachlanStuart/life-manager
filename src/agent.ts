@@ -25,12 +25,13 @@ export function codexDeepLink(prompt: string, cwd: string): string {
   return url.toString();
 }
 
-export function createCodexSender(options: { cwd: string; apiOrigin?: string; skillPath?: string }): { send: AgentSender } {
-  if (!isAbsolute(options.cwd)) throw new Error('Codex working directory must be an absolute path.');
+export function createAgentSender(options: { cwd: string; apiOrigin?: string; skillPath?: string }): { send: AgentSender } {
+  if (!isAbsolute(options.cwd)) throw new Error('Agent working directory must be an absolute path.');
   return {
-    async send({ item, template, origin }) {
+    async send({ item, template, origin, target = 'modal' }) {
       const prompt = materializePrompt(item, template, origin, options.cwd, options.apiOrigin, options.skillPath);
-      return { message: 'Codex link ready.', url: codexDeepLink(prompt, options.cwd) };
+      if (target === 'codex') return { message: 'Codex link ready.', prompt, url: codexDeepLink(prompt, options.cwd) };
+      return { message: 'Prompt ready.', prompt };
     },
   };
 }

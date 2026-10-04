@@ -6,10 +6,10 @@ import { extname, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import type { LifeManagerActions, WidgetRegistrySurface } from './rpc.js';
 import { widgetActionInputSchema, widgetRenderInputSchema } from './rpc.js';
-import type { AgentReply, Item, PromptTemplate } from './types.js';
+import type { AgentReply, Item, PromptHandling, PromptTemplate } from './types.js';
 
 export type { AgentReply } from './types.js';
-export type AgentSender = (input: { item: Item; template: PromptTemplate; origin: string }) => Promise<AgentReply>;
+export type AgentSender = (input: { item: Item; template: PromptTemplate; origin: string; target?: PromptHandling }) => Promise<AgentReply>;
 
 export function createChangeFeed() {
   const clients = new Set<ServerResponse>();
@@ -100,12 +100,12 @@ export function createHttpHandler(options: {
           case '/api/templates/save': json(actions.savePromptTemplate(body as PromptTemplate)); return;
           case '/api/templates/delete': actions.deletePromptTemplate(body as { id: string }); json({ deleted: true }); return;
           case '/api/agent/link': {
-            const input = z.object({ itemId: z.string().min(1), templateId: z.string().min(1) }).strict().parse(body);
+            const input = z.object({ itemId: z.string().min(1), templateId: z.string().min(1), target: z.enum(['modal', 'codex']).default('modal') }).strict().parse(body);
             const item = actions.workspace().dashboard.items.find(value => value.id === input.itemId);
             const template = actions.listPromptTemplates().find(value => value.id === input.templateId);
             if (!item || !template) throw new HttpError(404, 'The Item or prompt template no longer exists.');
-            if (!options.sendToAgent) throw new HttpError(503, 'Codex dispatch is not configured.');
-            json(await options.sendToAgent({ item, template, origin })); return;
+            if (!options.sendToAgent) throw new HttpError(503, 'Agent prompts are not configured.');
+            json(await options.sendToAgent({ item, template, origin, target: input.target })); return;
           }
           default: throw new HttpError(404, 'No such action.');
         }

@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent, ReactNode } from 'react';
+import type { CSSProperties, PointerEvent } from 'react';
+import { readPromptHandling, savePromptHandling } from './ui/prompt-handling';
+import { Modal } from './ui/Modal';
 import { ItemContextMenu } from './ui/ItemContextMenu';
 import { Icon } from './ui/Icons';
 import { WorkspaceSettingsEditor } from './ui/WorkspaceSettingsEditor';
@@ -17,7 +19,7 @@ import { api, uploadImage } from './ui/api';
 import { newClientId, parseRoute, routeUrl, type ViewRoute } from './ui/navigation';
 import { SunburstDisplaySettings } from './ui/SunburstDisplaySettings';
 import { childrenOf, effectiveIncluded } from './src/domain';
-import { type AgentReply, type Item, type ItemCommand, type PromptTemplate, type WidgetActionInput, type WidgetActionResult, type WidgetRenderInput, type WidgetRenderResult, type Workspace } from './src/types';
+import { type AgentReply, type Item, type ItemCommand, type PromptTemplate, type PromptHandling, type WidgetActionInput, type WidgetActionResult, type WidgetRenderInput, type WidgetRenderResult, type Workspace } from './src/types';
 import type { WheelMode } from './ui/contracts';
 import './ui/workspace.css';
 import { appBase, browserDemo } from './ui/runtime';
@@ -25,14 +27,6 @@ import { appBase, browserDemo } from './ui/runtime';
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 type Draft = { itemId: string; markdown: string; snapshotId?: string };
 const ItemPanel = lazy(() => import('./ui/ItemPanel').then(module => ({ default: module.ItemPanel })));
-
-function Modal({ title, onClose, children, error }: { title: string; onClose: () => void; children: ReactNode; error?: string }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { ref.current?.showModal?.(); ref.current?.querySelector<HTMLInputElement>('input, textarea, select')?.focus(); }, []);
-  return <dialog ref={ref} className="lm-modal" aria-label={title} onCancel={event => { event.preventDefault(); onClose(); }}>
-    <div className="lm-modal-heading"><h2>{title}</h2><button aria-label="Close dialog" onClick={onClose}>×</button></div>{error && <p role="alert" className="lm-error">{error}</p>}{children}
-  </dialog>;
-}
 
 function parentPath(items: Item[], item: Item) {
   const parts: string[] = [];
@@ -70,6 +64,7 @@ export function LifeManagerPage() {
   const [createParent, setCreateParent] = useState<string | null | undefined>(undefined);
   const [search, setSearch] = useState('');
   const [searchItems, setSearchItems] = useState<Item[]>([]);
+  const [promptHandling, setPromptHandling] = useState(readPromptHandling);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate>({ id: '', name: '', prompt: '' });
   const frame = useRef<HTMLDivElement>(null);
@@ -180,7 +175,7 @@ export function LifeManagerPage() {
 
   const renderWidget = useCallback((input: WidgetRenderInput) => api<WidgetRenderResult>('widgets/render', input), []);
   const actWidget = useCallback(async (input: WidgetActionInput) => { await saveNotes(); const result = await api<WidgetActionResult>('widgets/action', input); await refresh(); return result; }, [saveNotes, refresh]);
-  const sendToAgent = useCallback((itemId: string, templateId: string) => api<AgentReply>('agent/link', { itemId, templateId }), []);
+  const sendToAgent = useCallback((itemId: string, templateId: string) => api<AgentReply>('agent/link', { itemId, templateId, target: promptHandling }), [promptHandling]);
 
   const settings = workspaceSettings(workspace ?? undefined);
   const channel = (id: string | null | undefined) => id === null ? null : settings.properties.some(property => property.id === id) ? id! : settings.properties.find(property => property.id === 'status')?.id ?? settings.properties[0]?.id ?? null;
@@ -292,7 +287,7 @@ export function LifeManagerPage() {
         <section className="lm-detail-pane" aria-label="Item details"><div className="lm-pane-actions"><button onClick={() => navigate({ ...routeRef.current, itemId: null })}>{board ? '← Board' : '← Wheel'}</button><div className="lm-pane-actions__right"><button className="lm-expand" onClick={() => setExpanded(value => !value)}>{expanded ? 'Split view' : 'Expand'}</button></div></div>
           {displayed ? <Suspense fallback={<div className="lm-loading">Opening Item…</div>}><ItemPanel settings={settings} propertyId={editPropertyId} key={`${route.snapshotId ?? 'current'}:${displayed.id}`} item={displayed} items={items} showAll={showAll} readOnly={readOnly} snapshotId={route.snapshotId} widgets={workspace.widgets}
             renderWidget={renderWidget} actWidget={actWidget} uploadImage={uploadImage} onOpenItem={select} onCommand={async value => { if (value.type === 'delete' || value.type === 'delete-many') await saveNotes(); await command(value); }} onSelect={select} onNotesChange={changeNotes} notesStatus={noteStatus}
-            promptTemplates={workspace.promptTemplates} onSendToAgent={browserDemo ? undefined : sendToAgent} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
+            promptTemplates={workspace.promptTemplates} promptHandling={promptHandling} onSendToAgent={browserDemo ? undefined : sendToAgent} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
           {noteStatus === 'Save error' && <button onClick={() => void run(saveNotes)}>Retry saving notes</button>}
         </section></>}
     </div>}
@@ -338,6 +333,15 @@ export function LifeManagerPage() {
       </details>
       <details className="lm-settings-section">
         <summary>Prompts</summary>
+        <label>Prompt handling<select value={promptHandling} onChange={event => {
+          const value = event.target.value as PromptHandling;
+          setPromptHandling(value); savePromptHandling(value);
+        }}>
+          <option value="modal">Show prompt dialog (default)</option>
+          <option value="codex">Codex</option>
+          <option value="t3" disabled>T3 Code (not yet supported)</option>
+        </select></label>
+        <p>Saved for this browser or desktop client. Codex opens on this device. T3 Code does not yet provide a supported link for a new conversation with a prompt; use the dialog to copy and paste into T3 Code.</p>
         <form onSubmit={event => { event.preventDefault(); void run(async () => {
           const saved = await api<PromptTemplate>('templates/save', { ...editingTemplate, id: editingTemplate.id || newClientId('prompt') }); setEditingTemplate(saved); await refresh();
         }); }}><label>Template<select aria-label="Edit template" value={editingTemplate.id} onChange={event => setTemplate(event.target.value)}><option value="">New template</option>{workspace?.promptTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>

@@ -39,7 +39,7 @@ All paths are relative to the running server. POST requests use `Content-Type: a
 | `POST /api/templates/delete` | `{id}` |
 | `POST /api/widgets/render` | `{widgetId, itemId, config?, snapshotId?}` → `{html}` |
 | `POST /api/widgets/action` | Render context plus `{action, input?}` |
-| `POST /api/agent/link` | `{itemId, templateId}` → `{message, url}` containing a prefilled `codex://` link. |
+| `POST /api/agent/link` | `{itemId, templateId, target?}` → `{message, prompt, url?}`. Target defaults to `modal`; `codex` adds a prefilled `codex://` link. |
 | `POST /api/attachments` | Raw PNG/JPEG/GIF/WebP bytes, image content type and `X-Life-Manager: 1`; returns `{url}`. Maximum 20 MB. |
 
 Commands support create, update, delete, delete-many, move, reorder, allocate and bulk updates. New Items default to automatic allocation unless an explicit `patch.weight` or optional creation `share` is supplied. Creation `share` applies a local percentage atomically with the new Item. `allocate` with `share: null` enables automatic allocation; blanks equally divide the remainder after included explicit shares. With included blanks, manual weights represent percentages; without them, weights retain proportional normalization. The additive optional `allocationAuto` field is retained in checkpoint and export Items (schema version 2); absent means manual, preserving older exports and snapshots. `delete-many` accepts `ids` and removes all selected subtrees atomically while preserving historical snapshots. See [the agent skill](../skills/life-manager/SKILL.md) for examples. Revision conflicts return HTTP 409. Other invalid operations return an error string. Browser clients receive change notifications over `/api/events` and refresh current server state.
@@ -118,13 +118,19 @@ Channel links open Twitch on the viewing device. Create Item always adds a fresh
 
 Add activity widgets through the Notes editor and configure their Markdown blocks for your own media directories and Twitch application.
 
-## Codex dispatch
+<a id="codex-dispatch"></a>
+
+## Agent prompts
 
 Saved prompts interpolate `{{item.name}}`, `{{item.url}}` and `{{item.id}}` for the selected Item. The server appends its loopback read API URL and the local Life Manager skill location, so agents on the server host can read Items directly. Sending does not change lifecycle or effort.
 
-The selected prompt appears as an inline link at the right of the Notes heading. Click its text to open Codex; click its chevron or surrounding control to choose another prompt. Links are prepared automatically when the Item or prompt changes. This is an ordinary browser link on every device, so the viewing device decides which app handles it. Preparation does not launch an application, submit a task, or enqueue work. Notes retain their usual autosave behavior. Manage templates under the global Settings cog → Prompts.
+The selected prompt appears as an inline action at the right of the Notes heading. Click its text to open the full-prompt dialog or Codex; click its chevron or surrounding control to choose another prompt. The dialog includes the interpolated template and the appended API/skill context, with a Copy prompt button and manual selection if clipboard access fails. Prompts are prepared automatically when the Item, template or handling choice changes.
 
-The link uses `codex://threads/new` with encoded `prompt` and `path` parameters. The [official deep-link reference](https://learn.chatgpt.com/docs/reference/commands#deep-links) describes a prefilled composer requiring Send and documents no new-task host selector. iPhone handling is an experiment; the link does not nominate a remote execution host. Host-local paths and the loopback API context are useful when the task runs on the application server.
+Settings → Prompts → Prompt handling defaults to **Show prompt dialog**, with **Codex** available and **T3 Code (not yet supported)** disabled. The choice is stored in this client’s local storage (`life-manager.prompt-handling`), outside workspace snapshots and exports. Saved templates remain shared workspace configuration.
+
+For Codex, this is an ordinary browser link on every device, so the viewing device decides which app handles it. Preparation does not launch an application, submit a task, or enqueue work. Notes retain their usual autosave behavior. Manage templates under the global Settings cog → Prompts.
+
+The Codex link uses `codex://threads/new` with encoded `prompt` and `path` parameters. The [official deep-link reference](https://learn.chatgpt.com/docs/reference/commands#deep-links) describes a prefilled composer requiring Send and documents no new-task host selector. iPhone handling is an experiment; the link does not nominate a remote execution host. Host-local paths and the loopback API context are useful when the task runs on the application server.
 
 ## Verification
 

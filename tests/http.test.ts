@@ -28,7 +28,7 @@ async function setup() {
   let widgets: WidgetRegistrySurface;
   const actions = createLifeManagerActions(store, () => widgets.summaries());
   widgets = createWidgetRegistry(actions);
-  const sendToAgent = vi.fn<AgentSender>(async () => ({ message: 'Codex link ready.', url: 'codex://threads/new?prompt=test' }));
+  const sendToAgent = vi.fn<AgentSender>(async () => ({ message: 'Codex link ready.', prompt: 'Full prompt', url: 'codex://threads/new?prompt=test' }));
   const server = createServer(createHttpHandler({ actions, widgets, attachmentsDir, publicDir, sendToAgent }));
   cleanups.push(async () => {
     server.closeAllConnections();
@@ -188,12 +188,16 @@ describe('standalone HTTP application', () => {
     await json(await post('/api/mutate', { command: { type: 'update', id: 'learn', patch: { defaultPromptId: prompt.id } } }));
     const before = await json<Workspace>(await post('/api/mutate', { command: { type: 'create', id: 'game', parentId: 'learn', title: 'Selected game', patch: { status: 'Doing', effortOverride: 135 } } }));
     const item = before.dashboard.items.find(value => value.id === 'game')!;
-    expect(await json(await post('/api/agent/link', { itemId: item.id, templateId: prompt.id }))).toEqual({ message: 'Codex link ready.', url: 'codex://threads/new?prompt=test' });
-    expect(sendToAgent).toHaveBeenCalledExactlyOnceWith({ item, template: prompt, origin });
+    expect(await json(await post('/api/agent/link', { itemId: item.id, templateId: prompt.id }))).toEqual({ message: 'Codex link ready.', prompt: 'Full prompt', url: 'codex://threads/new?prompt=test' });
+    expect(sendToAgent).toHaveBeenCalledExactlyOnceWith({ item, template: prompt, origin, target: 'modal' });
+    await json(await post('/api/agent/link', { itemId: item.id, templateId: prompt.id, target: 'codex' }));
+    expect(sendToAgent).toHaveBeenLastCalledWith({ item, template: prompt, origin, target: 'codex' });
+    await json(await post('/api/agent/link', { itemId: item.id, templateId: prompt.id, target: 't3' }), 400);
+    expect(sendToAgent).toHaveBeenCalledTimes(2);
     const after = await json<Workspace>(await get('/api/workspace'));
     expect(after.dashboard).toEqual(before.dashboard);
     await json(await post('/api/agent/link', { itemId: 'unknown', templateId: prompt.id }), 404);
-    expect(sendToAgent).toHaveBeenCalledTimes(1);
+    expect(sendToAgent).toHaveBeenCalledTimes(2);
   });
 });
 

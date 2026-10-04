@@ -7,6 +7,7 @@ import type { ItemPanelProps } from './contracts';
 import { NotesEditor } from './NotesEditor';
 import { ItemControls } from './ItemControls';
 import { Icon } from './Icons';
+import { PromptDialog } from './PromptDialog';
 import './item-panel.css';
 
 function ancestorTrail(items: Item[], item: Item): Item[] {
@@ -42,7 +43,7 @@ function descendantsOf(items: Item[], rootId: string): Set<string> {
 export function ItemPanel({
   item, items, showAll, readOnly = false, snapshotId, widgets, renderWidget, actWidget,
   uploadImage, onOpenItem, onCommand, onSelect, onNotesChange, notesStatus,
-  promptTemplates = [], onSendToAgent, settings, propertyId,
+  promptTemplates = [], promptHandling = 'modal', onSendToAgent, settings, propertyId,
 }: ItemPanelProps) {
   const configuration = settings ?? DEFAULT_WORKSPACE_SETTINGS;
   const property = selectedProperty(configuration, propertyId);
@@ -58,7 +59,8 @@ export function ItemPanel({
   const [error, setError] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
-  const [agentLink, setAgentLink] = React.useState<{ key: string; url?: string; error?: string } | null>(null);
+  const [agentLink, setAgentLink] = React.useState<{ key: string; prompt?: string; url?: string; error?: string } | null>(null);
+  const [promptOpen, setPromptOpen] = React.useState(false);
   const [drag, setDrag] = React.useState<{ id: string; target: string } | null>(null);
   const dragRef = React.useRef<{ id: string; target: string; pointerId: number } | null>(null);
   const listRef = React.useRef<HTMLUListElement>(null);
@@ -177,18 +179,20 @@ export function ItemPanel({
     if (!cancelled) reorder(current.id, current.target);
   };
   const template = promptTemplates.find((candidate) => candidate.id === templateId);
-  const linkKey = JSON.stringify([item.id, item.title, templateId, template?.prompt]);
+  const linkKey = JSON.stringify([item.id, item.title, templateId, template?.prompt, promptHandling]);
+  React.useEffect(() => { setPromptOpen(false); }, [linkKey, readOnly]);
   React.useEffect(() => {
     if (readOnly || !onSendToAgent || !templateId) return;
     let cancelled = false;
-    // Preparing a URL is side-effect free. Only following the anchor opens Codex.
+    // Preparation is side-effect free. Only following an app link opens it.
     void onSendToAgent(item.id, templateId).then((reply) => {
-      if (!cancelled) setAgentLink({ key: linkKey, url: reply.url, error: reply.url ? undefined : reply.message });
+      if (!cancelled) setAgentLink({ key: linkKey, prompt: reply.prompt, url: reply.url,
+        error: (promptHandling === 'modal' ? reply.prompt : reply.url) ? undefined : reply.message });
     }).catch((cause) => {
-      if (!cancelled) setAgentLink({ key: linkKey, error: cause instanceof Error ? cause.message : 'Could not prepare the Codex link.' });
+      if (!cancelled) setAgentLink({ key: linkKey, error: cause instanceof Error ? cause.message : 'Could not prepare the prompt.' });
     });
     return () => { cancelled = true; };
-  }, [linkKey, item.id, templateId, readOnly, onSendToAgent]);
+  }, [linkKey, item.id, templateId, promptHandling, readOnly, onSendToAgent]);
   const currentLink = !readOnly && agentLink?.key === linkKey ? agentLink : null;
 
   const remove = (target: Item) => {
@@ -366,7 +370,9 @@ export function ItemPanel({
             {promptTemplates.length === 0 && <option value="">No prompt templates</option>}
             {promptTemplates.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
           </select>
-          <a href={currentLink?.url} aria-disabled={!currentLink?.url} title={currentLink?.error ?? 'Open in Codex'}>{template?.name ?? 'No prompt templates'}</a>
+          {promptHandling === 'modal'
+            ? <button type="button" className="lm-prompt-action" disabled={!currentLink?.prompt} title={currentLink?.error ?? 'Show full prompt'} onClick={() => setPromptOpen(true)}>{template?.name ?? 'No prompt templates'}</button>
+            : <a href={currentLink?.url} aria-disabled={!currentLink?.url} title={currentLink?.error ?? 'Open in Codex'}>{template?.name ?? 'No prompt templates'}</a>}
           <span className="lm-inline-chevron" aria-hidden="true">⌄</span>
         </span>
         {!readOnly && templateId && !currentLink && <span className="lm-item-panel__hint" role="status">Preparing…</span>}
@@ -377,6 +383,7 @@ export function ItemPanel({
           widgets={widgets} renderWidget={renderWidget} actWidget={actWidget} uploadImage={uploadImage} onOpenItem={onOpenItem}
           onChange={(markdown) => { if (!readOnly) onNotesChange(item.id, markdown); }} />
       </section>
+      {promptOpen && currentLink?.prompt && <PromptDialog prompt={currentLink.prompt} onClose={() => setPromptOpen(false)} />}
     </section>
   );
 }

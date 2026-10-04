@@ -46,8 +46,8 @@
 .lm-inline-chevron { display: inline-block; margin-left: 8px; color: var(--ip-muted); pointer-events: none; }
 .lm-item-panel__status { flex-shrink: 0; font-size: 12px; }
 .lm-item-panel__prompt { max-width: 100%; }
-.lm-item-panel__prompt a { position: relative; color: var(--ip-accent); text-decoration: underline; text-decoration-color: #b4c4ae; text-underline-offset: 3px; overflow-wrap: anywhere; }
-.lm-item-panel__prompt a[aria-disabled="true"] { color: var(--ip-muted); text-decoration: none; pointer-events: none; }
+.lm-item-panel__prompt a, .lm-item-panel__prompt .lm-prompt-action { position: relative; color: var(--ip-accent); text-decoration: underline; text-decoration-color: #b4c4ae; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.lm-item-panel__prompt a[aria-disabled="true"], .lm-item-panel__prompt .lm-prompt-action:disabled { color: var(--ip-muted); text-decoration: none; pointer-events: none; }
 .lm-item-panel__prompt .lm-inline-chevron { min-width: 18px; text-align: center; }
 .lm-item-panel__agent { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .lm-item-panel .lm-item-panel__primary { border-color: var(--ip-accent); color: #fff; background: var(--ip-accent); }
@@ -133,3 +133,5 @@
 .lm-modal .lm-create-controls .lm-item-controls { flex-wrap: wrap; }
 .lm-modal .lm-create-controls .lm-item-controls__inclusion { display: inline-flex; }
 .lm-modal .lm-create-controls input[type='checkbox'] { width: 15px; padding: 0; border: 0; }
+
+.lm-item-panel__prompt .lm-prompt-action { border: 0; border-radius: 0; background: none; padding: 0; min-height: 0; font: inherit; cursor: pointer; }

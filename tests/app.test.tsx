@@ -53,7 +53,25 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
   }));
   return { screen: render(<LifeManagerPage />), current, historical, mutations };
 }
-beforeEach(() => { vi.stubGlobal('PointerEvent', MouseEvent); HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; });
+beforeEach(() => { localStorage.clear(); vi.stubGlobal('PointerEvent', MouseEvent); HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; });
+
+it('defaults prompt handling to the copy dialog and remembers the choice in this client', async () => {
+  const { screen, mutations } = setup();
+  await screen.findByText('Select Tend');
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(screen.getByText('Prompts', { selector: 'summary' }));
+  const select = screen.getByRole('combobox', { name: 'Prompt handling' }) as HTMLSelectElement;
+  expect(select.value).toBe('modal');
+  fireEvent.change(select, { target: { value: 'codex' } });
+  expect(localStorage.getItem('life-manager.prompt-handling')).toBe('codex');
+  expect(mutations).toEqual([]);
+  cleanup();
+  const next = setup().screen;
+  await next.findByText('Select Tend');
+  fireEvent.click(next.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(next.getByText('Prompts', { selector: 'summary' }));
+  expect((next.getByRole('combobox', { name: 'Prompt handling' }) as HTMLSelectElement).value).toBe('codex');
+});
 
 it('confirms period resets once for all Items, including hidden descendants, and preserves snapshots', async () => {
   const { screen, current, historical, mutations } = setup('/', [
