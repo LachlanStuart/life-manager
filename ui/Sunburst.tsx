@@ -426,11 +426,14 @@ export function Sunburst({
     focusId: null, showAll, efforts, compareItems, maxDepth: 3, innerRadius: 52, outerRadius: 460,
   }), [displayedItems, efforts, compareItems, focus, showAll]);
   const zoomOut = () => { if (focus) onFocus(focus.parentId); };
+  const zoomInto = (segment: SunburstSegment) => {
+    if (segment.hasVisibleChildren) onFocus(segment.id);
+    else onSelect(segment.id);
+  };
   const activate = (id: string) => {
     if (suppressClick.current) { suppressClick.current = false; return; }
     if (mode === 'Navigate' || mode === 'Omni' || disabled) {
-      if (layout.find(segment => segment.id === id)?.hasVisibleChildren) onFocus(id);
-      else onSelect(id);
+      onSelect(id);
     }
     else if (mode === 'Create') { if (!disabled) onCreate?.(id); }
     else onHighlight?.(id);
@@ -444,7 +447,7 @@ export function Sunburst({
     }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (event.shiftKey && !compact) onSelect(segment.id); else activate(segment.id);
+      if (event.shiftKey && (mode === 'Navigate' || mode === 'Omni' || disabled)) zoomInto(segment); else activate(segment.id);
       return;
     }
     if (disabled) return;
@@ -579,7 +582,7 @@ export function Sunburst({
                 role="treeitem" tabIndex={0}
                 aria-label={`${segment.title}${appearance.label ? `, ${appearance.label}` : ''}, ${formatPercent(segment.actualShare)} share, ${formatPercent(layers.actual)} effort${segment.included ? '' : ', excluded'}`}
                 aria-selected={segment.id === selectedId}
-                aria-description={segment.hasVisibleChildren ? 'Zoom into branch. Long-press or double-click to open details.' : 'Open details.'}
+                aria-description={segment.hasVisibleChildren ? 'Open details. Long-press, double-click or Shift+Enter to zoom into branch.' : 'Open details.'}
                 onPointerEnter={(event) => { if (event.pointerType !== 'touch' && !dragRef.current) setHoveredId(segment.id); }}
                 onPointerDown={(event) => {
                   pointerType.current = event.pointerType || 'mouse';
@@ -591,7 +594,7 @@ export function Sunburst({
                     touchTimer.current = setTimeout(() => {
                       touchSuppressClick.current = true;
                       cancelTouch();
-                      onSelect(segment.id);
+                      zoomInto(segment);
                     }, 500);
                   }
                   if (mode === 'Importance' || (mode === 'Effort' && onEffort)) beginDrag(event, segment, mode);
@@ -599,14 +602,14 @@ export function Sunburst({
                 onClick={(event) => {
                   event.stopPropagation();
                   if (touchSuppressClick.current) { touchSuppressClick.current = false; return; }
-                  if (!compact && (mode === 'Navigate' || omni) && pointerType.current !== 'touch' && event.detail > 0 && !suppressClick.current) {
+                  if ((mode === 'Navigate' || omni) && pointerType.current !== 'touch' && event.detail > 0 && !suppressClick.current) {
                     cancelNavigation();
                     if (event.detail === 1) navigationTimer.current = setTimeout(() => { navigationTimer.current = null; activate(segment.id); }, 400);
                   } else activate(segment.id);
                 }}
                 onDoubleClick={(event) => {
                   event.stopPropagation(); cancelNavigation(); cancelTouch();
-                  if (!compact && pointerType.current !== 'touch' && (mode === 'Navigate' || omni)) onSelect(segment.id);
+                  if (pointerType.current !== 'touch' && (mode === 'Navigate' || omni)) zoomInto(segment);
                 }}
                 onKeyDown={(event) => handleKey(event, segment)}>
                 <title>{`${segment.title}\n${appearance.label ? `${appearance.label} · ` : ''}${formatPercent(segment.actualShare)} intended share · ${formatPercent(layers.actual)} effort${segment.included ? '' : '\nExcluded — temporary Show all geometry'}`}</title>

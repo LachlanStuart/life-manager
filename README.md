@@ -35,7 +35,7 @@ These are starting points: use Settings → Top-level Items to rename, add, reor
 
 A slice's size means **intended share of attention**. Its fill means **effort spent relative to that intention in the current period**. Neither is a time estimate or an overall project-completion percentage. You can finish a productive session on an open-ended project without pretending the whole project is nearly done.
 
-Click or tap a branch to zoom, or a leaf to open its details. The center opens the focused Item; the ↑ control goes to its parent. Double-click on desktop or long-press on touch to open any Item directly. **+ New** creates an Item in the current branch in either view. Desktop Omni mode also puts allocation, effort and creation controls directly on the wheel.
+Click or tap any Item to open its details. Double-click on desktop or long-press on touch to zoom into a branch. The center opens the focused Item; the ↑ control goes to its parent. **+ New** creates an Item in the current branch in either view. Desktop Omni mode also puts allocation, effort and creation controls directly on the wheel.
 
 ### Switch to execution
 

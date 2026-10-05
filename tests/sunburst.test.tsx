@@ -207,47 +207,50 @@ const pointAt = (degrees: number, radius = 300) => ({
 });
 
 describe('sunburst interactions', () => {
-  it.each(['Navigate', 'Omni'] as const)('%s zooms on click, opens on double-click, and cancels pending zoom on mode change', mode => {
+  it.each([['Navigate', false], ['Omni', false], ['Navigate', true]] as const)('%s (compact=%s) opens on click, zooms on double-click, and cancels pending selection on mode change', (mode, compact) => {
     vi.useFakeTimers();
     const items = [item('a1', null, 1), item('a2', null, 1), item('a3', 'a1', 1)];
-    const view = mount(items, {mode});
+    const view = mount(items, {mode, compact});
     const slice = screen.getByRole('treeitem', {name: /Item a1/});
     fireEvent.click(slice, {detail: 1});
+    expect(view.onSelect).not.toHaveBeenCalled();
     expect(view.onFocus).not.toHaveBeenCalled();
     vi.advanceTimersByTime(450);
-    expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
-    view.onFocus.mockClear();
+    expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a1');
+    view.onSelect.mockClear();
     fireEvent.click(slice, {detail: 1});
     vi.advanceTimersByTime(320);
     fireEvent.click(slice, {detail: 2}); fireEvent.doubleClick(slice);
     vi.advanceTimersByTime(450);
-    expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a1');
-    expect(view.onFocus).not.toHaveBeenCalled();
+    expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
+    expect(view.onSelect).not.toHaveBeenCalled();
     fireEvent.click(slice, {detail: 1});
     view.rerender(<Sunburst items={items} selectedId={null} focusId={null} showAll={false} mode="Importance"
       onSelect={view.onSelect} onFocus={view.onFocus} onAllocate={view.onAllocate} />);
     vi.advanceTimersByTime(450);
-    expect(view.onFocus).not.toHaveBeenCalled();
+    expect(view.onSelect).not.toHaveBeenCalled();
+    expect(view.onFocus).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['Navigate', 'Omni'] as const)('%s zooms immediately on tap and opens only on a stationary long press', mode => {
+  it.each([['Navigate', false], ['Omni', false], ['Navigate', true]] as const)('%s (compact=%s) opens immediately on tap and zooms only on a stationary long press', (mode, compact) => {
     vi.useFakeTimers();
-    const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], {mode});
+    const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], {mode, compact});
     const slice = screen.getByRole('treeitem', {name: /Item a1/});
     const point = {pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 200};
     fireEvent.pointerDown(slice, point); vi.advanceTimersByTime(100);
     fireEvent.pointerUp(view.svg, point); fireEvent.click(slice, {detail: 1});
-    expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
-    expect(view.onSelect).not.toHaveBeenCalled(); view.onFocus.mockClear();
-    fireEvent.pointerDown(slice, point); vi.advanceTimersByTime(550);
     expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a1');
-    fireEvent.pointerUp(view.svg, point); fireEvent.click(slice, {detail: 1});
     expect(view.onFocus).not.toHaveBeenCalled(); view.onSelect.mockClear();
+    fireEvent.pointerDown(slice, point); vi.advanceTimersByTime(550);
+    expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
+    fireEvent.pointerUp(view.svg, point); fireEvent.click(slice, {detail: 1});
+    expect(view.onSelect).not.toHaveBeenCalled(); view.onFocus.mockClear();
     fireEvent.pointerDown(slice, point);
     fireEvent.pointerMove(view.svg, {...point, clientY: 220}); vi.advanceTimersByTime(600);
     fireEvent.pointerUp(view.svg, point); fireEvent.click(slice, {detail: 1});
-    expect(view.onSelect).not.toHaveBeenCalled(); expect(view.onFocus).not.toHaveBeenCalled();
+    expect(view.onFocus).not.toHaveBeenCalled(); expect(view.onSelect).not.toHaveBeenCalled();
     fireEvent.pointerDown(slice, point); fireEvent.pointerCancel(view.svg, point); vi.advanceTimersByTime(600);
+    expect(view.onFocus).not.toHaveBeenCalled();
     expect(view.onSelect).not.toHaveBeenCalled();
   });
 
@@ -307,11 +310,15 @@ describe('sunburst interactions', () => {
     expect(screen.getByRole('button', { name: 'Return to overview' })).toBeDefined();
   });
 
-  it('focuses directly through keyboard activation in Navigate mode', () => {
+  it.each(['Enter', ' '])('opens details with %s and zooms with Shift in Navigate mode', key => {
     const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], { mode: 'Navigate' });
-    fireEvent.keyDown(screen.getByRole('treeitem', { name: /Item a1/ }), {key: 'Enter'});
-    expect(view.onFocus).toHaveBeenCalledWith('a1');
-    expect(view.onSelect).not.toHaveBeenCalled();
+    const slice = screen.getByRole('treeitem', { name: /Item a1/ });
+    fireEvent.keyDown(slice, {key});
+    expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a1');
+    expect(view.onFocus).not.toHaveBeenCalled();
+    fireEvent.keyDown(slice, {key, shiftKey: true});
+    expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
+    expect(view.onSelect).toHaveBeenCalledTimes(1);
   });
 
   it('opens the focused Item from the center and uses separate controls to zoom out', () => {
@@ -525,7 +532,7 @@ it('uses the automatic remainder for angular geometry as well as displayed share
   expect(layout[1]!.endAngle - layout[1]!.startAngle).toBeCloseTo(2 * Math.PI * .3);
 });
 
-it('opens the status menu without a pending Omni click changing focus', () => {
+it('opens the status menu without a pending Omni click opening details', () => {
   vi.useFakeTimers();
   const onSelect = vi.fn(), onContextMenu = vi.fn();
   render(<Sunburst items={[item('a1', null, 1)]} mode="Omni" selectedId={null} focusId={null} showAll={false}
@@ -554,16 +561,16 @@ it.each(['Navigate', 'Omni'] as const)('%s opens leaves and all-hidden branches 
   expect(view.onFocus).not.toHaveBeenCalled();
   view.rerender(<Sunburst items={items} selectedId={null} focusId={null} showAll mode={mode}
     onSelect={view.onSelect} onFocus={view.onFocus} onAllocate={view.onAllocate} />);
-  fireEvent.keyDown(screen.getByRole('treeitem', {name: /Item a2/}), {key: 'Enter'});
+  fireEvent.keyDown(screen.getByRole('treeitem', {name: /Item a2/}), {key: 'Enter', shiftKey: true});
   expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a2');
 });
 
-it('opens leaves and focuses branches in the compact board navigator', () => {
+it('opens both branches and leaves in the compact board navigator', () => {
   const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], {compact: true});
   fireEvent.click(screen.getByRole('treeitem', {name: /Item a1/}));
   fireEvent.click(screen.getByRole('treeitem', {name: /Item a2/}));
-  expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
-  expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a2');
+  expect(view.onFocus).not.toHaveBeenCalled();
+  expect(view.onSelect.mock.calls).toEqual([['a1'], ['a2']]);
 });
 
 it('replaces an emptied branch with actions without navigating or inventing hidden children', () => {
