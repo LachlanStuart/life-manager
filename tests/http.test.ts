@@ -72,7 +72,10 @@ it('only launches T3 on an explicit protected action, never while preparing a pr
   await json(await post('/api/agent/t3', { cwd: '/arbitrary/path' }), 400);
   expect(launchT3).not.toHaveBeenCalled();
   expect(await json(await post('/api/agent/t3', {}))).toEqual({ opened: true });
-  expect(launchT3).toHaveBeenCalledExactlyOnceWith();
+  expect(launchT3).toHaveBeenCalledExactlyOnceWith(undefined);
+  await json(await post('/api/agent/t3', { location: '/Applications/T3 Code.app' }));
+  expect(launchT3).toHaveBeenLastCalledWith('/Applications/T3 Code.app');
+  await json(await post('/api/agent/t3', { location: { executable: '/tmp/script' } }), 400);
 });
 
 describe('standalone HTTP application', () => {

@@ -1,13 +1,30 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
-import { access, readdir } from 'node:fs/promises';
+import { access, readdir, stat } from 'node:fs/promises';
 import { launchT3Conversation } from '../src/t3-launch';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn((_file, _args, _options, callback) => callback(null, '', '')) }));
-vi.mock('node:fs/promises', () => ({ access: vi.fn().mockResolvedValue(undefined), readdir: vi.fn().mockResolvedValue(['T3 Code (Nightly)']) }));
+vi.mock('node:fs/promises', () => ({ access: vi.fn().mockResolvedValue(undefined), stat: vi.fn().mockResolvedValue({}), readdir: vi.fn().mockResolvedValue(['T3 Code (Nightly)']) }));
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
 
 describe('T3 conversation launcher', () => {
+  it('uses a saved location in preference to environment configuration', async () => {
+    vi.stubEnv('LIFE_MANAGER_T3_BIN', '/stale/t3');
+    await launchT3Conversation('/workspace', '/custom/tools/t3');
+    expect(execFile).toHaveBeenCalledWith('/custom/tools/t3', ['app', '/workspace'], expect.any(Object), expect.any(Function));
+    await expect(launchT3Conversation('/workspace', 'relative/t3')).rejects.toThrow('absolute path');
+    await expect(launchT3Conversation('/workspace', { path: '/tools/t3' })).rejects.toThrow('Invalid T3 Code location');
+  });
+
+  it.skipIf(process.platform !== 'darwin')('accepts a saved app bundle or its Finder executable path', async () => {
+    vi.stubEnv('LIFE_MANAGER_T3_BIN', '/stale/t3');
+    vi.stubEnv('LIFE_MANAGER_T3_APP', '/old/T3.app');
+    for (const location of ['/Applications/T3 Code (Nightly).app', '/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)']) {
+      await launchT3Conversation('/workspace', location);
+      expect(execFile).toHaveBeenLastCalledWith('/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)',
+        ['/Applications/T3 Code (Nightly).app/Contents/Resources/app.asar/apps/server/dist/bin.mjs', 'app', '/workspace'], expect.any(Object), expect.any(Function));
+    }
+  });
   it('passes a directory as a literal argument with a GUI-safe environment', async () => {
     vi.stubEnv('LIFE_MANAGER_T3_BIN', '/tools/t3');
     vi.stubEnv('NODE_OPTIONS', '--import /some/loader.js');
@@ -32,6 +49,8 @@ describe('T3 conversation launcher', () => {
     vi.stubEnv('LIFE_MANAGER_T3_APP', '/Applications/T3 Code (Nightly).app');
     await launchT3Conversation('/workspace');
     expect(access).toHaveBeenCalled();
+    expect(stat).toHaveBeenCalledWith('/Applications/T3 Code (Nightly).app/Contents/Resources/app.asar');
+    expect(access).not.toHaveBeenCalledWith('/Applications/T3 Code (Nightly).app/Contents/Resources/app.asar');
     expect(execFile).toHaveBeenCalledWith('/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)',
       ['/Applications/T3 Code (Nightly).app/Contents/Resources/app.asar/apps/server/dist/bin.mjs', 'app', '/workspace'],
       expect.objectContaining({ env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: '1' }) }), expect.any(Function));

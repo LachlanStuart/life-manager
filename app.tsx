@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
-import { readPromptHandling, savePromptHandling } from './ui/prompt-handling';
+import { readPromptHandling, savePromptHandling, readT3Location, saveT3Location } from './ui/prompt-handling';
 import { isDesktopClient, launchT3 } from './ui/t3-launch';
 import { Modal } from './ui/Modal';
 import { ItemContextMenu } from './ui/ItemContextMenu';
@@ -66,6 +66,7 @@ export function LifeManagerPage() {
   const [search, setSearch] = useState('');
   const [searchItems, setSearchItems] = useState<Item[]>([]);
   const [promptHandling, setPromptHandling] = useState(readPromptHandling);
+  const [t3Location, setT3Location] = useState(readT3Location);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate>({ id: '', name: '', prompt: '' });
   const frame = useRef<HTMLDivElement>(null);
@@ -290,7 +291,7 @@ export function LifeManagerPage() {
         <section className="lm-detail-pane" aria-label="Item details"><div className="lm-pane-actions"><button onClick={() => navigate({ ...routeRef.current, itemId: null })}>{board ? '← Board' : '← Wheel'}</button><div className="lm-pane-actions__right"><button className="lm-expand" onClick={() => setExpanded(value => !value)}>{expanded ? 'Split view' : 'Expand'}</button></div></div>
           {displayed ? <Suspense fallback={<div className="lm-loading">Opening Item…</div>}><ItemPanel settings={settings} propertyId={editPropertyId} key={`${route.snapshotId ?? 'current'}:${displayed.id}`} item={displayed} items={items} showAll={showAll} readOnly={readOnly} snapshotId={route.snapshotId} widgets={workspace.widgets}
             renderWidget={renderWidget} actWidget={actWidget} uploadImage={uploadImage} onOpenItem={select} onCommand={async value => { if (value.type === 'delete' || value.type === 'delete-many') await saveNotes(); await command(value); }} onSelect={select} onNotesChange={changeNotes} notesStatus={noteStatus}
-            promptTemplates={workspace.promptTemplates} promptHandling={promptHandling} onSendToAgent={browserDemo ? undefined : sendToAgent} onLaunchT3={browserDemo ? undefined : launchT3} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
+            promptTemplates={workspace.promptTemplates} promptHandling={promptHandling} onSendToAgent={browserDemo ? undefined : sendToAgent} onLaunchT3={browserDemo ? undefined : prompt => launchT3(prompt, t3Location)} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
           {noteStatus === 'Save error' && <button onClick={() => void run(saveNotes)}>Retry saving notes</button>}
         </section></>}
     </div>}
@@ -344,6 +345,11 @@ export function LifeManagerPage() {
           <option value="codex">Codex</option>
           <option value="t3">T3 Code</option>
         </select></label>
+        {promptHandling === 't3' && <>
+          <label>T3 Code location<input type="text" value={t3Location} maxLength={4096} placeholder="/Applications/T3 Code (Nightly).app" spellCheck={false}
+            onChange={event => { setT3Location(event.target.value); saveT3Location(event.target.value); }} /></label>
+          <p>Path to the T3 Code app bundle or CLI executable {isDesktopClient() ? 'on this computer' : 'on the Life Manager server'}. Saved automatically for this client. Leave blank to detect automatically.</p>
+        </>}
         <p>Saved for this browser or desktop client. Codex opens a draft on this device. T3 Code copies the prompt and opens a blank conversation {isDesktopClient() ? 'on this computer' : 'on the Life Manager server'} for you to paste and submit.</p>
         <form onSubmit={event => { event.preventDefault(); void run(async () => {
           const saved = await api<PromptTemplate>('templates/save', { ...editingTemplate, id: editingTemplate.id || newClientId('prompt') }); setEditingTemplate(saved); await refresh();

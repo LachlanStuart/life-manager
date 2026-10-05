@@ -12,12 +12,12 @@ it('copies natively and launches in the local workspace', async () => {
   expect(await launchDesktopT3('Complete prompt', { mode: 'local', dataDir: '/local/workspace', port: 4317, shareNetwork: false }, '/default/workspace'))
     .toEqual({ copied: true, opened: true, location: 'device' });
   expect(clipboard.writeText).toHaveBeenCalledWith('Complete prompt');
-  expect(launchT3Conversation).toHaveBeenCalledExactlyOnceWith('/local/workspace');
+  expect(launchT3Conversation).toHaveBeenCalledExactlyOnceWith('/local/workspace', undefined);
 });
 
 it('uses the local default directory for a remote connection, never the server address', async () => {
-  await launchDesktopT3('Remote context prompt', { mode: 'remote', url: 'https://remote.example' }, '/client/workspace');
-  expect(launchT3Conversation).toHaveBeenCalledExactlyOnceWith('/client/workspace');
+  await launchDesktopT3('Remote context prompt', { mode: 'remote', url: 'https://remote.example' }, '/client/workspace', '/Applications/T3 Code.app');
+  expect(launchT3Conversation).toHaveBeenCalledExactlyOnceWith('/client/workspace', '/Applications/T3 Code.app');
 });
 
 it('reports successful copy separately from launch failure', async () => {

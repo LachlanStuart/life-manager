@@ -63,7 +63,7 @@ export function createHttpHandler(options: {
   publicDir: string;
   feed?: ReturnType<typeof createChangeFeed>;
   sendToAgent?: AgentSender;
-  launchT3?: () => Promise<void>;
+  launchT3?: (location?: string) => Promise<void>;
   serverIdentity?: import('./server-discovery.js').ServerIdentity;
 }) {
   const { actions, widgets } = options;
@@ -109,9 +109,9 @@ export function createHttpHandler(options: {
             json(await options.sendToAgent({ item, template, origin, target: input.target, ...(input.context ? { context: input.context } : {}) })); return;
           }
           case '/api/agent/t3': {
-            z.object({}).strict().parse(body);
+            const input = z.object({ location: z.string().trim().max(4096).refine(value => !value.includes('\0')).optional() }).strict().parse(body);
             if (!options.launchT3) throw new HttpError(503, 'T3 Code launch is not configured on this server.');
-            await options.launchT3();
+            await options.launchT3(input.location);
             json({ opened: true }); return;
           }
           default: throw new HttpError(404, 'No such action.');

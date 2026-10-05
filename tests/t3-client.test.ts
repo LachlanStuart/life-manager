@@ -29,13 +29,18 @@ it('keeps copied status when the server cannot launch T3', async () => {
 it('uses Electron for both clipboard and launch, even when connected to a remote server', async () => {
   const native = vi.fn().mockResolvedValue({ copied: true, opened: true, location: 'device' });
   window.lifeManagerDesktop = { launchT3: native };
-  expect(await launchT3('Full prompt')).toMatchObject({ location: 'device' });
-  expect(native).toHaveBeenCalledWith('Full prompt');
+  expect(await launchT3('Full prompt', '/Applications/T3 Code.app')).toMatchObject({ location: 'device' });
+  expect(native).toHaveBeenCalledWith('Full prompt', '/Applications/T3 Code.app');
   expect(copyPrompt).not.toHaveBeenCalled();
   expect(api).not.toHaveBeenCalled();
   native.mockRejectedValueOnce(new Error('Native failure'));
   await expect(launchT3('Full prompt')).rejects.toThrow('Native failure');
   expect(api).not.toHaveBeenCalled();
+});
+
+it('sends the saved server installation path without altering the prompt or command arguments', async () => {
+  await launchT3('Full prompt', ' /server/tools/t3 ');
+  expect(api).toHaveBeenCalledWith('agent/t3', { location: '/server/tools/t3' });
 });
 
 it('does not fall back to the server if the Electron preload is unavailable', async () => {

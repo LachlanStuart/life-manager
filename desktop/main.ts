@@ -213,11 +213,11 @@ function verifySettingsSender(event: Electron.IpcMainInvokeEvent) {
     throw new Error('This operation is only available in Connection Settings.');
   }
 }
-ipcMain.handle('workspace:launch-t3', async (event, prompt: unknown): Promise<T3LaunchReply> => {
+ipcMain.handle('workspace:launch-t3', async (event, prompt: unknown, location: unknown): Promise<T3LaunchReply> => {
   if (!window || !origin || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || new URL(event.senderFrame.url).origin !== origin) {
     throw new Error('This operation is only available in the workspace window.');
   }
-  return launchDesktopT3(prompt, config, defaultDirectory);
+  return launchDesktopT3(prompt, config, defaultDirectory, location);
 });
 ipcMain.handle('desktop:load', event => { verifySettingsSender(event); return { config, defaultDirectory, error: lastError }; });
 ipcMain.handle('desktop:directory', async event => {

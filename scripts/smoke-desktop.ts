@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, rm, chmod } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, chmod, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createServer, request, type Server } from 'node:http';
-import { resolve, join } from 'node:path';
+import { resolve, join, dirname } from 'node:path';
+import { createRequire } from 'node:module';
 import { startServer } from '../src/server-runtime.js';
 import { identifyServer } from '../src/server-discovery.js';
 import type { DesktopConfig } from '../desktop/config.js';
@@ -100,12 +101,13 @@ try {
   console.log('PASS: explicit server connection loads; Quit leaves external server running.');
 
   let checkNativeLaunch = false;
+  let t3Location = '';
   let nativeResult: { copied?: boolean; opened?: boolean; location?: string; error?: string } | undefined;
   legacy = createServer((incoming, outgoing) => {
     if (checkNativeLaunch && incoming.url === '/') {
       outgoing.writeHead(200, { 'Content-Type': 'text/html' });
       outgoing.end(`<script>
-        window.lifeManagerDesktop.launchT3('Desktop smoke prompt').then(result =>
+        window.lifeManagerDesktop.launchT3('Desktop smoke prompt', ${JSON.stringify(t3Location)}).then(result =>
           fetch('/smoke-result', {method: 'POST', body: JSON.stringify(result)}))
           .catch(error => fetch('/smoke-result', {method: 'POST', body: JSON.stringify({error: String(error)})}));
       </script>`);
@@ -132,18 +134,27 @@ try {
   await quit();
   console.log('PASS: explicit connection supports servers without the desktop identity endpoint.');
 
-  const fakeT3 = join(directory, 't3');
+  const fakeBundle = join(directory, 'T3 Code.app');
+  await mkdir(join(fakeBundle, 'Contents/MacOS'), { recursive: true });
+  await mkdir(join(fakeBundle, 'Contents/Resources'), { recursive: true });
+  const fakeT3 = join(fakeBundle, 'Contents/MacOS/t3');
+  const archive = join(fakeBundle, 'Contents/Resources/app.asar');
+  // A real archive exercises Electron's ASAR filesystem behavior, which differs
+  // from Node when checking the archive root itself.
+  const electronBinary = createRequire(import.meta.url)('electron') as string;
+  await copyFile(join(dirname(dirname(electronBinary)), 'Resources/default_app.asar'), archive);
   const argumentsFile = join(directory, 't3-arguments');
   await writeFile(fakeT3, '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$LIFE_MANAGER_T3_SMOKE_ARGUMENTS"\n');
   await chmod(fakeT3, 0o700);
+  t3Location = fakeBundle;
   checkNativeLaunch = true;
-  const nativeProfile = await launch({ mode: 'remote', url: legacyOrigin }, { LIFE_MANAGER_T3_BIN: fakeT3, LIFE_MANAGER_T3_SMOKE_ARGUMENTS: argumentsFile });
+  const nativeProfile = await launch({ mode: 'remote', url: legacyOrigin }, { LIFE_MANAGER_T3_BIN: '', LIFE_MANAGER_T3_SMOKE_ARGUMENTS: argumentsFile });
   await waitFor(async () => nativeResult, 'native clipboard and launch result');
   assert.deepEqual(nativeResult, { copied: true, opened: true, location: 'device' });
-  assert.equal(await readFile(argumentsFile, 'utf8'), `app\n${join(nativeProfile, 'workspace')}\n`);
+  assert.equal(await readFile(argumentsFile, 'utf8'), `${join(archive, 'apps/server/dist/bin.mjs')}\napp\n${join(nativeProfile, 'workspace')}\n`);
   assert.equal(execFileSync('/usr/bin/pbpaste', { encoding: 'utf8' }), 'Desktop smoke prompt');
   await quit();
-  console.log('PASS: sandboxed preload copies natively and launches locally for a remote connection.');
+  console.log('PASS: sandboxed preload copies natively and launches the configured app bundle locally for a remote connection.');
 
   await new Promise<void>(done => legacy!.close(() => done())); legacy = undefined;
   await external.stop(); external = undefined;

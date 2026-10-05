@@ -56,7 +56,7 @@ export async function startServer(options: ServerOptions) {
       actions, widgets, feed, serverIdentity: identity,
       publicDir: options.publicDir, attachmentsDir: resolve(dataDir, 'attachments'),
       sendToAgent: input => createAgentSender({ cwd: options.cwd, skillPath: options.skillPath, apiOrigin: origin }).send(input),
-      launchT3: () => launchT3Conversation(options.cwd),
+      launchT3: location => launchT3Conversation(options.cwd, location),
     }));
     const host = options.host ?? '127.0.0.1';
     await new Promise<void>((done, reject) => {

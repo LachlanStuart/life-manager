@@ -73,6 +73,24 @@ it('defaults prompt handling to the copy dialog and remembers the choice in this
   expect((next.getByRole('combobox', { name: 'Prompt handling' }) as HTMLSelectElement).value).toBe('codex');
 });
 
+it('persists the T3 installation location across client restarts', async () => {
+  const { screen } = setup();
+  await screen.findByText('Select Tend');
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(screen.getByText('Prompts', { selector: 'summary' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Prompt handling' }), { target: { value: 't3' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'T3 Code location' }), { target: { value: '/Applications/T3 Code (Nightly).app' } });
+  expect(localStorage.getItem('life-manager.t3-location')).toBe('/Applications/T3 Code (Nightly).app');
+  cleanup();
+  const next = setup().screen;
+  await next.findByText('Select Tend');
+  fireEvent.click(next.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(next.getByText('Prompts', { selector: 'summary' }));
+  expect((next.getByRole('textbox', { name: 'T3 Code location' }) as HTMLInputElement).value).toBe('/Applications/T3 Code (Nightly).app');
+  fireEvent.change(next.getByRole('textbox', { name: 'T3 Code location' }), { target: { value: '' } });
+  expect(localStorage.getItem('life-manager.t3-location')).toBe('');
+});
+
 it('confirms period resets once for all Items, including hidden descendants, and preserves snapshots', async () => {
   const { screen, current, historical, mutations } = setup('/', [
     { id: 'hidden', parentId: 'build', order: 0, title: 'Hidden child', status: 'Done', notes: 'Keep notes', included: false, weight: 1, effortOverride: 60 },
