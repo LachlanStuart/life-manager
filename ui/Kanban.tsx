@@ -17,6 +17,7 @@ export interface KanbanProps {
   selectedId: string | null;
   disabled: boolean;
   onSelect: (id: string) => void;
+  onContextMenu?: (id: string, x: number, y: number) => void;
   onCommand: (command: ItemCommand) => Promise<void>;
 }
 
@@ -84,7 +85,7 @@ function columnTargetAtPoint(board: HTMLElement | null, clientX: number, clientY
   return column ? { kind: 'column', status: column.dataset.kanbanColumn || null } : null;
 }
 
-export function Kanban({ items, focusId, selectedId, disabled, onSelect, onCommand, sort = 'Order', settings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId, colorPropertyId }: KanbanProps) {
+export function Kanban({ items, focusId, selectedId, disabled, onSelect, onContextMenu, onCommand, sort = 'Order', settings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId, colorPropertyId }: KanbanProps) {
   const groupProperty = presentationProperty(settings, groupPropertyId);
   const colorProperty = presentationProperty(settings, colorPropertyId);
   const model = React.useMemo(() => buildKanbanModel(items, focusId, sort, settings, groupPropertyId), [items, focusId, sort, settings, groupPropertyId]);
@@ -97,8 +98,18 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
   const byId = React.useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
 
   const pointerRef = React.useRef<{ x: number; y: number } | null>(null);
+  const pointerType = React.useRef('mouse');
+  const touchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchPress = React.useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const cancelTouch = React.useCallback(() => {
+    if (touchTimer.current !== null) clearTimeout(touchTimer.current);
+    touchTimer.current = null;
+    touchPress.current = null;
+  }, []);
+  React.useEffect(() => cancelTouch, [cancelTouch]);
 
   const cancelDrag = React.useCallback((pointerId?: number) => {
+    if (pointerId === undefined || touchPress.current?.pointerId === pointerId) cancelTouch();
     const current = dragRef.current;
     if (!current || (pointerId !== undefined && current.pointerId !== pointerId)) return;
     if (current.active) {
@@ -108,22 +119,19 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
     dragRef.current = null;
     pointerRef.current = null;
     setDrag(null);
-  }, []);
+  }, [cancelTouch]);
 
   React.useEffect(() => {
-    if (!dragRef.current) return;
     // A changed branch or a newly locked workspace invalidates the pointer's target.
     if (disabled) cancelDrag();
   }, [disabled, cancelDrag]);
 
   React.useEffect(() => {
-    if (!dragRef.current) return;
     // Changing the focused branch changes the board underneath the pointer.
     cancelDrag();
   }, [focusId, sort, settings, groupPropertyId, cancelDrag]);
 
   React.useEffect(() => {
-    if (!drag) return;
     const onBlur = () => cancelDrag();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') cancelDrag();
@@ -134,7 +142,7 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [drag, cancelDrag]);
+  }, [cancelDrag]);
 
   const scrollBoardAtPointer = (clientX: number, clientY: number) => {
     const board = boardRef.current;
@@ -183,6 +191,8 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
   }, [drag?.id, drag?.active]);
 
   const setDropTargetFromPointer = (event: React.PointerEvent) => {
+    const press = touchPress.current;
+    if (press?.pointerId === event.pointerId && Math.hypot(event.clientX - press.x, event.clientY - press.y) >= 5) cancelTouch();
     const current = dragRef.current;
     if (!current || current.pointerId !== event.pointerId) return;
     current.x = event.clientX; current.y = event.clientY;
@@ -235,8 +245,12 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
   };
 
   const finishDrag = (event: React.PointerEvent<HTMLElement>, cancelled = false) => {
+    cancelTouch();
     const current = dragRef.current;
-    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current || current.pointerId !== event.pointerId) {
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
     if (!cancelled) setDropTargetFromPointer(event);
     cancelDrag(event.pointerId);
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -290,15 +304,44 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onComma
                           tabIndex={0}
                           aria-current={selectedId === card.item.id ? 'true' : undefined}
                           aria-label={`${card.item.title}${groupProperty ? `, ${column.label}` : ''}`}
+                          aria-description={onContextMenu ? 'Open details. Right-click or long-press for actions.' : undefined}
                           style={{ '--lm-kanban-card-color': propertyPresentation(card.item, colorProperty).color, '--lm-kanban-card-height': `${card.height}px`, '--lm-kanban-card-font-size': `${card.fontSize}px` } as React.CSSProperties}
-                          onPointerDown={event => beginDrag(event, card.item.id, card.fontSize)}
+                          onPointerDown={event => {
+                            pointerType.current = event.pointerType || 'mouse';
+                            cancelTouch();
+                            if (event.button !== 0) return;
+                            suppressClick.current = false;
+                            if (event.pointerType === 'touch' && onContextMenu) {
+                              touchPress.current = {pointerId: event.pointerId, x: event.clientX, y: event.clientY};
+                              touchTimer.current = setTimeout(() => {
+                                cancelDrag();
+                                suppressClick.current = true;
+                                onContextMenu(card.item.id, event.clientX, event.clientY);
+                              }, 500);
+                            }
+                            beginDrag(event, card.item.id, card.fontSize);
+                          }}
                           onPointerMove={setDropTargetFromPointer}
                           onPointerUp={event => finishDrag(event)}
                           onPointerCancel={event => finishDrag(event, true)}
+                          onPointerLeave={cancelTouch}
                           onLostPointerCapture={event => cancelDrag(event.pointerId)}
+                          onContextMenu={event => {
+                            if (!onContextMenu) return;
+                            event.preventDefault(); event.stopPropagation();
+                            if (pointerType.current === 'touch') return;
+                            cancelDrag();
+                            onContextMenu(card.item.id, event.clientX, event.clientY);
+                          }}
                           onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } onSelect(card.item.id); }}
                           onKeyDown={(event) => {
                             if (event.target !== event.currentTarget) return;
+                            if (onContextMenu && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
+                              event.preventDefault(); event.stopPropagation(); cancelDrag();
+                              const rect = event.currentTarget.getBoundingClientRect();
+                              onContextMenu(card.item.id, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                              return;
+                            }
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault(); onSelect(card.item.id);
                             }

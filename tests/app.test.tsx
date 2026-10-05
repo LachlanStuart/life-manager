@@ -436,3 +436,28 @@ it('keeps historical menu navigation available while disabling changes', async (
   await waitFor(() => expect(new URL(window.location.href).searchParams.get('focus')).toBe('tend'));
   expect(mutations).toEqual([]);
 });
+
+
+it('uses the shared actions menu on Kanban cards for status, moving and inclusion', async () => {
+  const {screen, current} = setup('/?view=kanban');
+  const card = await screen.findByRole('button', {name: 'Tend, Later'});
+  fireEvent.contextMenu(card, {clientX: 80, clientY: 120});
+  expect(screen.getByRole('menu', {name: 'Actions for Tend'})).toBeDefined();
+  expect(screen.getByRole('menuitemcheckbox', {name: /Included on dashboard/})).toBeDefined();
+  expect((screen.getByRole('menuitem', {name: 'Zoom in'}) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('menuitemradio', {name: 'Now'}));
+  await screen.findByRole('button', {name: 'Tend, Now'});
+  expect(current.dashboard.items[0]!.status).toBe('Now');
+  expect(screen.queryByLabelText('Item details')).toBeNull();
+  fireEvent.contextMenu(screen.getByRole('button', {name: 'Tend, Now'}));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
+  expect(screen.getByRole('dialog', {name: 'Move Tend'})).toBeDefined();
+  fireEvent.change(screen.getByRole('combobox', {name: 'Move to'}), {target: {value: 'build'}});
+  fireEvent.click(screen.getByRole('button', {name: 'Move'}));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(current.dashboard.items[0]!.parentId).toBe('build');
+  fireEvent.contextMenu(screen.getByRole('button', {name: 'Tend, Now'}));
+  fireEvent.click(screen.getByRole('menuitemcheckbox', {name: /Included on dashboard/}));
+  await waitFor(() => expect(screen.queryByRole('button', {name: 'Tend, Now'})).toBeNull());
+  expect(current.dashboard.items[0]!.included).toBe(false);
+});

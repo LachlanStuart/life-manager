@@ -274,7 +274,7 @@ export function LifeManagerPage() {
             </nav>
           </aside>
           <Kanban settings={settings} colorPropertyId={colorPropertyId} groupPropertyId={groupPropertyId} sort={viewSort} items={items} focusId={focusedItem?.id ?? null} selectedId={route.itemId} disabled={readOnly || busy}
-            onSelect={select} onCommand={async value => {
+            onSelect={select} onContextMenu={(id, x, y) => setContextItem({id, x, y})} onCommand={async value => {
               if (routeRef.current.snapshotId !== route.snapshotId || latest.current?.dashboard.periodId !== workspace.dashboard.periodId) {
                 const reason = 'The dashboard changed during this move. Check the Item before trying again.';
                 setError(reason); throw new Error(reason);

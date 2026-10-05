@@ -120,6 +120,91 @@ describe('Kanban component', () => {
     return { ...view, onCommand, onSelect };
   }
 
+  it('opens the actions menu by right-click or keyboard without selecting or dragging', () => {
+    const onContextMenu = vi.fn();
+    const {onSelect, onCommand} = renderBoard({onContextMenu});
+    const card = screen.getByRole('button', {name: 'Alpha, Now'});
+    fireEvent.pointerDown(card, {button: 2, pointerType: 'mouse'});
+    fireEvent.contextMenu(card, {clientX: 25, clientY: 40});
+    expect(onContextMenu).toHaveBeenCalledExactlyOnceWith('a', 25, 40);
+    fireEvent.keyDown(card, {key: 'F10', shiftKey: true});
+    fireEvent.keyDown(card, {key: 'ContextMenu'});
+    expect(onContextMenu).toHaveBeenCalledTimes(3);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onCommand).not.toHaveBeenCalled();
+    expect(document.querySelector('.lm-kanban__drag-preview')).toBeNull();
+  });
+
+  it.each([false, true])('opens on long press and suppresses release clicks (read-only=%s)', disabled => {
+    vi.useFakeTimers();
+    try {
+      const onContextMenu = vi.fn();
+      const {onSelect, onCommand} = renderBoard({onContextMenu, disabled});
+      const card = screen.getByRole('button', {name: 'Alpha, Now'});
+      const point = {button: 0, pointerType: 'touch', pointerId: 1, clientX: 25, clientY: 40};
+      fireEvent.pointerDown(card, point);
+      React.act(() => vi.advanceTimersByTime(500));
+      expect(onContextMenu).toHaveBeenCalledExactlyOnceWith('a', 25, 40);
+      fireEvent.contextMenu(card, {clientX: 25, clientY: 40});
+      fireEvent.pointerMove(card, {...point, clientX: 45});
+      fireEvent.pointerUp(card, point);
+      fireEvent.click(card);
+      expect(onContextMenu).toHaveBeenCalledTimes(1);
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(onCommand).not.toHaveBeenCalled();
+      expect(document.querySelector('.lm-kanban__drag-preview')).toBeNull();
+      // The next ordinary tap still opens details.
+      fireEvent.pointerDown(card, point);
+      fireEvent.pointerUp(card, point);
+      fireEvent.click(card);
+      React.act(() => vi.advanceTimersByTime(600));
+      expect(onSelect).toHaveBeenCalledExactlyOnceWith('a');
+      expect(onContextMenu).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('keeps touch dragging available and cancels the pending menu once movement starts', () => {
+    vi.useFakeTimers();
+    try {
+      const onContextMenu = vi.fn();
+      const {onSelect} = renderBoard({onContextMenu});
+      const card = screen.getByRole('button', {name: 'Alpha, Now'});
+      const point = {button: 0, pointerType: 'touch', pointerId: 1, clientX: 25, clientY: 40};
+      pointTarget(document.body);
+      fireEvent.pointerDown(card, point);
+      fireEvent.pointerMove(card, {...point, clientX: 45});
+      React.act(() => vi.advanceTimersByTime(600));
+      expect(onContextMenu).not.toHaveBeenCalled();
+      expect(document.querySelector('.lm-kanban__drag-preview')).not.toBeNull();
+      fireEvent.pointerUp(card, {...point, clientX: 45});
+      fireEvent.click(card);
+      expect(onSelect).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(['cancel', 'leave', 'capture', 'escape', 'blur', 'unmount', 'focus'] as const)('cancels a pending long press on %s', reason => {
+    vi.useFakeTimers();
+    try {
+      const onContextMenu = vi.fn();
+      const view = renderBoard({onContextMenu});
+      const card = screen.getByRole('button', {name: 'Alpha, Now'});
+      const point = {button: 0, pointerType: 'touch', pointerId: 1, clientX: 25, clientY: 40};
+      fireEvent.pointerDown(card, point);
+      if (reason === 'cancel') fireEvent.pointerCancel(card, point);
+      if (reason === 'leave') fireEvent.pointerLeave(card, point);
+      if (reason === 'capture') fireEvent.lostPointerCapture(card, point);
+      if (reason === 'escape') fireEvent.keyDown(window, {key: 'Escape'});
+      if (reason === 'blur') fireEvent.blur(window);
+      if (reason === 'unmount') view.unmount();
+      if (reason === 'focus') view.rerender(<Kanban items={cardItems} focusId={null} selectedId={null} disabled={false}
+        onSelect={view.onSelect} onCommand={view.onCommand} onContextMenu={onContextMenu} />);
+      React.act(() => vi.advanceTimersByTime(600));
+      expect(onContextMenu).not.toHaveBeenCalled();
+      expect(view.onSelect).not.toHaveBeenCalled();
+      expect(view.onCommand).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
   it('shows title-only cards and still supports keyboard opening', () => {
     const { onCommand, onSelect } = renderBoard();
     const card = screen.getByRole('button', { name: 'Alpha, Now' });

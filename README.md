@@ -45,7 +45,7 @@ The Kanban board keeps the same hierarchy and focus. Related tasks stay grouped 
 
 The starting Status options use **Now** for work you intend to tackle, **Doing** while it's underway, and **Blocked** when something is in the way. **Done** records completion, **Later** keeps a possibility for reconsideration, **Skip** means it isn't relevant this period, and **Cut** means you've intentionally abandoned it.
 
-Choose **Group by** to organise columns by another property, and **Color by** to colour cards and the wheel independently. Each property includes an unset choice.
+Choose **Group by** to organise columns by another property, and **Color by** to colour cards and the wheel independently. Each property includes an unset choice. Right-click or long-press a card for the same compact actions menu as the wheel.
 
 Parents with included children stay off the board so the actionable children take the space. A parent with no included children can remain visible as a placeholder for work you still need to define.
 
