@@ -8,7 +8,7 @@ try {
   const server = await startServer({
     dataDir: resolveDataDirectory(directory, process.env.LIFE_MANAGER_DATA_DIR),
     publicDir: resolve(directory, 'dist'), cwd: directory,
-    host: process.env.HOST || '0.0.0.0', port: Number(process.env.PORT || 4317),
+    host: process.env.HOST || '127.0.0.1', port: Number(process.env.PORT || 4317),
   });
   console.log(`Life Manager: ${server.origin}`);
   console.log(`Listening on ${server.host}:${server.port}; data: ${server.dataDir}`);

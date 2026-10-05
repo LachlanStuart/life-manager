@@ -79,7 +79,7 @@ Choose **Local workspace** to create a workspace or select an existing data dire
 
 Life Manager stays in the menu bar. Its Dock icon appears while a workspace or connection-settings window is open, including when minimized, and disappears when all windows are closed or hidden. Closing the workspace window keeps the local server running. The menu offers **Open Life Manager**, **Open in Browser**, **Connection Settings**, and **Quit Life Manager**. Quit stops a server started by the app and leaves an independently running server alone.
 
-Desktop and browser windows can use the same workspace simultaneously. Local hosting initially allows access only from this Mac. Enable **Allow access from other devices** for a trusted private network; the menu then lists addresses you can click to copy. Other devices need this Mac to remain awake. There is no sign-in, so do not expose the server directly to the public internet.
+Desktop and browser windows can use the same workspace simultaneously. Local hosting initially allows access only from this Mac. For remote access, use [Tailscale Serve](#use-it-on-your-phone) and leave **Allow access from other devices** disabled. Enabling that setting allows direct access on all IPv4 interfaces, including Wi-Fi; use it only for intentional sharing on a trusted LAN. The menu then lists addresses you can click to copy. Other devices need this Mac to remain awake. There is no sign-in, so do not expose the server directly to the public internet.
 
 Rebuild and replace the app to update it, quitting the old app first. Your workspace stays outside the application bundle. See [desktop operation](docs/REFERENCE.md#desktop-operation) for logs and connection details.
 
@@ -118,18 +118,28 @@ Settings also contains top-level Items, saved agent prompts and sunburst display
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `4317` | Choose the server port |
-| `HOST` | `0.0.0.0` | Network interface; use `127.0.0.1` for access from this computer only |
+| `HOST` | `127.0.0.1` | Listen address; local access only by default. `0.0.0.0` explicitly enables access on all IPv4 interfaces, including Wi-Fi |
 | `LIFE_MANAGER_DATA_DIR` | macOS: `~/Library/Application Support/Life Manager/workspace/`; other platforms: `.data/` | Choose where your personal workspace is stored; the demo always uses `.demo-data/` |
 
-For example, to keep access local to this computer on macOS or Linux:
+The server accepts connections only from this computer by default. To explicitly enable direct access from a trusted LAN on macOS or Linux:
 
 ```sh
-HOST=127.0.0.1 npm start
+HOST=0.0.0.0 npm start
 ```
 
 ### Use it on your phone
 
-Connect to the server's address through a trusted private network, such as Tailscale. The phone uses the same workspace, and the host must be awake with the server running. This is an ordinary online web app; offline editing is not supported.
+Keep the server bound to `127.0.0.1` and use [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) for access through your tailnet. With Tailscale connected on the host and phone, start Life Manager and run this on the host:
+
+```sh
+tailscale serve --bg http://127.0.0.1:4317
+```
+
+Follow any setup link Tailscale provides, then open the HTTPS address it reports on your phone. If you use a different Life Manager port, substitute it above. For desktop hosting, leave **Allow access from other devices** disabled and choose a fixed server port. A desktop app attached to an independently running server uses that server's listening settings.
+
+Serve makes the local service available through Tailscale without opening Life Manager's port to the surrounding Wi-Fi network. Use Serve, not Funnel, which enables public internet access. Restrict access with your tailnet's access rules: anyone allowed to reach Life Manager has full access to its workspace and server-side actions.
+
+The phone uses the same workspace, and the host must be awake with the server running. This is an ordinary online web app; offline editing is not supported.
 
 **There is no sign-in screen or multi-user isolation. Keep the server on a trusted private network and do not expose it directly to the public internet.**
 
