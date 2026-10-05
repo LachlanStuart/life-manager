@@ -4,6 +4,7 @@ import { readPromptHandling, savePromptHandling, readT3Location, saveT3Location 
 import { isDesktopClient, launchT3 } from './ui/t3-launch';
 import { Modal } from './ui/Modal';
 import { ItemContextMenu } from './ui/ItemContextMenu';
+import { MoveItemForm } from './ui/MoveItemForm';
 import { Icon } from './ui/Icons';
 import { WorkspaceSettingsEditor } from './ui/WorkspaceSettingsEditor';
 import { RootItemsSettings } from './ui/RootItemsSettings';
@@ -44,6 +45,7 @@ export function LifeManagerPage() {
   const [highlightId, setHighlightId] = useState<string | null>(route.itemId);
   const [mode, setMode] = useState<WheelMode>(() => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches ? 'Omni' : 'Navigate');
   const [contextItem, setContextItem] = useState<{id: string; x: number; y: number} | null>(null);
+  const [moveItemId, setMoveItemId] = useState<string | null>(null);
   const [viewSorts, setViewSorts] = useState<Record<'sunburst' | 'kanban', ViewSort>>({sunburst: 'Order', kanban: 'Order'});
   const [colorChannel, setColorChannel] = useState<string | null | undefined>(undefined);
   const [groupChannel, setGroupChannel] = useState<string | null | undefined>(undefined);
@@ -189,7 +191,8 @@ export function LifeManagerPage() {
   const displayed = selected && draft?.itemId === selected.id && draft.snapshotId === route.snapshotId ? { ...selected, notes: draft.markdown } : selected;
   const historical = Boolean(route.snapshotId);
   const readOnly = historical && !correcting;
-  useEffect(() => { setContextItem(null); }, [route.focusId, route.snapshotId, route.view, mode]);
+  useEffect(() => { setContextItem(null); setMoveItemId(null); }, [route.focusId, route.snapshotId, route.view, mode]);
+  const movingItem = items.find(item => item.id === moveItemId);
   const board = route.view === 'kanban';
   const editPropertyId = board ? groupPropertyId : colorPropertyId;
   const viewSort = viewSorts[board ? 'kanban' : 'sunburst'];
@@ -259,7 +262,7 @@ export function LifeManagerPage() {
         {board ? <div className="lm-board-layout">
           <aside className="lm-board-scope" aria-label="Board focus">
             <Sunburst settings={settings} colorPropertyId={colorPropertyId} sort={viewSort} items={items} selectedId={null} focusId={focusedItem?.id ?? null} showAll={false} compact mode="Navigate"
-              onSelect={select} onFocus={focus} onAllocate={() => undefined} />
+              onSelect={select} onFocus={focus} onAllocate={() => undefined} onContextMenu={(id, x, y) => setContextItem({id, x, y})} />
             <nav aria-label="Focus branch">
               {focusedItem && <button onClick={() => focus(null)}>↑ {settings.name}</button>}
               {focusAncestors.map(item => <button key={item.id} onClick={() => focus(item.id)}>↑ {item.title}</button>)}
@@ -306,8 +309,20 @@ export function LifeManagerPage() {
     </Modal>}
     {contextItem && items.some(item => item.id === contextItem.id) && <ItemContextMenu settings={settings} propertyId={editPropertyId} item={items.find(item => item.id === contextItem.id)!} x={contextItem.x} y={contextItem.y} disabled={readOnly || busy}
       onClose={() => setContextItem(null)} onOpen={() => { select(contextItem.id); setContextItem(null); }}
+      onInclude={() => { const item = items.find(item => item.id === contextItem.id)!; setContextItem(null); void run(() => command({type: 'update', id: item.id, patch: {included: !item.included}})); }}
+      onMove={() => { setMoveItemId(contextItem.id); setContextItem(null); }}
+      canZoom={items.some(item => item.parentId === contextItem.id && ((!board && showAll) || effectiveIncluded(items, item.id)))}
+      onZoom={() => { focus(contextItem.id); setContextItem(null); }}
       onProperty={(propertyId, value) => { const id = contextItem.id; setContextItem(null); void run(() => command({type: 'update', id, patch: propertyPatch(propertyId, value)})); }}
       onStatus={status => { const id = contextItem.id; setContextItem(null); void run(() => command({type: 'update', id, patch: {status}})); }} />}
+    {movingItem && <Modal error={error} title={`Move ${movingItem.title}`} onClose={() => !busy && setMoveItemId(null)}>
+      <MoveItemForm key={movingItem.id} item={movingItem} items={items} workspaceName={settings.name} disabled={readOnly || busy}
+        onCancel={() => setMoveItemId(null)} onMove={parentId => void run(async () => {
+          await saveNotes();
+          await command({type: 'move', id: movingItem.id, parentId});
+          setMoveItemId(null);
+        })} />
+    </Modal>}
     {rolloverOpen && <Modal error={error} title="New period" onClose={() => !busy && setRolloverOpen(false)}><form onSubmit={event => { event.preventDefault(); void run(async () => { await saveNotes(); await enqueue(async () => accept(await api<Workspace>('rollover', { name: periodName.trim() || undefined, expectedRevision: latest.current!.dashboard.revision }))); setRolloverOpen(false); }); }}>
       <p>Capture this period’s Closing snapshot and carry the dashboard forward unchanged.</p><label>Name<input autoFocus value={periodName} onChange={event => setPeriodName(event.target.value)} placeholder="Optional" maxLength={200} /></label>
       <div className="lm-modal-actions"><button type="button" disabled={busy} onClick={() => setRolloverOpen(false)}>Cancel</button><button className="lm-primary" disabled={busy}>Close and roll over</button></div>

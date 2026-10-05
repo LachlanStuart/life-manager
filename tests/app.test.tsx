@@ -27,7 +27,7 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
     if (url === '/api/mutate') {
       mutations.push(input);
       if (input.expectedRevision !== state.dashboard.revision) return { ok: false, json: async () => ({ error: 'Revision conflict' }) };
-      if (input.command.type === 'create' || input.command.type === 'bulk') {
+      if (input.command.type === 'create' || input.command.type === 'bulk' || input.command.type === 'move') {
         state.dashboard.items = mutateItems(state.dashboard.items, input.command, state.settings);
       } else if (input.command.type === 'delete') {
         const removed = new Set<string>([input.command.id]);
@@ -362,4 +362,77 @@ it('flushes pending notes before the desktop disconnects, and reports save failu
   vi.mocked(fetch).mockImplementationOnce(async () => { throw new Error('Server unavailable'); });
   await expect(window.lifeManagerFlush!()).rejects.toThrow('Server unavailable');
   expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toBe('Keep this failed draft');
+});
+
+
+it('puts actions before statuses and toggles dashboard inclusion from the menu', async () => {
+  const {screen, current} = setup(); await screen.findByText('Select Tend');
+  fireEvent.contextMenu(screen.getByText('Select Tend'), {clientX: 100, clientY: 100});
+  const menu = screen.getByRole('menu');
+  expect(Array.from(menu.querySelectorAll('button')).slice(0, 4).map(button => button.textContent?.replace('✓', '')))
+    .toEqual(['Open details', 'Included on dashboard', 'Move…', 'Zoom in']);
+  const inclusion = screen.getByRole('menuitemcheckbox', {name: /Included on dashboard/});
+  expect(inclusion.getAttribute('aria-checked')).toBe('true');
+  fireEvent.click(inclusion);
+  await waitFor(() => expect(current.dashboard.items[0]!.included).toBe(false));
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.queryByLabelText('Item details')).toBeNull();
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  fireEvent.click(screen.getByRole('menuitemcheckbox', {name: /Included on dashboard/}));
+  await waitFor(() => expect(current.dashboard.items[0]!.included).toBe(true));
+});
+
+it('moves a branch through the modal, excluding itself and descendants as destinations', async () => {
+  const child = {...fixture().dashboard.items[0]!, id: 'child', title: 'Child', parentId: 'tend'};
+  const grandchild = {...child, id: 'grandchild', title: 'Grandchild', parentId: 'child'};
+  const {screen, current, mutations} = setup('/', [child, grandchild]);
+  await screen.findByText('Select Tend');
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.getByRole('dialog', {name: 'Move Tend'})).toBeDefined();
+  const destination = screen.getByRole('combobox', {name: 'Move to'});
+  expect(Array.from(destination.querySelectorAll('option')).map(option => option.value)).toEqual(['', 'build']);
+  expect((screen.getByRole('button', {name: 'Move'}) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(destination, {target: {value: 'build'}});
+  fireEvent.click(screen.getByRole('button', {name: 'Move'}));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(mutations.at(-1).command).toEqual({type: 'move', id: 'tend', parentId: 'build'});
+  expect(current.dashboard.items.find(item => item.id === 'tend')?.parentId).toBe('build');
+  expect(current.dashboard.items.find(item => item.id === 'child')?.parentId).toBe('tend');
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
+  fireEvent.change(screen.getByRole('combobox', {name: 'Move to'}), {target: {value: ''}});
+  fireEvent.click(screen.getByRole('button', {name: 'Cancel'}));
+  expect(mutations).toHaveLength(1);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
+  fireEvent.change(screen.getByRole('combobox', {name: 'Move to'}), {target: {value: ''}});
+  fireEvent.click(screen.getByRole('button', {name: 'Move'}));
+  await waitFor(() => expect(current.dashboard.items.find(item => item.id === 'tend')?.parentId).toBeNull());
+});
+
+it.each(['/', '/?view=kanban'])('zooms through the actions menu in %s', async path => {
+  const child = {...fixture().dashboard.items[0]!, id: 'child', title: 'Child', parentId: 'tend'};
+  const {screen, mutations} = setup(path, [child]); await screen.findByText('Select Tend');
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Zoom in'}));
+  await waitFor(() => expect(new URL(window.location.href).searchParams.get('focus')).toBe('tend'));
+  expect(screen.queryByLabelText('Item details')).toBeNull();
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(mutations).toEqual([]);
+});
+
+it('keeps historical menu navigation available while disabling changes', async () => {
+  const child = {...fixture().dashboard.items[0]!, id: 'child', title: 'Child', parentId: 'tend'};
+  const {screen, mutations} = setup('/?snapshot=opening-1', [child]); await screen.findByText('Select Tend');
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  for (const button of [screen.getByRole('menuitemcheckbox'), screen.getByRole('menuitem', {name: 'Move…'}), ...screen.getAllByRole('menuitemradio')]) {
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  }
+  expect((screen.getByRole('menuitem', {name: 'Open details'}) as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Zoom in'}));
+  await waitFor(() => expect(new URL(window.location.href).searchParams.get('focus')).toBe('tend'));
+  expect(mutations).toEqual([]);
 });

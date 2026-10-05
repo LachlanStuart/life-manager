@@ -582,19 +582,19 @@ export function Sunburst({
                 role="treeitem" tabIndex={0}
                 aria-label={`${segment.title}${appearance.label ? `, ${appearance.label}` : ''}, ${formatPercent(segment.actualShare)} share, ${formatPercent(layers.actual)} effort${segment.included ? '' : ', excluded'}`}
                 aria-selected={segment.id === selectedId}
-                aria-description={segment.hasVisibleChildren ? 'Open details. Long-press, double-click or Shift+Enter to zoom into branch.' : 'Open details.'}
+                aria-description={segment.hasVisibleChildren ? 'Open details. Right-click or long-press for actions; double-click or Shift+Enter to zoom into branch.' : 'Open details. Right-click or long-press for actions.'}
                 onPointerEnter={(event) => { if (event.pointerType !== 'touch' && !dragRef.current) setHoveredId(segment.id); }}
                 onPointerDown={(event) => {
                   pointerType.current = event.pointerType || 'mouse';
                   touchSuppressClick.current = false;
                   cancelTouch();
-                  if (event.pointerType === 'touch' && (mode === 'Navigate' || omni)) {
+                  if (event.pointerType === 'touch' && onContextMenu && (mode === 'Navigate' || omni)) {
                     cancelNavigation();
                     touchPress.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
                     touchTimer.current = setTimeout(() => {
                       touchSuppressClick.current = true;
                       cancelTouch();
-                      zoomInto(segment);
+                      onContextMenu(segment.id, event.clientX, event.clientY);
                     }, 500);
                   }
                   if (mode === 'Importance' || (mode === 'Effort' && onEffort)) beginDrag(event, segment, mode);

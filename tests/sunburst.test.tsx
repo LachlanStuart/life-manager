@@ -191,7 +191,7 @@ beforeAll(() => {
 });
 
 function mount(items: Item[], props: Partial<React.ComponentProps<typeof Sunburst>> = {}) {
-  const callbacks = { onSelect: vi.fn(), onFocus: vi.fn(), onAllocate: vi.fn(), onEffort: vi.fn(), onCreate: vi.fn() };
+  const callbacks = { onSelect: vi.fn(), onFocus: vi.fn(), onAllocate: vi.fn(), onEffort: vi.fn(), onCreate: vi.fn(), onContextMenu: vi.fn() };
   const view = render(<Sunburst items={items} selectedId={null} focusId={null} showAll={false} {...callbacks} {...props} />);
   const svg = view.container.querySelector('svg') as SVGSVGElement;
   Object.defineProperty(svg, 'getBoundingClientRect', { value: () => ({
@@ -232,7 +232,7 @@ describe('sunburst interactions', () => {
     expect(view.onFocus).toHaveBeenCalledTimes(1);
   });
 
-  it.each([['Navigate', false], ['Omni', false], ['Navigate', true]] as const)('%s (compact=%s) opens immediately on tap and zooms only on a stationary long press', (mode, compact) => {
+  it.each([['Navigate', false], ['Omni', false], ['Navigate', true]] as const)('%s (compact=%s) opens immediately on tap and shows the actions menu only on a stationary long press', (mode, compact) => {
     vi.useFakeTimers();
     const view = mount([item('a1', null, 1), item('a2', 'a1', 1)], {mode, compact});
     const slice = screen.getByRole('treeitem', {name: /Item a1/});
@@ -242,9 +242,13 @@ describe('sunburst interactions', () => {
     expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a1');
     expect(view.onFocus).not.toHaveBeenCalled(); view.onSelect.mockClear();
     fireEvent.pointerDown(slice, point); vi.advanceTimersByTime(550);
-    expect(view.onFocus).toHaveBeenCalledExactlyOnceWith('a1');
+    expect(view.onContextMenu).toHaveBeenCalledExactlyOnceWith('a1', 200, 200);
+    expect(view.onFocus).not.toHaveBeenCalled();
     fireEvent.pointerUp(view.svg, point); fireEvent.click(slice, {detail: 1});
-    expect(view.onSelect).not.toHaveBeenCalled(); view.onFocus.mockClear();
+    expect(view.onSelect).not.toHaveBeenCalled();
+    fireEvent.contextMenu(slice);
+    expect(view.onContextMenu).toHaveBeenCalledTimes(1);
+    view.onContextMenu.mockClear();
     fireEvent.pointerDown(slice, point);
     fireEvent.pointerMove(view.svg, {...point, clientY: 220}); vi.advanceTimersByTime(600);
     fireEvent.pointerUp(view.svg, point); fireEvent.click(slice, {detail: 1});
@@ -252,6 +256,7 @@ describe('sunburst interactions', () => {
     fireEvent.pointerDown(slice, point); fireEvent.pointerCancel(view.svg, point); vi.advanceTimersByTime(600);
     expect(view.onFocus).not.toHaveBeenCalled();
     expect(view.onSelect).not.toHaveBeenCalled();
+    expect(view.onContextMenu).not.toHaveBeenCalled();
   });
 
   it('Omni exposes small controls on every slice and dragging highlights without opening details', () => {

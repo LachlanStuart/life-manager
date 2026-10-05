@@ -9,37 +9,8 @@ import { ItemControls } from './ItemControls';
 import { Icon } from './Icons';
 import { PromptDialog } from './PromptDialog';
 import { Modal } from './Modal';
+import { ancestorTrail, descendantsOf, moveParentOptions } from './item-hierarchy';
 import './item-panel.css';
-
-function ancestorTrail(items: Item[], item: Item): Item[] {
-  const byId = new Map(items.map((candidate) => [candidate.id, candidate]));
-  const trail: Item[] = [];
-  const visited = new Set([item.id]);
-  let parentId = item.parentId;
-  while (parentId) {
-    const parent = byId.get(parentId);
-    if (!parent || visited.has(parent.id)) break;
-    trail.unshift(parent);
-    visited.add(parent.id);
-    parentId = parent.parentId;
-  }
-  return trail;
-}
-
-function descendantsOf(items: Item[], rootId: string): Set<string> {
-  const descendants = new Set([rootId]);
-  const pending = [rootId];
-  while (pending.length) {
-    for (const child of childrenOf(items, pending.pop()!)) {
-      if (!descendants.has(child.id)) {
-        descendants.add(child.id);
-        pending.push(child.id);
-      }
-    }
-  }
-  descendants.delete(rootId);
-  return descendants;
-}
 
 export function ItemPanel({
   item, items, showAll, readOnly = false, snapshotId, widgets, renderWidget, actWidget,
@@ -70,11 +41,7 @@ export function ItemPanel({
   const children = React.useMemo(() => childrenOf(items, item.id), [items, item.id]);
   const efforts = React.useMemo(() => computeEfforts(items, configuration), [items, configuration]);
   const trail = React.useMemo(() => ancestorTrail(items, item), [items, item]);
-  const descendants = React.useMemo(() => descendantsOf(items, item.id), [items, item.id]);
-  const parentOptions = React.useMemo(() => items
-    .filter((candidate) => candidate.id !== item.id && !descendants.has(candidate.id))
-    .map((candidate) => ({ id: candidate.id, label: [...ancestorTrail(items, candidate), candidate].map((part) => part.title).join(' / ') }))
-    .sort((a, b) => a.label.localeCompare(b.label)), [items, item.id, descendants]);
+  const parentOptions = React.useMemo(() => moveParentOptions(items, item), [items, item]);
   const templateIds = promptTemplates.map((template) => template.id).join('\n');
   const defaultId = [item, ...trail.slice().reverse()].find((ancestor) =>
     ancestor.defaultPromptId && promptTemplates.some((template) => template.id === ancestor.defaultPromptId))?.defaultPromptId;
