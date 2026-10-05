@@ -87,6 +87,8 @@ Rebuild and replace the app to update it, quitting the old app first. Your works
 
 You'll need **Node.js 22.12 or newer**, npm and Git. Use the same Node version for installation and execution.
 
+After switching Node versions in an existing checkout, run `npm rebuild better-sqlite3` before starting the server or running tests. SQLite uses a native module compiled for the Node version that installed it.
+
 ```sh
 git clone https://github.com/LachlanStuart/life-manager.git
 cd life-manager
