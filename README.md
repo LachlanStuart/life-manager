@@ -54,7 +54,7 @@ Parents with included children stay off the board so the actionable children tak
 
 **Filter** shows all property values as toggles. Switch off Done, Cut or Blocked to concentrate on available work. For triage, choose **None** beside Status and turn on its default or Unset. Combine that with a Project value to narrow the view further. Each toggle applies immediately; **All** restores a property and **Reset all** clears every filter.
 
-Filters carry across Sunburst, Kanban and Outline and survive refresh and browser Back. They do not change dashboard inclusion or effort. Outline and the wheel retain ancestors for context. Clear filters before resizing importance on the wheel.
+Filters carry across Sunburst, Kanban and Outline and survive refresh, browser Back and app restarts. They are saved in this client's local storage; explicit filters in a link take precedence. They do not change dashboard inclusion or effort. Outline and the wheel retain ancestors for context. Clear filters before resizing importance on the wheel.
 
 ### Leave yourself a good place to resume
 

@@ -134,7 +134,7 @@ The creation form identifies the parent and focuses title entry. The pop-up reus
 
 The current dashboard also supports Show all as described above. Exact colours, styling, and small-segment presentation remain design choices for prototyping.
 
-Opening the application's home URL shows the current period's full wheel. Direct Item links open their target; refreshing and browser Back preserve the view represented by the URL. A separate last-session restoration mechanism is unnecessary.
+Opening the application's home URL shows the current period's wheel with this client's saved property filters. Filters are saved in local storage and restored on startup when the URL does not specify filters; explicit URL filters take precedence, including an explicitly empty selection. Reset all also resets the saved preference. Direct Item links open their target; refreshing and browser Back preserve the view represented by the URL.
 
 ### Kanban execution view
 

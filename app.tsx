@@ -11,7 +11,7 @@ import { RootItemsSettings } from './ui/RootItemsSettings';
 import { workspaceSettings } from './src/properties';
 import { propertyPatch, selectedProperty } from './ui/PropertySelect';
 import { FilterControl } from './ui/FilterControl';
-import { activePropertyFilters, matchingItemIds, type PropertyFilters } from './ui/property-filters';
+import { activePropertyFilters, matchingItemIds, savePropertyFilters, type PropertyFilters } from './ui/property-filters';
 import { SortControl } from './ui/SortControl';
 import type { ViewSort } from './ui/view-sort';
 import { PeriodControl } from './ui/PeriodControl';
@@ -21,7 +21,7 @@ import { CreateItemForm } from './ui/CreateItemForm';
 import { Kanban } from './ui/Kanban';
 import { Outline } from './ui/Outline';
 import { api, uploadImage } from './ui/api';
-import { newClientId, parseRoute, routeUrl, type ViewRoute } from './ui/navigation';
+import { initialRoute, newClientId, parseRoute, routeUrl, type ViewRoute } from './ui/navigation';
 import { SunburstDisplaySettings } from './ui/SunburstDisplaySettings';
 import { childrenOf, effectiveIncluded } from './src/domain';
 import { type AgentReply, type Item, type ItemCommand, type PromptTemplate, type PromptHandling, type WidgetActionInput, type WidgetActionResult, type WidgetRenderInput, type WidgetRenderResult, type Workspace } from './src/types';
@@ -41,8 +41,13 @@ function parentPath(items: Item[], item: Item) {
 }
 
 export function LifeManagerPage() {
-  const [route, setRoute] = useState<ViewRoute>(() => parseRoute(new URL(window.location.href)));
+  const [route, setRoute] = useState<ViewRoute>(() => initialRoute(new URL(window.location.href)));
   const routeRef = useRef(route);
+  useEffect(() => {
+    // Record restored filters in this history entry before navigating away from it.
+    if (routeRef.current.filters) window.history.replaceState(null, '', routeUrl(routeRef.current));
+  }, []);
+  useEffect(() => { savePropertyFilters(route.filters); }, [route.filters]);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const latest = useRef<Workspace | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(route.itemId);

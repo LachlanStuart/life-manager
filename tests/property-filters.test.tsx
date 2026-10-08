@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import React, {useState} from 'react';
-import {afterEach, expect, it} from 'vitest';
+import {afterEach, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, within} from '@testing-library/react';
 import type {Item, WorkspaceSettings} from '../src/types';
 import {DEFAULT_WORKSPACE_SETTINGS} from '../src/properties';
 import {computeEfforts} from '../src/domain';
-import {activePropertyFilters, matchingItemIds, parsePropertyFilters, type PropertyFilters} from '../ui/property-filters';
+import {activePropertyFilters, matchingItemIds, parsePropertyFilters, readPropertyFilters, savePropertyFilters, type PropertyFilters} from '../ui/property-filters';
 import {FilterControl} from '../ui/FilterControl';
 import {buildSunburstLayout} from '../ui/Sunburst';
 import {buildKanbanModel} from '../ui/kanban-helpers';
 import {outlineModel} from '../ui/outline-model';
-import {parseRoute, routeUrl} from '../ui/navigation';
+import {initialRoute, parseRoute, routeUrl} from '../ui/navigation';
 
 const settings: WorkspaceSettings = {...DEFAULT_WORKSPACE_SETTINGS, properties: [...DEFAULT_WORKSPACE_SETTINGS.properties, {
   id: 'project', name: 'Project', unsetLabel: 'No project', unsetColor: '#aaa', defaultValue: null,
@@ -20,7 +20,25 @@ const item = (id: string, parentId: string | null, extra: Partial<Item> = {}): I
 const items = [item('root', null, {status: 'Done'}), item('ready', 'root', {status: 'Now', properties: {project: 'a'}}),
   item('finished', 'root', {status: 'Done', properties: {project: 'b'}, weight: 3}),
   item('unset', null, {status: null}), item('hidden', null, {included: false, order: 2}), item('hidden-child', 'hidden', {status: 'Now'})];
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
+
+it.each([false, true])('restores saved filters only on startup, respecting explicit URL filters (demo=%s)', demo => {
+  savePropertyFilters({status: ['Done'], project: [null, 'b']});
+  const url = (filters?: PropertyFilters) => new URL(routeUrl({itemId: null, focusId: null, filters}, demo), 'https://example.com');
+  expect(initialRoute(url(), demo).filters).toEqual({status: ['Done'], project: [null, 'b']});
+  expect(parseRoute(url(), demo).filters).toBeUndefined();
+  expect(initialRoute(url({status: ['Cut']}), demo).filters).toEqual({status: ['Cut']});
+  expect(initialRoute(url({}), demo).filters).toEqual({});
+});
+
+it('tolerates corrupt or unavailable local storage', () => {
+  localStorage.setItem('life-manager.property-filters', 'not json');
+  expect(readPropertyFilters()).toEqual({});
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Storage disabled'); });
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage full'); });
+  expect(readPropertyFilters()).toEqual({});
+  expect(() => savePropertyFilters({status: ['Done']})).not.toThrow();
+});
 
 it('combines excluded values across properties, with defaults distinct from unset', () => {
   expect(matchingItemIds(items, {})).toBeUndefined();

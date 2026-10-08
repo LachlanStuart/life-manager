@@ -507,3 +507,37 @@ it('shares quick filters between Outline and Kanban, preserves URLs and never mu
   expect(screen.queryByRole('treeitem', {name: 'Build'})).toBeNull();
   expect(mutations).toEqual([]);
 });
+
+it('restores filters after restarting at a fresh URL and remembers Reset all', async () => {
+  let screen = setup('/?view=outline').screen;
+  await screen.findByRole('treeitem', {name: 'Build'});
+  fireEvent.click(screen.getByRole('button', {name: 'Filters'}));
+  fireEvent.click(within(screen.getByRole('dialog', {name: 'Filter Items'})).getByRole('button', {name: 'Doing'}));
+  cleanup();
+
+  screen = setup('/?view=kanban').screen;
+  await screen.findByRole('button', {name: 'Tend, Later'});
+  expect(screen.queryByRole('button', {name: 'Build, Doing'})).toBeNull();
+  expect(parseRoute(new URL(window.location.href)).filters).toEqual({status: ['Doing']});
+  fireEvent.click(screen.getByRole('button', {name: /Filters/}));
+  fireEvent.click(screen.getByRole('button', {name: 'Reset all'}));
+  cleanup();
+
+  screen = setup('/?view=outline').screen;
+  await screen.findByRole('treeitem', {name: 'Build'});
+  expect(screen.getByRole('treeitem', {name: 'Tend'})).toBeDefined();
+  expect(parseRoute(new URL(window.location.href)).filters).toBeUndefined();
+});
+
+it('lets an explicit link override saved filters and keeps unfiltered history unfiltered', async () => {
+  localStorage.setItem('life-manager.property-filters', JSON.stringify({status: ['Doing']}));
+  const {screen} = setup(routeUrl({itemId: null, focusId: null, view: 'outline', filters: {status: ['Later']}}));
+  await screen.findByRole('treeitem', {name: 'Build'});
+  expect(screen.queryByRole('treeitem', {name: 'Tend'})).toBeNull();
+  expect(JSON.parse(localStorage.getItem('life-manager.property-filters')!)).toEqual({status: ['Later']});
+  window.history.replaceState(null, '', '/?view=outline');
+  fireEvent.popState(window);
+  await screen.findByRole('treeitem', {name: 'Tend'});
+  expect(screen.getByRole('treeitem', {name: 'Build'})).toBeDefined();
+  expect(JSON.parse(localStorage.getItem('life-manager.property-filters')!)).toEqual({});
+});

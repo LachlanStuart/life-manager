@@ -4,6 +4,16 @@ import { propertyValue } from '../src/properties';
 /** Values switched off in the view. An absent property shows all its values. */
 export type PropertyFilters = Record<string, (string | null)[]>;
 
+const storageKey = 'life-manager.property-filters';
+
+export function readPropertyFilters(): PropertyFilters {
+  try { return parsePropertyFilters(localStorage.getItem(storageKey)); } catch { return {}; }
+}
+
+export function savePropertyFilters(filters: PropertyFilters | undefined): void {
+  try { localStorage.setItem(storageKey, JSON.stringify(filters ?? {})); } catch { /* Keep filters for this session when storage is unavailable. */ }
+}
+
 export function parsePropertyFilters(raw: string | null): PropertyFilters {
   if (!raw) return {};
   try {
