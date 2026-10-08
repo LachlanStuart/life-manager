@@ -208,3 +208,23 @@ button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .lm-sort-control:hover { background: #ecefe6; }
 .lm-sort-control:focus-within { outline: 2px solid #527764; outline-offset: 2px; }
 .lm-workspace .lm-sort-control select { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; padding: 0; cursor: pointer; }
+
+/* The outline is a dense editing surface; keep its phone chrome to two slim rows. */
+@media (max-width: 600px) {
+  .lm-workspace[data-view='outline'] .lm-chart-pane--outline { padding: 0; }
+  .lm-workspace[data-view='outline'] .lm-header { padding: 4px 8px; gap: 8px; }
+  .lm-workspace[data-view='outline'] .lm-brand { min-width: 0; }
+  .lm-workspace[data-view='outline'] .lm-brand h1 { display: none; }
+  .lm-workspace[data-view='outline'] .lm-search > input { padding: 4px 6px; }
+  .lm-workspace[data-view='outline'] .lm-period-controls { flex-wrap: nowrap; padding: 0 8px 4px; gap: 3px; }
+  .lm-workspace[data-view='outline'] .lm-view-picker { flex: 0 0 auto; margin-right: 0; }
+  .lm-workspace[data-view='outline'] .lm-view-picker button { width: 28px; min-height: 30px; padding: 3px; }
+  .lm-workspace[data-view='outline'] .lm-property-view-control { flex: 0 1 auto; min-width: 0; }
+  .lm-workspace[data-view='outline'] .lm-property-view-control > span { display: none; }
+  .lm-workspace[data-view='outline'] .lm-property-view-control select { max-width: 80px; padding: 4px; margin: 0; }
+  .lm-workspace[data-view='outline'] .lm-filter-button > span { display: none; }
+  .lm-workspace[data-view='outline'] .lm-filter-button { flex: 0 0 auto; padding: 4px; border: 0; background: transparent; }
+  .lm-workspace[data-view='outline'] .lm-period-picker { flex: 1; min-width: 0; }
+  .lm-workspace[data-view='outline'] .lm-period-picker > button { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 4px 2px; }
+  .lm-workspace[data-view='outline'] .lm-period-controls:has(.lm-snapshot-badge) { flex-wrap: wrap; }
+}

@@ -86,10 +86,12 @@ it('selects only the row by default and supports explicit branch selection and b
   const { screen, commands } = setup();
   fireEvent.click(screen.getByRole('button', { name: 'Select' }));
   fireEvent.click(screen.getByLabelText('Select Garden'));
+  fireEvent.click(screen.getByLabelText('Bulk actions'));
   fireEvent.click(screen.getByRole('button', { name: 'Exclude' }));
   await waitFor(() => expect(commands[0]).toEqual({ type: 'bulk', ids: ['Garden'], patch: { included: false } }));
   const actions = screen.getByLabelText('Actions for Garden'); fireEvent.click(actions);
   fireEvent.click(within(actions.parentElement!).getByText('Select branch'));
+  fireEvent.click(screen.getByLabelText('Bulk actions'));
   fireEvent.click(screen.getByText('Effort to Auto'));
   await waitFor(() => expect(commands[1]).toEqual({ type: 'bulk', ids: ['Garden', 'Sketch', 'Test'], patch: { effortOverride: null } }));
 });
@@ -195,6 +197,28 @@ it('keeps filtered ancestors as context and applies bulk actions only to matchin
   fireEvent.click(screen.getByRole('button', {name: 'Select'}));
   expect((screen.getByLabelText('Select Garden') as HTMLInputElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', {name: 'Select shown rows'}));
+  fireEvent.click(screen.getByLabelText('Bulk actions'));
   fireEvent.click(screen.getByRole('button', {name: 'Exclude'}));
   await waitFor(() => expect(commands[0]).toEqual({type: 'bulk', ids: ['Sketch'], patch: {included: false}}));
+});
+
+
+it('keeps selection actions in a dismissible bottom bar and omits the persistent footer', () => {
+  const { screen } = setup();
+  expect(screen.queryByRole('toolbar', { name: 'Selected Item actions' })).toBeNull();
+  expect(screen.queryByText(/Allocation =/)).toBeNull();
+  expect(screen.queryByText(/shown ·/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+  const toolbar = screen.getByRole('toolbar', { name: 'Selected Item actions' });
+  expect(screen.getByRole('tree').compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect((screen.getByLabelText('Bulk actions').parentElement as HTMLDetailsElement).open).toBe(false);
+  fireEvent.click(screen.getByLabelText('Bulk actions'));
+  expect((screen.getByLabelText('Bulk actions').parentElement as HTMLDetailsElement).open).toBe(true);
+  fireEvent.keyDown(screen.getByLabelText('Bulk actions'), { key: 'Escape' });
+  expect((screen.getByLabelText('Bulk actions').parentElement as HTMLDetailsElement).open).toBe(false);
+  fireEvent.click(screen.getByLabelText('Bulk actions'));
+  fireEvent.pointerDown(screen.getByRole('tree'));
+  expect((screen.getByLabelText('Bulk actions').parentElement as HTMLDetailsElement).open).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+  expect(screen.queryByRole('toolbar', { name: 'Selected Item actions' })).toBeNull();
 });

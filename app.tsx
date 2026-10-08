@@ -227,9 +227,9 @@ export function LifeManagerPage() {
   }
   const setTemplate = (id: string) => setEditingTemplate(workspace?.promptTemplates.find(value => value.id === id) ?? { id: '', name: '', prompt: '' });
 
-  return <main className="lm-workspace" aria-label="Life Manager" data-item-open={Boolean(route.itemId)}>
+  return <main className="lm-workspace" aria-label="Life Manager" data-view={route.view ?? 'sunburst'} data-item-open={Boolean(route.itemId)}>
     <header className="lm-header">
-      <a className="lm-brand" href={routeUrl({ itemId: null, focusId: null })} onClick={event => { event.preventDefault(); navigate({ itemId: null, focusId: null }); }}><img src={`${appBase}favicon.svg`} alt="" /><h1>Life Manager</h1></a>
+      <a className="lm-brand" aria-label="Life Manager" href={routeUrl({ itemId: null, focusId: null })} onClick={event => { event.preventDefault(); navigate({ itemId: null, focusId: null }); }}><img src={`${appBase}favicon.svg`} alt="" /><h1>Life Manager</h1></a>
       <div className="lm-search"><input aria-label="Find an Item" type="search" placeholder="Find an Item" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch(''); }} />
         {search.trim() && <div className="lm-search-results" role="listbox" aria-label="Search results">{results.length ? results.map(item => <button key={item.id} role="option" aria-selected={item.id === route.itemId} onClick={() => navigate({ ...routeRef.current, itemId: item.id, focusId: null })}><span>{item.title}</span><small>{parentPath(searchItems, item)}{!effectiveIncluded(searchItems, item.id) ? ' · hidden' : ''}</small></button>) : <span>No matching Items</span>}</div>}
       </div>
@@ -244,7 +244,7 @@ export function LifeManagerPage() {
       {!board && !outline && <><div className="lm-mode-picker" role="group" aria-label="Wheel mode">{(['Navigate', 'Omni', 'Importance', 'Effort', 'Create'] as WheelMode[]).map(value => <button key={value} aria-label={value} title={value} aria-pressed={mode === value} disabled={readOnly && ['Importance', 'Effort', 'Create'].includes(value)} onClick={() => setMode(value)}><Icon name={value} /><span className="lm-tool-text">{value}</span></button>)}</div>
         <button className="lm-show-all" aria-label="Show all" title={showAll ? 'Hide excluded Items' : 'Show all Items'} aria-pressed={showAll} onClick={() => setShowAll(value => !value)}><Icon name={showAll ? 'eye' : 'eye-off'} /></button></>}
       {!outline && <button disabled={!workspace || busy || readOnly} onClick={() => setCreateParent(focusedItem?.id ?? null)}>+ New</button>}
-      {settings.properties.length > 0 && <label className="lm-property-view-control">{outline ? 'Property' : 'Color by'}<select aria-label={outline ? 'Outline property' : 'Color by'} value={(outline ? editPropertyId : colorPropertyId) ?? ''} onChange={event => setColorChannel(event.target.value || null)}>
+      {settings.properties.length > 0 && <label className="lm-property-view-control"><span>{outline ? 'Property' : 'Color by'}</span><select aria-label={outline ? 'Outline property' : 'Color by'} value={(outline ? editPropertyId : colorPropertyId) ?? ''} onChange={event => setColorChannel(event.target.value || null)}>
         {!outline && <option value="">None</option>}{settings.properties.map(property => <option key={property.id} value={property.id}>{property.name}</option>)}
       </select></label>}
       {board && settings.properties.length > 0 && <label className="lm-property-view-control">Group by<select aria-label="Group by" value={groupPropertyId ?? ''} onChange={event => setGroupChannel(event.target.value || null)}>

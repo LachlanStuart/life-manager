@@ -42,6 +42,7 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
   const hover = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
   const createRef = useRef<HTMLInputElement>(null);
+  const bulkMenu = useRef<HTMLDetailsElement>(null);
   const locked = disabled || pending;
   const model = useMemo(() => outlineModel(items, expanded, all, query, settings, sort, propertyId, matchingIds), [items, expanded, all, query, settings, sort, propertyId, matchingIds]);
   const efforts = useMemo(() => computeEfforts(items, settings), [items, settings]);
@@ -86,7 +87,17 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save the change.'); return false; }
     finally { pendingRef.current = false; setPending(false); }
   };
-  const bulk = (patch: ItemPatch) => { if (selectedIds.length) void issue({ type: 'bulk', ids: selectedIds, patch }); };
+  const closeBulkMenu = () => {
+    if (bulkMenu.current) { bulkMenu.current.open = false; bulkMenu.current.querySelector('summary')?.focus(); }
+  };
+  const bulk = (patch: ItemPatch) => { if (selectedIds.length) { closeBulkMenu(); void issue({ type: 'bulk', ids: selectedIds, patch }); } };
+  useEffect(() => {
+    const outside = (event: globalThis.PointerEvent) => {
+      if (bulkMenu.current && !bulkMenu.current.contains(event.target as Node)) bulkMenu.current.open = false;
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, []);
   const arrange = async (ids: string[], parentId: string | null, beforeId?: string) => {
     if (locked) return;
     const command: ItemCommand = { type: 'arrange', ids, parentId, ...(beforeId ? { beforeId } : {}) };
@@ -183,23 +194,10 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
       <strong>{settings.name}</strong>
       <input type="search" aria-label="Find in outline" placeholder="Find in outline…" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setQuery(''); }} />
       <select aria-label="Outline visibility" value={all ? 'all' : 'dashboard'} onChange={event => setAll(event.target.value === 'all')}><option value="all">All Items</option><option value="dashboard">Dashboard only</option></select>
-      <details className="lm-outline__expansion"><summary>Expand</summary><div><button onClick={event => { setExpanded(new Set(items.map(item => item.id))); event.currentTarget.closest('details')!.open = false; }}>Expand all</button><button onClick={event => { setExpanded(new Set()); event.currentTarget.closest('details')!.open = false; }}>Collapse all</button></div></details>
-      <button aria-pressed={selecting} disabled={disabled} onClick={() => { setSelecting(value => !value); setSelection(new Set()); }}>Select</button>
-      <button disabled={locked} onClick={() => beginAdd(null)}>+ Add Item</button>
+      <details className="lm-outline__expansion"><summary aria-label="Expand outline" title="Expand or collapse all"><span>Expand</span><span className="lm-outline__expand-icon" aria-hidden="true">↕</span></summary><div><button onClick={event => { setExpanded(new Set(items.map(item => item.id))); event.currentTarget.closest('details')!.open = false; }}>Expand all</button><button onClick={event => { setExpanded(new Set()); event.currentTarget.closest('details')!.open = false; }}>Collapse all</button></div></details>
+      <button className="lm-outline__select" aria-label="Select" aria-pressed={selecting} disabled={disabled} onClick={() => { setSelecting(value => !value); setSelection(new Set()); }}>{selecting ? 'Done' : 'Select'}</button>
+      <button className="lm-outline__add" aria-label="Add Item" title="Add Item" disabled={locked} onClick={() => beginAdd(null)}>+<span> Add Item</span></button>
     </div>
-    {selecting && <div className="lm-outline__bulk" aria-label="Selected Item actions">
-      <span>{selectedIds.length} selected</span>
-      <button onClick={() => setSelection(new Set(model.rows.filter(row => !row.contextOnly).map(row => row.item.id)))}>Select shown rows</button>
-      <button onClick={() => setSelection(new Set())}>Clear selection</button>
-      <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: true })}>Include</button>
-      <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: false })}>Exclude</button>
-      {property && <select aria-label={`Set selected ${property.name}`} value="" disabled={locked || !selectedIds.length} onChange={event => bulk(propertyPatch(property.id, JSON.parse(event.target.value) as string | null))}>
-        <option value="" disabled>{property.name}…</option><option value="null">{property.unsetLabel}</option>{property.options.map(option => <option key={option.id} value={JSON.stringify(option.id)}>{option.label}</option>)}
-      </select>}
-      <button disabled={locked || !selectedIds.length} onClick={() => setMoving(orderedSelected())}>Move selected…</button>
-      <button disabled={locked || !selectedIds.length} onClick={() => bulk({ allocationAuto: true })}>Allocation to Auto</button>
-      <button disabled={locked || !selectedIds.length} onClick={() => bulk({ effortOverride: null })}>Effort to Auto</button>
-    </div>}
     {error && <p className="lm-outline__error" role="alert">{error}</p>}
     {notice && <div className="lm-outline__notice" role="status"><span>{notice}</span>{undoAvailable && <button disabled={locked} onClick={() => {
       if (!undo) return;
@@ -264,7 +262,24 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
       {addingTo === null && creation(0)}
       {!model.rows.length && <p className="lm-outline__empty">{model.filtering ? 'No matching Items.' : all ? 'Add an Item to start your outline.' : 'No Items are included. Switch to All Items to choose some.'}</p>}
     </div>
-    <div className="lm-outline__footer"><span>{model.rows.length} shown · {items.length} total</span><span title="Allocation is relative to included siblings. Gray percentages are automatic.">Allocation = share within parent · gray = Auto</span></div>
+    {selecting && <div className="lm-outline__bulk" role="toolbar" aria-label="Selected Item actions">
+      <span role="status">{selectedIds.length} selected</span>
+      <button onClick={() => setSelection(new Set(model.rows.filter(row => !row.contextOnly).map(row => row.item.id)))} aria-label="Select shown rows">All shown</button>
+      <button onClick={() => setSelection(new Set())} aria-label="Clear selection" disabled={!selectedIds.length}>Clear</button>
+      <details ref={bulkMenu} className="lm-outline__bulk-menu" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeBulkMenu(); } }}>
+        <summary aria-label="Bulk actions" title="Selected Item actions">Actions <span aria-hidden="true">⌃</span></summary>
+        <div className="lm-outline__bulk-options">
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: true })}>Include</button>
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: false })}>Exclude</button>
+          {property && <select aria-label={`Set selected ${property.name}`} value="" disabled={locked || !selectedIds.length} onChange={event => bulk(propertyPatch(property.id, JSON.parse(event.target.value) as string | null))}>
+            <option value="" disabled>{property.name}…</option><option value="null">{property.unsetLabel}</option>{property.options.map(option => <option key={option.id} value={JSON.stringify(option.id)}>{option.label}</option>)}
+          </select>}
+          <button disabled={locked || !selectedIds.length} onClick={() => { closeBulkMenu(); setMoving(orderedSelected()); }}>Move selected…</button>
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ allocationAuto: true })}>Allocation to Auto</button>
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ effortOverride: null })}>Effort to Auto</button>
+        </div>
+      </details>
+    </div>}
     {moving && items.some(item => item.id === moving[0]) && <Modal title={moving.length === 1 ? `Move ${items.find(item => item.id === moving[0])!.title}` : `Move ${moving.length} Items`} error={error} onClose={() => !pending && setMoving(null)}>
       <MoveItemForm item={items.find(item => item.id === moving[0])!} movingIds={moving} items={items} workspaceName={settings.name} disabled={locked} onMove={parentId => void arrange(moving, parentId)} onCancel={() => setMoving(null)} />
     </Modal>}
