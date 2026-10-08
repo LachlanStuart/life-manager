@@ -14,8 +14,8 @@ export function ItemControls({ item, hidden, allocation, allocationAutomatic, al
   const property = selectedProperty(settings ?? DEFAULT_WORKSPACE_SETTINGS, propertyId);
   const label = settings ? property?.name : 'Lifecycle status';
   return <div className="lm-item-controls" aria-label={`${item.title} controls`}>
-    <label className="lm-item-controls__inclusion" title="Included on dashboard">
-      {hidden && <span className="lm-item-panel__hidden-label">Hidden</span>}
+    <label className="lm-item-controls__inclusion" title={hidden ? item.included ? 'Hidden by parent' : 'Excluded from dashboard' : 'Included on dashboard'}>
+      {hidden && detail && <span className="lm-item-panel__hidden-label">Hidden</span>}
       <input type="checkbox" aria-label={detail ? 'Included on dashboard' : `${item.title} included on dashboard`}
         checked={item.included} disabled={disabled} onChange={event => onIncluded(event.target.checked)} />
     </label>

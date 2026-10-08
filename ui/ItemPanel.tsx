@@ -7,10 +7,12 @@ import type { ItemPanelProps } from './contracts';
 import { NotesEditor } from './NotesEditor';
 import { ItemControls } from './ItemControls';
 import { Icon } from './Icons';
+import { propertyPresentation } from './property-presentation';
 import { PromptDialog } from './PromptDialog';
 import { Modal } from './Modal';
 import { ancestorTrail, descendantsOf, moveParentOptions } from './item-hierarchy';
 import './item-panel.css';
+import './item-row.css';
 
 export function ItemPanel({
   item, items, showAll, readOnly = false, snapshotId, widgets, renderWidget, actWidget,
@@ -292,8 +294,9 @@ export function ItemPanel({
           <ul className="lm-item-panel__child-list" ref={listRef}>
             {children.map((child) => {
               const included = effectiveIncluded(items, child.id);
-              return <li key={child.id} data-child-id={child.id} className={[
-                'lm-item-panel__child', !included && 'lm-item-panel__child--hidden',
+              return <li key={child.id} data-child-id={child.id} data-hidden={!included}
+                style={{ '--lm-row-color': propertyPresentation(child, property).color } as React.CSSProperties} className={[
+                'lm-item-panel__child lm-property-row', !included && 'lm-item-panel__child--hidden',
                 drag?.id === child.id && 'lm-item-panel__child--dragging',
                 drag && drag.target === child.id && drag.id !== child.id && 'lm-item-panel__child--target',
               ].filter(Boolean).join(' ')}>

@@ -77,7 +77,7 @@
 .lm-item-panel__batch label { display: flex; align-items: center; gap: 5px; margin-right: 4px; }
 .lm-item-panel .lm-item-panel__batch :is(button, select) { min-height: 27px; padding: 3px 6px; }
 .lm-item-panel__child-list { margin: 0; padding: 0; list-style: none; }
-.lm-item-panel__child { display: flex; gap: 9px; align-items: center; min-width: 0; border-bottom: 1px solid var(--ip-line); padding: 3px 0; }
+.lm-item-panel__child { display: flex; gap: 9px; align-items: center; min-width: 0; border-bottom: 1px solid var(--ip-line); padding: 1px 3px; }
 .lm-item-panel__child:last-child { border-bottom: 0; }
 .lm-item-panel__child--hidden { color: var(--ip-muted); }
 .lm-item-panel__child--dragging { opacity: .5; }
@@ -135,3 +135,9 @@
 .lm-modal .lm-create-controls input[type='checkbox'] { width: 15px; padding: 0; border: 0; }
 
 .lm-item-panel__prompt .lm-prompt-action { border: 0; border-radius: 0; background: none; padding: 0; min-height: 0; font: inherit; cursor: pointer; }
+
+@container (max-width: 480px) {
+  .lm-item-panel__child { padding: 0 3px; }
+  .lm-item-panel .lm-item-panel__child :is(button, input:not([type='checkbox'])) { min-height: 24px; padding-top: 1px; padding-bottom: 1px; }
+  .lm-item-panel__child .lm-item-controls__inclusion, .lm-item-panel__child .lm-item-controls .lm-inline-choice { min-height: 24px; padding-top: 0; padding-bottom: 0; }
+}

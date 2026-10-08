@@ -32,7 +32,11 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it('starts at two levels, distinguishes inherited hiding, and preserves expansion between views', () => {
   const { screen, commands } = setup();
   expect(screen.queryByRole('treeitem', { name: 'Sketch' })).toBeNull();
-  expect(within(screen.getByRole('treeitem', { name: 'Japanese' })).getByText('Hidden by parent')).toBeTruthy();
+  const hiddenRow = screen.getByRole('treeitem', { name: 'Japanese' });
+  expect(hiddenRow.getAttribute('data-hidden')).toBe('true');
+  expect(within(hiddenRow).queryByText('Hidden by parent')).toBeNull();
+  expect(within(hiddenRow).getByTitle('Hidden by parent')).toBeTruthy();
+  expect(hiddenRow.style.getPropertyValue('--lm-row-color')).toBe('#7b8178');
   expect((screen.getByLabelText('Japanese included on dashboard') as HTMLInputElement).checked).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Expand Garden' }));
   expect(screen.getByRole('treeitem', { name: 'Sketch' })).toBeTruthy();

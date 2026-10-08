@@ -93,7 +93,8 @@ describe('ItemPanel', () => {
     const { props } = renderPanel();
     const children = screen.getByRole('heading', { name: 'Children 2' });
     expect(children.compareDocumentPosition(screen.getByRole('heading', { name: 'Notes' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText('Hidden')).toBeTruthy();
+    expect(screen.queryByText('Hidden')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Rename Hidden child' }).closest('li')?.getAttribute('data-hidden')).toBe('true');
     await user.type(screen.getByRole('textbox', { name: 'New child title' }), 'Next step');
     await user.click(screen.getByRole('button', { name: 'Add' }));
     expect(props.onCommand).toHaveBeenCalledWith({ type: 'create', parentId: 'project', title: 'Next step' });
@@ -443,6 +444,7 @@ it('edits configured properties and bulk values without replacing other fields o
   const configuredItems = items.map(item => ({ ...item, properties: { priority: null, context: 'home' } }));
   const { props } = renderPanel({ items: configuredItems, item: configuredItems[1]!, settings: customSettings, propertyId: 'priority' });
   expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Priority' }).value).toBe('');
+  expect(screen.getByRole('textbox', { name: 'Rename Finished child' }).closest('li')?.style.getPropertyValue('--lm-row-color')).toBe('#888888');
   await user.selectOptions(screen.getByRole('combobox', { name: 'Priority' }), 'high');
   expect(props.onCommand).toHaveBeenCalledWith({ type: 'update', id: 'project', patch: { properties: { priority: 'high' } } });
   await user.click(screen.getByRole('checkbox', { name: 'Select all children' }));

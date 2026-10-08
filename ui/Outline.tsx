@@ -8,9 +8,11 @@ import { Modal } from './Modal';
 import { MoveItemForm } from './MoveItemForm';
 import { descendantsOf } from './item-hierarchy';
 import { outlineModel, placement } from './outline-model';
+import { propertyPresentation } from './property-presentation';
 import type { ViewSort } from './view-sort';
 import './item-panel.css';
 import './outline.css';
+import './item-row.css';
 
 type Drop = { id: string; position: 'before' | 'after' | 'inside' };
 type Gesture = { id: string; pointerId: number; x: number; y: number; active: boolean; drop: Drop | null };
@@ -207,11 +209,11 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     <div className="lm-outline__head" aria-hidden="true"><span>Item</span><span className="lm-outline__columns"><span>Included</span><span>{property?.name ?? ''}</span><span title="Share within parent">Allocation</span><span>Effort</span><span /></span><span /></div>
     <div className="lm-outline__rows" ref={rowsRef} role="tree" aria-label="Item hierarchy" aria-multiselectable={selecting || undefined}>
       {model.rows.map(({ item, depth, hasChildren, open, contextOnly }, index) => <div key={item.id}>
-        <div className={`lm-outline__row${selectedId === item.id ? ' lm-outline__row--current' : ''}`} role="treeitem" tabIndex={0} aria-level={depth + 1}
+        <div className={`lm-outline__row lm-property-row${selectedId === item.id ? ' lm-outline__row--current' : ''}`} role="treeitem" tabIndex={0} aria-level={depth + 1}
           aria-expanded={hasChildren ? open : undefined} aria-selected={selecting ? selectedIds.includes(item.id) : undefined} aria-label={item.title}
           data-outline-id={item.id} data-depth={depth} data-hidden={!model.visible.has(item.id)} data-context={contextOnly}
           data-drop={drag?.drop?.id === item.id ? drag.drop.position : undefined} data-dragging={drag?.active && drag.id === item.id}
-          style={{ '--outline-depth': depth } as CSSProperties}
+          style={{ '--outline-depth': depth, '--lm-row-color': propertyPresentation(item, property).color } as CSSProperties}
           onKeyDown={event => {
             if (event.target !== event.currentTarget) return;
             const keys = ['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End', 'Enter', 'F2', ' '];
@@ -237,12 +239,11 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
               {editing?.id === item.id ? <input autoFocus aria-label={`Rename ${item.title}`} value={editing.title} maxLength={500} onChange={event => setEditing({ id: item.id, title: event.target.value })} onBlur={saveTitle}
                 onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); cancelEdit.current = true; event.currentTarget.blur(); setEditing(null); focusRow(item.id); } if (event.key === 'Enter') event.currentTarget.blur(); }} />
                 : <button className="lm-outline__title" disabled={locked} title={item.title} onClick={() => setEditing({ id: item.id, title: item.title })}>{item.title}</button>}
-              {!model.visible.has(item.id) && <small>{item.included ? 'Hidden by parent' : 'Excluded'}</small>}
             </div>
             {hasChildren && !open && <span className="lm-outline__count" title="Immediate children">{model.children.get(item.id)?.length}</span>}
             <button className="lm-outline__open" aria-label={`Open ${item.title}`} onClick={() => onOpen(item.id)}><Icon name="open-item" /></button>
           </div>
-          <ItemControls item={item} hidden={false} allocation={localShare(items, item.id)} allocationAutomatic={Boolean(item.allocationAuto)} allocationMax={allocationLimit(items, item.id)}
+          <ItemControls item={item} hidden={!model.visible.has(item.id)} allocation={localShare(items, item.id)} allocationAutomatic={Boolean(item.allocationAuto)} allocationMax={allocationLimit(items, item.id)}
             effort={efforts[item.id] ?? 0} settings={settings} propertyId={propertyId} disabled={locked} allocationDisabled={!item.included}
             onIncluded={included => void issue({ type: 'update', id: item.id, patch: { included } })}
             onProperty={(id, value) => void issue({ type: 'update', id: item.id, patch: propertyPatch(id, value) })}

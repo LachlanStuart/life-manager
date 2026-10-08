@@ -1,0 +1,7 @@
+/* Property tint and effective inclusion are shared by both hierarchy editors. */
+.lm-property-row { --lm-row-tint: 14%; background: color-mix(in srgb, var(--lm-row-color) var(--lm-row-tint), #fffef9); }
+.lm-property-row:hover { --lm-row-tint: 20%; }
+.lm-property-row[data-hidden='true'] { --lm-row-tint: 5%; }
+.lm-property-row[data-hidden='true']:hover { --lm-row-tint: 9%; }
+.lm-property-row[data-hidden='true'] :is(.lm-outline__title, .lm-outline__name input, .lm-item-panel__child-title) { color: #737c6e; font-style: italic; }
+.lm-property-row[data-hidden='true'] :is(.lm-outline__grip, .lm-outline__toggle, .lm-outline__count, .lm-outline__open, .lm-item-panel__drag-handle, .lm-item-panel__child-open) { color: #91978b; }
