@@ -328,6 +328,59 @@ export function mutateItems(items: readonly Item[], command: ItemCommand, settin
       );
       break;
     }
+    case 'arrange': {
+      assertIds(command.ids, 'arrange ids');
+      if (!command.ids.length) fail('arrange ids must not be empty');
+      assertParentId(command.parentId, 'parentId');
+      if (command.parentId !== null) requireItem(byId, command.parentId);
+      const selected = new Set(command.ids);
+      // A selected descendant travels with its selected ancestor, keeping its parent.
+      const roots = command.ids.filter(id => {
+        let parent = requireItem(byId, id).parentId;
+        while (parent !== null) {
+          if (selected.has(parent)) return false;
+          parent = requireItem(byId, parent).parentId;
+        }
+        return true;
+      });
+      let ancestor = command.parentId;
+      while (ancestor !== null) {
+        if (selected.has(ancestor)) fail('Cannot move Items into themselves or their descendants');
+        ancestor = requireItem(byId, ancestor).parentId;
+      }
+      const moving = new Set(roots);
+      const siblings = childrenOf(items, command.parentId).filter(item => !moving.has(item.id)).map(item => item.id);
+      const index = command.beforeId === undefined ? siblings.length : siblings.indexOf(command.beforeId);
+      if (index < 0) fail('The insertion target must be a destination sibling outside the moved branch');
+      siblings.splice(index, 0, ...roots);
+      const orders = new Map(siblings.map((id, order) => [id, order]));
+      result = items.map(item => orders.has(item.id) ? { ...item, parentId: command.parentId, order: orders.get(item.id)! } : item);
+      break;
+    }
+    case 'restore-arrangement': {
+      assertIds(command.placements.map(item => item.id), 'placement ids');
+      assertIds(command.expected.map(item => item.id), 'expected ids');
+      if (command.expected.length !== items.length || command.placements.length !== items.length) fail('The hierarchy changed; this move can no longer be undone');
+      for (const expected of command.expected) {
+        const current = requireItem(byId, expected.id);
+        if (current.parentId !== expected.parentId || current.order !== expected.order || current.weight !== expected.weight ||
+            Boolean(current.allocationAuto) !== Boolean(expected.allocationAuto) || current.included !== expected.included) {
+          fail('The hierarchy or allocation changed; this move can no longer be undone');
+        }
+      }
+      const placements = new Map(command.placements.map(item => [item.id, item]));
+      result = items.map(item => {
+        const placement = placements.get(item.id);
+        if (!placement) fail('placements must contain every Item exactly once');
+        const restored = { ...item, parentId: placement.parentId, order: placement.order, weight: placement.weight };
+        if (placement.allocationAuto === undefined) delete restored.allocationAuto;
+        else restored.allocationAuto = placement.allocationAuto;
+        return restored;
+      });
+      validateItems(result, settings);
+      // Exact restoration must not rematerialize legacy ratios a second time.
+      return result;
+    }
     case 'reorder': {
       assertParentId(command.parentId, 'parentId');
       if (command.parentId !== null) requireItem(byId, command.parentId);

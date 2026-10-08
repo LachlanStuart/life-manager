@@ -4,13 +4,14 @@
 
 Life Manager brings projects, routines, learning and leisure into one personal workspace. Keep the context you would put on a Notion page, give each pursuit a place in a visual hierarchy, and choose how much of your attention it deserves right now.
 
-Use the sunburst to plan. Switch to Kanban when you're ready to act. Return to your notes when you need to pick up where you left off.
+Use Outline to organise projects and next steps across the hierarchy, and the sunburst to balance attention. Switch to Kanban when you're ready to act. Return to your notes when you need to pick up where you left off.
 
 ![Animated tour of planning, project notes, board filtering and changing a task's status](docs/media/workflow.gif)
 
 ## What you can do
 
 - **See the whole picture.** Arrange areas, projects and tasks in a zoomable sunburst. Resize slices to express their relative importance.
+- **Plan across branches.** Expand the Outline to edit inclusion, properties, allocation and effort in place. Add children anywhere, drag branches between parents with Undo, or select Items for bulk changes.
 - **Keep today's choices manageable.** Hide inactive branches without losing their notes or next steps. Bring them back when your interests change.
 - **Work from a familiar board.** Group cards by a single-choice property, drag them between its options, and sort temporarily by importance, effort or property order. Card size reflects intended attention.
 - **Make the workspace yours.** Name your workspace, organise its top-level Items, and define properties with your own labels, colours and creation defaults.
@@ -35,7 +36,7 @@ These are starting points: use Settings → Top-level Items to rename, add, reor
 
 A slice's size means **intended share of attention**. Its fill means **effort spent relative to that intention in the current period**. Neither is a time estimate or an overall project-completion percentage. You can finish a productive session on an open-ended project without pretending the whole project is nearly done.
 
-Click or tap any Item to open its details. Double-click on desktop to zoom into a branch. Right-click or long-press for a compact menu with inclusion, Move, Zoom in, and status choices. The center opens the focused Item; the ↑ control goes to its parent. **+ New** creates an Item in the current branch in either view. Desktop Omni mode also puts allocation, effort and creation controls directly on the wheel.
+Click or tap any Item to open its details. Double-click on desktop to zoom into a branch. Right-click or long-press for a compact menu with inclusion, Move, Zoom in, and status choices. The center opens the focused Item; the ↑ control goes to its parent. **+ New** creates an Item in the current branch in Sunburst or Kanban. Outline has an Add Item action and an Add child action on every row. Desktop Omni mode also puts allocation, effort and creation controls directly on the wheel.
 
 ### Switch to execution
 

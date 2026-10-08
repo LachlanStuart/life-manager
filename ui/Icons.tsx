@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-export type IconName = 'sort' | 'sunburst' | 'kanban' | 'Navigate' | 'Omni' | 'Importance' | 'Effort' | 'Create' | 'eye' | 'eye-off' | 'settings' | 'open-item' | 'move' | 'zoom';
+export type IconName = 'outline' | 'sort' | 'sunburst' | 'kanban' | 'Navigate' | 'Omni' | 'Importance' | 'Effort' | 'Create' | 'eye' | 'eye-off' | 'settings' | 'open-item' | 'move' | 'zoom';
 const paths: Record<IconName, ReactNode> = {
+  outline: <><path d="M4 4v15h4M4 10h4M9 4h12M11 10h10M11 19h10" /></>,
   move: <><path d="M9 5H3v14h6m4-11 4 4-4 4m-6-4h14" /></>,
   zoom: <><circle cx="10" cy="10" r="6" /><path d="m15 15 6 6M7 10h6m-3-3v6" /></>,
   sort: <><path d="M4 5v14m-3-3 3 3 3-3M10 5h11M10 10h8M10 15h5M10 20h2"/></>,

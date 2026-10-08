@@ -9,7 +9,7 @@ import { Icon } from './ui/Icons';
 import { WorkspaceSettingsEditor } from './ui/WorkspaceSettingsEditor';
 import { RootItemsSettings } from './ui/RootItemsSettings';
 import { workspaceSettings } from './src/properties';
-import { propertyPatch } from './ui/PropertySelect';
+import { propertyPatch, selectedProperty } from './ui/PropertySelect';
 import { SortControl } from './ui/SortControl';
 import type { ViewSort } from './ui/view-sort';
 import { PeriodControl } from './ui/PeriodControl';
@@ -17,6 +17,7 @@ import { PeriodResetForm } from './ui/PeriodResetForm';
 import { Sunburst } from './ui/Sunburst';
 import { CreateItemForm } from './ui/CreateItemForm';
 import { Kanban } from './ui/Kanban';
+import { Outline } from './ui/Outline';
 import { api, uploadImage } from './ui/api';
 import { newClientId, parseRoute, routeUrl, type ViewRoute } from './ui/navigation';
 import { SunburstDisplaySettings } from './ui/SunburstDisplaySettings';
@@ -46,7 +47,7 @@ export function LifeManagerPage() {
   const [mode, setMode] = useState<WheelMode>(() => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches ? 'Omni' : 'Navigate');
   const [contextItem, setContextItem] = useState<{id: string; x: number; y: number} | null>(null);
   const [moveItemId, setMoveItemId] = useState<string | null>(null);
-  const [viewSorts, setViewSorts] = useState<Record<'sunburst' | 'kanban', ViewSort>>({sunburst: 'Order', kanban: 'Order'});
+  const [viewSorts, setViewSorts] = useState<Record<'sunburst' | 'kanban' | 'outline', ViewSort>>({sunburst: 'Order', kanban: 'Order', outline: 'Order'});
   const [colorChannel, setColorChannel] = useState<string | null | undefined>(undefined);
   const [groupChannel, setGroupChannel] = useState<string | null | undefined>(undefined);
   const [showAll, setShowAll] = useState(false);
@@ -88,10 +89,11 @@ export function LifeManagerPage() {
   const enqueue = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     const result = queue.current.then(operation); queue.current = result.catch(() => undefined); return result;
   }, []);
-  const command = useCallback((value: ItemCommand) => enqueue(async () => {
+  const command = useCallback((value: ItemCommand, expectedRevision?: number) => enqueue(async () => {
     const current = latest.current;
     if (!current || (current.dashboard.snapshotId ?? undefined) !== routeRef.current.snapshotId) throw new Error('Wait for the dashboard to load.');
     try {
+      if (expectedRevision !== undefined && expectedRevision !== current.dashboard.revision) throw new Error('The dashboard changed. Check the Item before trying again.');
       const next = await api<Workspace>('mutate', { snapshotId: current.dashboard.snapshotId ?? undefined, expectedRevision: current.dashboard.revision, command: value });
       accept(next); setError('');
       if (routeRef.current.itemId && !next.dashboard.items.some(item => item.id === routeRef.current.itemId)) {
@@ -194,8 +196,9 @@ export function LifeManagerPage() {
   useEffect(() => { setContextItem(null); setMoveItemId(null); }, [route.focusId, route.snapshotId, route.view, mode]);
   const movingItem = items.find(item => item.id === moveItemId);
   const board = route.view === 'kanban';
-  const editPropertyId = board ? groupPropertyId : colorPropertyId;
-  const viewSort = viewSorts[board ? 'kanban' : 'sunburst'];
+  const outline = route.view === 'outline';
+  const editPropertyId = board ? groupPropertyId : outline ? selectedProperty(settings, colorPropertyId)?.id ?? null : colorPropertyId;
+  const viewSort = viewSorts[route.view ?? 'sunburst'];
   const focusedItem = items.find(item => item.id === route.focusId);
   const focusAncestors: Item[] = [];
   let ancestor = items.find(item => item.id === focusedItem?.parentId);
@@ -225,19 +228,20 @@ export function LifeManagerPage() {
     </header>
     <div className="lm-period-controls">
       <div className="lm-mode-picker lm-view-picker" role="group" aria-label="Dashboard view">
-        <button aria-pressed={!board} aria-label="Sunburst" title="Sunburst" onClick={() => navigate({ ...routeRef.current, view: undefined })}><Icon name="sunburst" /><span className="lm-tool-text">Sunburst</span></button>
+        <button aria-pressed={!board && !outline} aria-label="Sunburst" title="Sunburst" onClick={() => navigate({ ...routeRef.current, view: undefined })}><Icon name="sunburst" /><span className="lm-tool-text">Sunburst</span></button>
         <button aria-pressed={board} aria-label="Kanban" title="Kanban" onClick={() => navigate({ ...routeRef.current, view: 'kanban' })}><Icon name="kanban" /><span className="lm-tool-text">Kanban</span></button>
+        <button aria-pressed={outline} aria-label="Outline" title="Outline" onClick={() => navigate({ ...routeRef.current, view: 'outline' })}><Icon name="outline" /><span className="lm-tool-text">Outline</span></button>
       </div>
-      {!board && <><div className="lm-mode-picker" role="group" aria-label="Wheel mode">{(['Navigate', 'Omni', 'Importance', 'Effort', 'Create'] as WheelMode[]).map(value => <button key={value} aria-label={value} title={value} aria-pressed={mode === value} disabled={readOnly && ['Importance', 'Effort', 'Create'].includes(value)} onClick={() => setMode(value)}><Icon name={value} /><span className="lm-tool-text">{value}</span></button>)}</div>
+      {!board && !outline && <><div className="lm-mode-picker" role="group" aria-label="Wheel mode">{(['Navigate', 'Omni', 'Importance', 'Effort', 'Create'] as WheelMode[]).map(value => <button key={value} aria-label={value} title={value} aria-pressed={mode === value} disabled={readOnly && ['Importance', 'Effort', 'Create'].includes(value)} onClick={() => setMode(value)}><Icon name={value} /><span className="lm-tool-text">{value}</span></button>)}</div>
         <button className="lm-show-all" aria-label="Show all" title={showAll ? 'Hide excluded Items' : 'Show all Items'} aria-pressed={showAll} onClick={() => setShowAll(value => !value)}><Icon name={showAll ? 'eye' : 'eye-off'} /></button></>}
-      <button disabled={!workspace || busy || readOnly} onClick={() => setCreateParent(focusedItem?.id ?? null)}>+ New</button>
-      {settings.properties.length > 0 && <label className="lm-property-view-control">Color by<select aria-label="Color by" value={colorPropertyId ?? ''} onChange={event => setColorChannel(event.target.value || null)}>
-        <option value="">None</option>{settings.properties.map(property => <option key={property.id} value={property.id}>{property.name}</option>)}
+      {!outline && <button disabled={!workspace || busy || readOnly} onClick={() => setCreateParent(focusedItem?.id ?? null)}>+ New</button>}
+      {settings.properties.length > 0 && <label className="lm-property-view-control">{outline ? 'Property' : 'Color by'}<select aria-label={outline ? 'Outline property' : 'Color by'} value={(outline ? editPropertyId : colorPropertyId) ?? ''} onChange={event => setColorChannel(event.target.value || null)}>
+        {!outline && <option value="">None</option>}{settings.properties.map(property => <option key={property.id} value={property.id}>{property.name}</option>)}
       </select></label>}
       {board && settings.properties.length > 0 && <label className="lm-property-view-control">Group by<select aria-label="Group by" value={groupPropertyId ?? ''} onChange={event => setGroupChannel(event.target.value || null)}>
         <option value="">None</option>{settings.properties.map(property => <option key={property.id} value={property.id}>{property.name}</option>)}
       </select></label>}
-      <SortControl propertyName={settings.properties.find(property => property.id === editPropertyId)?.name} value={viewSort} onChange={sort => setViewSorts(current => ({...current, [board ? 'kanban' : 'sunburst']: sort}))} />
+      <SortControl propertyName={settings.properties.find(property => property.id === editPropertyId)?.name} value={viewSort} onChange={sort => setViewSorts(current => ({...current, [route.view ?? 'sunburst']: sort}))} />
       <PeriodControl workspace={workspace} snapshotId={route.snapshotId} busy={busy} onSelect={snapshotId => navigate({ ...routeRef.current, snapshotId })}
         onPlan={() => void run(async () => { await saveNotes(); await enqueue(async () => accept(await api<Workspace>('plan', { expectedRevision: latest.current!.dashboard.revision }))); })}
         onNext={() => { setPeriodName(''); setRolloverOpen(true); }}
@@ -247,7 +251,7 @@ export function LifeManagerPage() {
     </div>
     {error && <div className="lm-error" role="alert"><span>{error}</span><button onClick={() => void run(async () => { await saveNotes(); await refresh(); })}>Retry</button><button aria-label="Dismiss error" onClick={() => setError('')}>×</button></div>}
     {!workspace ? <div className="lm-loading" role="status">Loading…</div> : <div className={`lm-main ${expanded ? 'lm-main-expanded' : ''}`} data-item-open={Boolean(route.itemId)} ref={frame} style={{ '--lm-pane-width': `${paneWidth}%` } as CSSProperties}>
-      <section className={`lm-chart-pane${board ? ' lm-chart-pane--board' : ''}`} aria-label="Attention dashboard"
+      <section className={`lm-chart-pane${outline ? ' lm-chart-pane--outline' : board ? ' lm-chart-pane--board' : ''}`} aria-label="Attention dashboard"
         onPointerDown={event => {
           const target = event.target;
           backgroundPress.current = target instanceof Element && target.matches('.lm-chart-pane, .lm-board-layout, .lm-kanban, .lm-kanban__board, .lm-kanban__column-dropzone, .lm-kanban__cards, .lm-wheel-space, .lm-sunburst, .lm-sunburst__stage, .lm-sunburst__svg, .lm-sunburst__backdrop')
@@ -259,7 +263,14 @@ export function LifeManagerPage() {
             navigate({ ...routeRef.current, itemId: null });
           }
         }}>
-        {board ? <div className="lm-board-layout">
+        <Outline key={`${workspace.dashboard.periodId}:${route.snapshotId ?? 'current'}`} active={outline} items={items} settings={settings} propertyId={editPropertyId} sort={viewSorts.outline}
+          selectedId={route.itemId} disabled={readOnly || busy} historical={historical} revision={workspace.dashboard.revision} onOpen={select}
+          onCommand={async (value, revision) => {
+            if (routeRef.current.snapshotId !== route.snapshotId || latest.current?.dashboard.periodId !== workspace.dashboard.periodId) throw new Error('The dashboard changed. Check the Item before trying again.');
+            if (value.type === 'delete') await saveNotes();
+            await command(value, revision);
+          }} />
+        {outline ? null : board ? <div className="lm-board-layout">
           <aside className="lm-board-scope" aria-label="Board focus">
             <Sunburst settings={settings} colorPropertyId={colorPropertyId} sort={viewSort} items={items} selectedId={null} focusId={focusedItem?.id ?? null} showAll={false} compact mode="Navigate"
               onSelect={select} onFocus={focus} onAllocate={() => undefined} onContextMenu={(id, x, y) => setContextItem({id, x, y})} />
@@ -291,8 +302,8 @@ export function LifeManagerPage() {
       {route.itemId && <><div className="lm-divider" role="separator" aria-label="Resize Item pane" aria-orientation="vertical" tabIndex={0} aria-valuemin={30} aria-valuemax={82} aria-valuenow={paneWidth}
         onPointerDown={event => event.currentTarget.setPointerCapture(event.pointerId)} onPointerMove={resize} onPointerUp={event => event.currentTarget.releasePointerCapture(event.pointerId)}
         onKeyDown={event => { if (event.key === 'ArrowLeft') setPaneWidth(value => Math.min(82, value + 3)); if (event.key === 'ArrowRight') setPaneWidth(value => Math.max(30, value - 3)); }} />
-        <section className="lm-detail-pane" aria-label="Item details"><div className="lm-pane-actions"><button onClick={() => navigate({ ...routeRef.current, itemId: null })}>{board ? '← Board' : '← Wheel'}</button><div className="lm-pane-actions__right"><button className="lm-expand" onClick={() => setExpanded(value => !value)}>{expanded ? 'Split view' : 'Expand'}</button></div></div>
-          {displayed ? <Suspense fallback={<div className="lm-loading">Opening Item…</div>}><ItemPanel settings={settings} propertyId={editPropertyId} key={`${route.snapshotId ?? 'current'}:${displayed.id}`} item={displayed} items={items} showAll={showAll} readOnly={readOnly} snapshotId={route.snapshotId} widgets={workspace.widgets}
+        <section className="lm-detail-pane" aria-label="Item details"><div className="lm-pane-actions"><button onClick={() => navigate({ ...routeRef.current, itemId: null })}>{outline ? '← Outline' : board ? '← Board' : '← Wheel'}</button><div className="lm-pane-actions__right"><button className="lm-expand" onClick={() => setExpanded(value => !value)}>{expanded ? 'Split view' : 'Expand'}</button></div></div>
+          {displayed ? <Suspense fallback={<div className="lm-loading">Opening Item…</div>}><ItemPanel settings={settings} propertyId={editPropertyId} key={`${route.snapshotId ?? 'current'}:${displayed.id}`} item={displayed} items={items} showAll={outline ? false : showAll} readOnly={readOnly} snapshotId={route.snapshotId} widgets={workspace.widgets}
             renderWidget={renderWidget} actWidget={actWidget} uploadImage={uploadImage} onOpenItem={select} onCommand={async value => { if (value.type === 'delete' || value.type === 'delete-many') await saveNotes(); await command(value); }} onSelect={select} onNotesChange={changeNotes} notesStatus={noteStatus}
             promptTemplates={workspace.promptTemplates} promptHandling={promptHandling} onSendToAgent={browserDemo ? undefined : sendToAgent} onLaunchT3={browserDemo ? undefined : prompt => launchT3(prompt, t3Location)} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
           {noteStatus === 'Save error' && <button onClick={() => void run(saveNotes)}>Retry saving notes</button>}

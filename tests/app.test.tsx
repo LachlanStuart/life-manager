@@ -27,7 +27,7 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
     if (url === '/api/mutate') {
       mutations.push(input);
       if (input.expectedRevision !== state.dashboard.revision) return { ok: false, json: async () => ({ error: 'Revision conflict' }) };
-      if (input.command.type === 'create' || input.command.type === 'bulk' || input.command.type === 'move') {
+      if (input.command.type === 'create' || input.command.type === 'bulk' || input.command.type === 'move' || input.command.type === 'arrange' || input.command.type === 'restore-arrangement') {
         state.dashboard.items = mutateItems(state.dashboard.items, input.command, state.settings);
       } else if (input.command.type === 'delete') {
         const removed = new Set<string>([input.command.id]);
@@ -391,7 +391,7 @@ it('moves a branch through the modal, excluding itself and descendants as destin
   fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
   expect(screen.queryByRole('menu')).toBeNull();
   expect(screen.getByRole('dialog', {name: 'Move Tend'})).toBeDefined();
-  const destination = screen.getByRole('combobox', {name: 'Move to'});
+  const destination = screen.getByRole('listbox', {name: 'Move to'});
   expect(Array.from(destination.querySelectorAll('option')).map(option => option.value)).toEqual(['', 'build']);
   expect((screen.getByRole('button', {name: 'Move'}) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.change(destination, {target: {value: 'build'}});
@@ -402,13 +402,13 @@ it('moves a branch through the modal, excluding itself and descendants as destin
   expect(current.dashboard.items.find(item => item.id === 'child')?.parentId).toBe('tend');
   fireEvent.contextMenu(screen.getByText('Select Tend'));
   fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
-  fireEvent.change(screen.getByRole('combobox', {name: 'Move to'}), {target: {value: ''}});
+  fireEvent.change(screen.getByRole('listbox', {name: 'Move to'}), {target: {value: ''}});
   fireEvent.click(screen.getByRole('button', {name: 'Cancel'}));
   expect(mutations).toHaveLength(1);
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.contextMenu(screen.getByText('Select Tend'));
   fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
-  fireEvent.change(screen.getByRole('combobox', {name: 'Move to'}), {target: {value: ''}});
+  fireEvent.change(screen.getByRole('listbox', {name: 'Move to'}), {target: {value: ''}});
   fireEvent.click(screen.getByRole('button', {name: 'Move'}));
   await waitFor(() => expect(current.dashboard.items.find(item => item.id === 'tend')?.parentId).toBeNull());
 });
@@ -452,7 +452,7 @@ it('uses the shared actions menu on Kanban cards for status, moving and inclusio
   fireEvent.contextMenu(screen.getByRole('button', {name: 'Tend, Now'}));
   fireEvent.click(screen.getByRole('menuitem', {name: 'Move…'}));
   expect(screen.getByRole('dialog', {name: 'Move Tend'})).toBeDefined();
-  fireEvent.change(screen.getByRole('combobox', {name: 'Move to'}), {target: {value: 'build'}});
+  fireEvent.change(screen.getByRole('listbox', {name: 'Move to'}), {target: {value: 'build'}});
   fireEvent.click(screen.getByRole('button', {name: 'Move'}));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(current.dashboard.items[0]!.parentId).toBe('build');
@@ -460,4 +460,25 @@ it('uses the shared actions menu on Kanban cards for status, moving and inclusio
   fireEvent.click(screen.getByRole('menuitemcheckbox', {name: /Included on dashboard/}));
   await waitFor(() => expect(screen.queryByRole('button', {name: 'Tend, Now'})).toBeNull());
   expect(current.dashboard.items[0]!.included).toBe(false);
+});
+
+it('opens Outline from its URL and retains its expansion through details and view switching', async () => {
+  const { screen } = setup('/?view=outline', [
+    { id: 'project', parentId: 'build', order: 0, title: 'Project', status: 'Later', notes: '', included: true, weight: 1, effortOverride: null },
+    { id: 'step', parentId: 'project', order: 0, title: 'Step', status: 'Later', notes: '', included: true, weight: 1, effortOverride: null },
+  ]);
+  await screen.findByRole('tree', { name: 'Item hierarchy' });
+  expect(screen.getByRole('button', { name: 'Outline' }).getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(screen.getByLabelText('Expand Project'));
+  fireEvent.click(screen.getByLabelText('Open Step'));
+  await screen.findByText('Step details');
+  expect(window.location.search).toBe('?view=outline');
+  fireEvent.click(screen.getByText('← Outline'));
+  await waitFor(() => expect(screen.queryByText('Step details')).toBeNull());
+  fireEvent.click(screen.getByRole('button', { name: 'Kanban' }));
+  await waitFor(() => expect(window.location.search).toBe('?view=kanban'));
+  fireEvent.click(screen.getByRole('button', { name: 'Outline' }));
+  await screen.findByRole('treeitem', { name: 'Step' });
+  expect(parseRoute(new URL('http://localhost/?view=outline')).view).toBe('outline');
+  expect(parseRoute(new URL('http://localhost/life-manager/#/?view=outline'), true).view).toBe('outline');
 });

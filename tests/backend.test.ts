@@ -223,3 +223,22 @@ it('persists automatic allocation across reopen and checkpoints without rewritin
   expect(localShare(second.actions.workspace({ snapshotId: closing.id }).dashboard.items, 'learn')).toBe(20);
   expect(localShare(second.actions.workspace().dashboard.items, 'learn')).toBe(12.5);
 });
+
+it('applies and undoes outline moves as single revisions without changing snapshots', () => {
+  const { actions } = setup();
+  actions.mutate({ command: { type: 'create', id: 'project', parentId: 'build', title: 'Project', patch: { weight: 80 } } });
+  actions.mutate({ command: { type: 'create', id: 'auto', parentId: 'learn', title: 'Automatic' } });
+  actions.mutate({ command: { type: 'create', id: 'explicit', parentId: 'learn', title: 'Explicit', patch: { weight: 70 } } });
+  const before = actions.workspace();
+  const historical = actions.workspace({ snapshotId: before.snapshots[0]!.id });
+  const after = actions.mutate({ expectedRevision: before.dashboard.revision, command: { type: 'arrange', ids: ['project'], parentId: 'learn', beforeId: 'explicit' } });
+  expect(after.dashboard.revision).toBe(before.dashboard.revision + 1);
+  const placement = ({ id, parentId, order, weight, allocationAuto }: Item) => ({ id, parentId, order, weight, allocationAuto });
+  const undo = { type: 'restore-arrangement' as const, placements: before.dashboard.items.map(placement), expected: after.dashboard.items.map(item => ({ ...placement(item), included: item.included })) };
+  const restored = actions.mutate({ expectedRevision: after.dashboard.revision, command: undo });
+  expect(restored.dashboard.items).toEqual(before.dashboard.items);
+  expect(restored.dashboard.revision).toBe(after.dashboard.revision + 1);
+  expect(actions.workspace({ snapshotId: before.snapshots[0]!.id })).toEqual(historical);
+  expect(() => actions.mutate({ command: { type: 'arrange', ids: ['project', 'missing'], parentId: 'learn' } })).toThrow();
+  expect(actions.workspace().dashboard).toEqual(restored.dashboard);
+});

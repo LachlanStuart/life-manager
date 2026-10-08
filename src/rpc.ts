@@ -34,6 +34,7 @@ export const itemPatchSchema = z.object({
   resourceUri: resourceUriSchema.nullable().optional(),
 }).strict();
 
+const placementShape = { id: idSchema, parentId: nullableParentSchema, order: z.number().int(), weight: finiteNonNegativeSchema, allocationAuto: z.boolean().optional() };
 export const itemCommandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('create'),
@@ -47,6 +48,9 @@ export const itemCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('delete'), id: idSchema }).strict(),
   z.object({ type: z.literal('delete-many'), ids: z.array(idSchema).min(1).max(10_000) }).strict(),
   z.object({ type: z.literal('move'), id: idSchema, parentId: nullableParentSchema }).strict(),
+  z.object({ type: z.literal('arrange'), ids: z.array(idSchema).min(1).max(10_000), parentId: nullableParentSchema, beforeId: idSchema.optional() }).strict(),
+  z.object({ type: z.literal('restore-arrangement'), placements: z.array(z.object(placementShape).strict()).max(10_000),
+    expected: z.array(z.object({ ...placementShape, included: z.boolean() }).strict()).max(10_000) }).strict(),
   z.object({
     type: z.literal('reorder'),
     parentId: nullableParentSchema,

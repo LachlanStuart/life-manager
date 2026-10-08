@@ -23,12 +23,15 @@ export interface Item {
   effortOverride: number | null;
 }
 export type ItemPatch = Partial<Pick<Item, 'title' | 'status' | 'properties' | 'notes' | 'included' | 'weight' | 'allocationAuto' | 'effortOverride' | 'defaultPromptId' | 'resourceUri'>>;
+export type ItemPlacement = Pick<Item, 'id' | 'parentId' | 'order' | 'weight' | 'allocationAuto'>;
 export type ItemCommand =
   | { type: 'create'; id?: string; parentId: string | null; title: string; patch?: ItemPatch; share?: number | null }
   | { type: 'update'; id: string; patch: ItemPatch }
   | { type: 'delete'; id: string }
   | { type: 'delete-many'; ids: string[] }
   | { type: 'move'; id: string; parentId: string | null }
+  | { type: 'arrange'; ids: string[]; parentId: string | null; beforeId?: string }
+  | { type: 'restore-arrangement'; placements: ItemPlacement[]; expected: (ItemPlacement & { included: boolean })[] }
   | { type: 'reorder'; parentId: string | null; ids: string[] }
   | { type: 'allocate'; id: string; share: number | null }
   | { type: 'bulk'; ids: string[]; patch: ItemPatch };

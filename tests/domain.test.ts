@@ -319,3 +319,32 @@ it('can clear a hidden allocation without including the Item or editing its desc
   expect(localShare(cleared, 'visible')).toBe(100);
   expect(cleared[0]).toEqual(original[0]);
 });
+
+describe('outline arrangement', () => {
+  it('moves selected roots atomically, preserves descendants, and orders relative to all destination siblings', () => {
+    const items = [item('a', null), item('b', null), item('project', 'a'), item('child', 'project'), item('hidden', 'b', { included: false }), item('last', 'b', { order: 1 })];
+    const result = mutateItems(items, { type: 'arrange', ids: ['project', 'child'], parentId: 'b', beforeId: 'last' });
+    expect(childrenOf(result, 'b').map(item => item.id)).toEqual(['hidden', 'project', 'last']);
+    expect(result.find(item => item.id === 'child')?.parentId).toBe('project');
+    expect(items.find(item => item.id === 'project')?.parentId).toBe('a');
+    expect(() => mutateItems(items, { type: 'arrange', ids: ['project'], parentId: 'child' })).toThrow(/descendants/);
+    expect(() => mutateItems(items, { type: 'arrange', ids: ['project', 'missing'], parentId: 'b' })).toThrow();
+    expect(() => mutateItems(items, { type: 'arrange', ids: ['project'], parentId: 'b', beforeId: 'a' })).toThrow(/destination sibling/);
+    expect(() => mutateItems(items, { type: 'arrange', ids: ['project', 'project'], parentId: 'b' })).toThrow(/duplicate/);
+  });
+
+  it('restores normalized sibling allocations exactly without overwriting subsequent notes or statuses', () => {
+    const before = [item('a', null), item('b', null), item('project', 'a', { weight: 70 }), item('existing', 'b', { weight: 80 }), item('auto', 'b', { allocationAuto: true })];
+    const moved = mutateItems(before, { type: 'arrange', ids: ['project'], parentId: 'b' });
+    expect(moved.find(item => item.id === 'existing')?.weight).toBeCloseTo(80 * 100 / 150);
+    const placements = (items: Item[]) => items.map(({ id, parentId, order, weight, allocationAuto }) => ({ id, parentId, order, weight, allocationAuto }));
+    const command = { type: 'restore-arrangement' as const, placements: placements(before), expected: moved.map(item => ({ ...placements([item])[0]!, included: item.included })) };
+    const edited = mutateItems(moved, { type: 'update', id: 'project', patch: { notes: 'Keep this new note', status: 'Doing' } });
+    const restored = mutateItems(edited, command);
+    expect(placements(restored)).toEqual(placements(before));
+    expect(restored.find(item => item.id === 'project')).toMatchObject({ notes: 'Keep this new note', status: 'Doing' });
+    expect(() => mutateItems(mutateItems(moved, { type: 'update', id: 'auto', patch: { included: false } }), command)).toThrow(/no longer be undone/);
+    expect(() => mutateItems(mutateItems(moved, { type: 'create', parentId: 'b', title: 'New child' }), command)).toThrow(/no longer be undone/);
+    expect(() => mutateItems(moved, { ...command, placements: command.placements.map(item => item.id === 'a' ? { ...item, parentId: 'project' } : item) })).toThrow();
+  });
+});

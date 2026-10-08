@@ -1,9 +1,10 @@
-export interface ViewRoute { itemId: string | null; focusId: string | null; snapshotId?: string; view?: 'kanban' }
+export interface ViewRoute { itemId: string | null; focusId: string | null; snapshotId?: string; view?: 'kanban' | 'outline' }
 
 export function parseRoute(url: URL, demo = browserDemo): ViewRoute {
   if (demo) url = new URL(url.hash.slice(1) || '/', url.origin);
   const match = url.pathname.match(/^\/items\/([^/]+)\/?$/);
-  return { itemId: match ? decodeURIComponent(match[1]!) : null, focusId: url.searchParams.get('focus'), snapshotId: url.searchParams.get('snapshot') || undefined, ...(url.searchParams.get('view') === 'kanban' ? { view: 'kanban' as const } : {}) };
+  const view = url.searchParams.get('view');
+  return { itemId: match ? decodeURIComponent(match[1]!) : null, focusId: url.searchParams.get('focus'), snapshotId: url.searchParams.get('snapshot') || undefined, ...(view === 'kanban' || view === 'outline' ? { view } : {}) };
 }
 
 export function routeUrl(route: ViewRoute, demo = browserDemo): string {
