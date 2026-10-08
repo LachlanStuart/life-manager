@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
 import { readPromptHandling, savePromptHandling, readT3Location, saveT3Location } from './ui/prompt-handling';
 import { isDesktopClient, launchT3 } from './ui/t3-launch';
@@ -10,6 +10,8 @@ import { WorkspaceSettingsEditor } from './ui/WorkspaceSettingsEditor';
 import { RootItemsSettings } from './ui/RootItemsSettings';
 import { workspaceSettings } from './src/properties';
 import { propertyPatch, selectedProperty } from './ui/PropertySelect';
+import { FilterControl } from './ui/FilterControl';
+import { activePropertyFilters, matchingItemIds, type PropertyFilters } from './ui/property-filters';
 import { SortControl } from './ui/SortControl';
 import type { ViewSort } from './ui/view-sort';
 import { PeriodControl } from './ui/PeriodControl';
@@ -189,6 +191,13 @@ export function LifeManagerPage() {
   const channel = (id: string | null | undefined) => id === null ? null : settings.properties.some(property => property.id === id) ? id! : settings.properties.find(property => property.id === 'status')?.id ?? settings.properties[0]?.id ?? null;
   const colorPropertyId = channel(colorChannel), groupPropertyId = channel(groupChannel);
   const items = workspace?.dashboard.items ?? [];
+  const filters = useMemo(() => activePropertyFilters(route.filters, settings), [route.filters, settings]);
+  const matchingIds = useMemo(() => matchingItemIds(items, filters), [items, filters]);
+  const changeFilters = (filters: PropertyFilters) => {
+    const next = {...routeRef.current, filters: Object.keys(filters).length ? filters : undefined};
+    window.history.pushState(null, '', routeUrl(next));
+    routeRef.current = next; setRoute(next); setContextItem(null);
+  };
   const selected = items.find(item => item.id === route.itemId);
   const displayed = selected && draft?.itemId === selected.id && draft.snapshotId === route.snapshotId ? { ...selected, notes: draft.markdown } : selected;
   const historical = Boolean(route.snapshotId);
@@ -242,6 +251,7 @@ export function LifeManagerPage() {
         <option value="">None</option>{settings.properties.map(property => <option key={property.id} value={property.id}>{property.name}</option>)}
       </select></label>}
       <SortControl propertyName={settings.properties.find(property => property.id === editPropertyId)?.name} value={viewSort} onChange={sort => setViewSorts(current => ({...current, [route.view ?? 'sunburst']: sort}))} />
+      {settings.properties.length > 0 && <FilterControl settings={settings} filters={filters} onChange={changeFilters} />}
       <PeriodControl workspace={workspace} snapshotId={route.snapshotId} busy={busy} onSelect={snapshotId => navigate({ ...routeRef.current, snapshotId })}
         onPlan={() => void run(async () => { await saveNotes(); await enqueue(async () => accept(await api<Workspace>('plan', { expectedRevision: latest.current!.dashboard.revision }))); })}
         onNext={() => { setPeriodName(''); setRolloverOpen(true); }}
@@ -263,7 +273,7 @@ export function LifeManagerPage() {
             navigate({ ...routeRef.current, itemId: null });
           }
         }}>
-        <Outline key={`${workspace.dashboard.periodId}:${route.snapshotId ?? 'current'}`} active={outline} items={items} settings={settings} propertyId={editPropertyId} sort={viewSorts.outline}
+        <Outline key={`${workspace.dashboard.periodId}:${route.snapshotId ?? 'current'}`} active={outline} items={items} matchingIds={matchingIds} settings={settings} propertyId={editPropertyId} sort={viewSorts.outline}
           selectedId={route.itemId} disabled={readOnly || busy} historical={historical} revision={workspace.dashboard.revision} onOpen={select}
           onCommand={async (value, revision) => {
             if (routeRef.current.snapshotId !== route.snapshotId || latest.current?.dashboard.periodId !== workspace.dashboard.periodId) throw new Error('The dashboard changed. Check the Item before trying again.');
@@ -272,7 +282,7 @@ export function LifeManagerPage() {
           }} />
         {outline ? null : board ? <div className="lm-board-layout">
           <aside className="lm-board-scope" aria-label="Board focus">
-            <Sunburst settings={settings} colorPropertyId={colorPropertyId} sort={viewSort} items={items} selectedId={null} focusId={focusedItem?.id ?? null} showAll={false} compact mode="Navigate"
+            <Sunburst matchingIds={matchingIds} settings={settings} colorPropertyId={colorPropertyId} sort={viewSort} items={items} selectedId={null} focusId={focusedItem?.id ?? null} showAll={false} compact mode="Navigate"
               onSelect={select} onFocus={focus} onAllocate={() => undefined} onContextMenu={(id, x, y) => setContextItem({id, x, y})} />
             <nav aria-label="Focus branch">
               {focusedItem && <button onClick={() => focus(null)}>↑ {settings.name}</button>}
@@ -284,7 +294,7 @@ export function LifeManagerPage() {
               {childBranches.map(item => <button key={item.id} onClick={() => focus(item.id)}>{item.title}</button>)}
             </nav>
           </aside>
-          <Kanban settings={settings} colorPropertyId={colorPropertyId} groupPropertyId={groupPropertyId} sort={viewSort} items={items} focusId={focusedItem?.id ?? null} selectedId={route.itemId} disabled={readOnly || busy}
+          <Kanban matchingIds={matchingIds} settings={settings} colorPropertyId={colorPropertyId} groupPropertyId={groupPropertyId} sort={viewSort} items={items} focusId={focusedItem?.id ?? null} selectedId={route.itemId} disabled={readOnly || busy}
             onSelect={select} onContextMenu={(id, x, y) => setContextItem({id, x, y})} onCommand={async value => {
               if (routeRef.current.snapshotId !== route.snapshotId || latest.current?.dashboard.periodId !== workspace.dashboard.periodId) {
                 const reason = 'The dashboard changed during this move. Check the Item before trying again.';
@@ -294,7 +304,7 @@ export function LifeManagerPage() {
             }} />
         </div> : <>
 
-        <div className="lm-wheel-space"><Sunburst settings={settings} colorPropertyId={colorPropertyId} sort={viewSort} items={items} selectedId={highlightId ?? route.itemId} focusId={route.focusId && items.some(item => item.id === route.focusId) ? route.focusId : null} showAll={showAll} mode={mode}
+        <div className="lm-wheel-space"><Sunburst matchingIds={matchingIds} settings={settings} colorPropertyId={colorPropertyId} sort={viewSort} items={items} selectedId={highlightId ?? route.itemId} focusId={route.focusId && items.some(item => item.id === route.focusId) ? route.focusId : null} showAll={showAll} mode={mode}
           onSelect={id => { setHighlightId(id); select(id); }} onHighlight={setHighlightId} onFocus={focus} onShowHidden={() => setShowAll(true)} onCreate={beginCreate} onContextMenu={(id, x, y) => setContextItem({id, x, y})} disabled={readOnly || busy}
           onAllocate={(id, share) => void run(() => command({ type: 'allocate', id, share }))} onEffort={(id, effortOverride) => void run(() => command({ type: 'update', id, patch: { effortOverride } }))} /></div>
         </>}

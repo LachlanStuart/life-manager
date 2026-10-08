@@ -10,14 +10,14 @@ import type { ViewSort } from '../ui/view-sort';
 
 const item = (id: string, parentId: string | null, extra: Partial<Item> = {}): Item => ({ id, title: id, parentId, order: 0, status: 'Later', notes: '', included: true, weight: 1, allocationAuto: true, effortOverride: null, ...extra });
 const fixture = () => [item('Build', null), item('Garden', 'Build'), item('Sketch', 'Garden'), item('Test', 'Garden', { order: 1 }), item('Learn', null, { order: 1, included: false }), item('Japanese', 'Learn')];
-function setup({ disabled = false, historical = false, sort = 'Order' as ViewSort, reject = false } = {}) {
+function setup({ disabled = false, historical = false, sort = 'Order' as ViewSort, reject = false, matchingIds = undefined as ReadonlySet<string> | undefined } = {}) {
   const commands: ItemCommand[] = [];
   let current = fixture();
   const open = vi.fn();
   function Harness() {
     const [items, setItems] = useState(current);
     const [active, setActive] = useState(true);
-    return <><button onClick={() => setActive(value => !value)}>Switch view</button><Outline items={items} settings={settings} propertyId="status" sort={sort} selectedId={null} disabled={disabled} historical={historical} revision={commands.length} active={active} onOpen={open}
+    return <><button onClick={() => setActive(value => !value)}>Switch view</button><Outline matchingIds={matchingIds} items={items} settings={settings} propertyId="status" sort={sort} selectedId={null} disabled={disabled} historical={historical} revision={commands.length} active={active} onOpen={open}
       onCommand={async command => { if (reject) throw new Error('Revision conflict'); current = mutateItems(current, command, settings); commands.push(command); setItems(current); }} /></>;
   }
   const screen = render(<Harness />);
@@ -185,4 +185,16 @@ it('does not imply sibling reordering while a sort override is active', async ()
   expect(target.getAttribute('data-drop')).toBe('inside');
   fireEvent.pointerUp(grip);
   await waitFor(() => expect(commands[0]).toEqual({ type: 'arrange', ids: ['Garden'], parentId: 'Learn' }));
+});
+
+
+it('keeps filtered ancestors as context and applies bulk actions only to matching rows', async () => {
+  const {screen, commands} = setup({matchingIds: new Set(['Sketch'])});
+  expect(screen.getAllByRole('treeitem').map(row => row.getAttribute('aria-label'))).toEqual(['Build', 'Garden', 'Sketch']);
+  expect(screen.getByRole('treeitem', {name: 'Garden'}).getAttribute('data-context')).toBe('true');
+  fireEvent.click(screen.getByRole('button', {name: 'Select'}));
+  expect((screen.getByLabelText('Select Garden') as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', {name: 'Select shown rows'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Exclude'}));
+  await waitFor(() => expect(commands[0]).toEqual({type: 'bulk', ids: ['Sketch'], patch: {included: false}}));
 });

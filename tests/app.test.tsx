@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { mutateItems } from '../src/domain';
 import type { Workspace } from '../src/types';
 import type { ItemPanelProps, SunburstProps } from '../ui/contracts';
@@ -481,4 +481,29 @@ it('opens Outline from its URL and retains its expansion through details and vie
   await screen.findByRole('treeitem', { name: 'Step' });
   expect(parseRoute(new URL('http://localhost/?view=outline')).view).toBe('outline');
   expect(parseRoute(new URL('http://localhost/life-manager/#/?view=outline'), true).view).toBe('outline');
+});
+
+it('shares quick filters between Outline and Kanban, preserves URLs and never mutates Items', async () => {
+  const {screen, mutations} = setup('/?view=outline');
+  await screen.findByRole('treeitem', {name: 'Tend'});
+  fireEvent.click(screen.getByRole('button', {name: 'Filters'}));
+  const dialog = screen.getByRole('dialog', {name: 'Filter Items'});
+  fireEvent.click(within(dialog).getByRole('button', {name: 'Doing'}));
+  expect(screen.queryByRole('treeitem', {name: 'Build'})).toBeNull();
+  expect(screen.getByRole('treeitem', {name: 'Tend'})).toBeDefined();
+  const filteredUrl = window.location.href;
+  expect(parseRoute(new URL(filteredUrl)).filters).toEqual({status: ['Doing']});
+  fireEvent.click(screen.getByRole('button', {name: 'Close filters'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Kanban'}));
+  await screen.findByRole('button', {name: 'Tend, Later'});
+  expect(screen.queryByRole('button', {name: 'Build, Doing'})).toBeNull();
+  expect(parseRoute(new URL(window.location.href)).filters).toEqual({status: ['Doing']});
+  fireEvent.click(screen.getByRole('button', {name: /Filters/}));
+  fireEvent.click(screen.getByRole('button', {name: 'Reset all'}));
+  expect(screen.getByRole('button', {name: 'Build, Doing'})).toBeDefined();
+  window.history.replaceState(null, '', filteredUrl);
+  fireEvent.popState(window);
+  await screen.findByRole('treeitem', {name: 'Tend'});
+  expect(screen.queryByRole('treeitem', {name: 'Build'})).toBeNull();
+  expect(mutations).toEqual([]);
 });

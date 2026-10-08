@@ -128,11 +128,11 @@ export function branchRelativeShares(items: readonly Item[], focusId: string | n
 }
 
 /** Build the visual columns and parent-path groups used by the board. */
-export function buildKanbanModel(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId?: string | null): KanbanBoardModel {
+export function buildKanbanModel(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId?: string | null, matchingIds?: ReadonlySet<string>): KanbanBoardModel {
   const byId = itemIndex(items);
   const shares = branchRelativeShares(items, focusId);
   const property = presentationProperty(settings, groupPropertyId);
-  const visible = kanbanItems(items, focusId, sort, settings, groupPropertyId);
+  const visible = kanbanItems(items, focusId, sort, settings, groupPropertyId).filter(item => !matchingIds || matchingIds.has(item.id));
   const cards = visible.map((item): KanbanCard => {
     const share = Math.max(0, Math.min(1, shares.get(item.id) ?? 0));
     return {
@@ -172,7 +172,7 @@ export function buildKanbanModel(items: readonly Item[], focusId: string | null,
         group.cards.push(card);
       }
       return { ...column, groups: [...groups.values()] };
-    }),
+    }).filter(column => !matchingIds || column.groups.length > 0),
   };
 }
 

@@ -91,6 +91,16 @@ For example, two equally weighted visible activities at 150% and 50% yield 100% 
 
 ## Main workspace
 
+### Property filters
+
+A shared Filter popup works across Sunburst, Kanban and Outline, independently of colouring, grouping and sorting. Every configured property has a row of value toggles, including Unset; all values start enabled. A tap switches a value off or on immediately while the popup stays open. Each row has All and None shortcuts, and Reset all restores the unfiltered view. The creation default is marked on its value. The toolbar badge counts disabled values. There are no rule-building or Apply steps.
+
+An Item must have an enabled value for every filtered property. Filters use each Item's own values, without inheriting a parent's property. They persist in the URL across switching views, opening details, refresh and browser Back. Missing properties and removed options are ignored against the displayed workspace or snapshot's definitions. Filters only affect presentation: inclusion, allocations, effort calculations and snapshot data remain unchanged. Sunburst Show all and Outline All Items / Dashboard only retain their separate inclusion meanings.
+
+Sunburst retains ancestors of matching Items for navigation and dims their labels when they do not themselves match. Remaining slices fit the available space, with real local shares and effort retained in readouts. The filtered view is labelled, and wheel allocation dragging is disabled until filters are cleared. Numeric editing in Item details and Outline still uses the full dashboard. The compact Kanban navigator uses the same filtered hierarchy.
+
+Kanban filters its existing eligible cards without promoting a parent when all of its cards are filtered out. Card sizes and parent paths retain their original meaning; empty columns disappear while property filters are active. Outline combines property filters with title search, reveals matching descendants through collapsed branches, and retains nonmatching ancestors as context. Clearing filters restores the prior expansion state. Filtered context rows remain editable but are excluded from bulk selection; Select shown rows and Select branch only select matching Items while property filters are active. New filters cancel pending drags, and filtered Outline drops move into a parent rather than positioning against an incomplete sibling list.
+
 ### Sunburst
 
 The sunburst presents a zoomable hierarchy with importance expressed by angular share and effort by radial fill.
@@ -150,7 +160,7 @@ Dragging starts only from the row's handle. Dropping onto a row reparents the en
 
 A move is atomic, with the normal allocation recalculation in affected sibling groups. One-level Undo restores placement, order and allocation values exactly, while preserving subsequent notes, properties and effort edits. Undo becomes unavailable when the hierarchy, inclusion or allocation changes. Moving reveals the destination, clears the search and switches to All Items so the moved branch remains inspectable.
 
-Select mode introduces selection checkboxes separately from inclusion. Selecting a parent selects only that row; Select branch explicitly includes all descendants, including hidden or collapsed ones. Select shown rows selects the current search/expansion results. Bulk controls include Include, Exclude, Set property, Move, Allocation to Auto and Effort to Auto. When moving a selection containing both a parent and its descendants, descendants travel with that parent instead of becoming siblings. Historical views retain browsing and expansion, disable edits until correction mode is enabled, and never offer deletion.
+Select mode introduces selection checkboxes separately from inclusion. Selecting a parent selects only that row; Select branch explicitly includes all descendants, including hidden or collapsed ones, subject to active property filters. Select shown rows selects matching rows in the current search/expansion results, excluding ancestors shown only for context. Bulk controls include Include, Exclude, Set property, Move, Allocation to Auto and Effort to Auto. When moving a selection containing both a parent and its descendants, descendants travel with that parent instead of becoming siblings. Historical views retain browsing and expansion, disable edits until correction mode is enabled, and never offer deletion.
 
 ### Item details and child table
 

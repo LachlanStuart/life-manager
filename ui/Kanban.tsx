@@ -8,6 +8,7 @@ import type { ViewSort } from './view-sort';
 import './kanban.css';
 
 export interface KanbanProps {
+  matchingIds?: ReadonlySet<string>;
   items: Item[];
   sort?: ViewSort;
   settings?: WorkspaceSettings;
@@ -85,10 +86,10 @@ function columnTargetAtPoint(board: HTMLElement | null, clientX: number, clientY
   return column ? { kind: 'column', status: column.dataset.kanbanColumn || null } : null;
 }
 
-export function Kanban({ items, focusId, selectedId, disabled, onSelect, onContextMenu, onCommand, sort = 'Order', settings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId, colorPropertyId }: KanbanProps) {
+export function Kanban({ matchingIds, items, focusId, selectedId, disabled, onSelect, onContextMenu, onCommand, sort = 'Order', settings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId, colorPropertyId }: KanbanProps) {
   const groupProperty = presentationProperty(settings, groupPropertyId);
   const colorProperty = presentationProperty(settings, colorPropertyId);
-  const model = React.useMemo(() => buildKanbanModel(items, focusId, sort, settings, groupPropertyId), [items, focusId, sort, settings, groupPropertyId]);
+  const model = React.useMemo(() => buildKanbanModel(items, focusId, sort, settings, groupPropertyId, matchingIds), [items, focusId, sort, settings, groupPropertyId, matchingIds]);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const suppressClick = React.useRef(false);
   const dragRef = React.useRef<DragState | null>(null);
@@ -129,7 +130,7 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onConte
   React.useEffect(() => {
     // Changing the focused branch changes the board underneath the pointer.
     cancelDrag();
-  }, [focusId, sort, settings, groupPropertyId, cancelDrag]);
+  }, [focusId, sort, settings, groupPropertyId, matchingIds, cancelDrag]);
 
   React.useEffect(() => {
     const onBlur = () => cancelDrag();
@@ -364,7 +365,7 @@ export function Kanban({ items, focusId, selectedId, disabled, onSelect, onConte
           width: drag.width, minHeight: drag.height, '--lm-kanban-card-color': byId.has(drag.id) ? propertyPresentation(byId.get(drag.id)!, colorProperty).color : undefined, '--lm-kanban-card-font-size': `${drag.fontSize}px` } as React.CSSProperties}>
         <span className="lm-kanban__card-title">{byId.get(drag.id)?.title}</span>
       </div>, document.body)}
-      {model.cards.length === 0 && <p className="lm-kanban__empty-board">No included Items in this branch.</p>}
+      {model.cards.length === 0 && <p className="lm-kanban__empty-board">{matchingIds ? 'No Items match these filters in this branch.' : 'No included Items in this branch.'}</p>}
     </section>
   );
 }

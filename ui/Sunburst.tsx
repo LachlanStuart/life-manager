@@ -11,6 +11,7 @@ import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
 import { presentationProperty, propertyPresentation } from './property-presentation';
 import type { SunburstProps } from './contracts';
 import { DEFAULT_SUNBURST_DISPLAY, useSunburstDisplay, type SunburstDisplay } from './sunburst-display';
+import { withAncestors } from './property-filters';
 import { viewComparator } from './view-sort';
 import './sunburst.css';
 
@@ -46,6 +47,7 @@ export interface SunburstSegment {
 }
 
 export interface SunburstLayoutOptions {
+  matchingIds?: ReadonlySet<string>;
   focusId: string | null;
   showAll: boolean;
   efforts: Readonly<Record<string, number>>;
@@ -193,7 +195,9 @@ export function buildSunburstLayout(
     for (const [id, share] of siblingShares(siblings)) shareById.set(id, share);
   }
   const shareOf = (item: Item) => shareById.get(item.id) ?? 0;
-  const isDrawn = (item: Item) => options.showAll || isIncluded(item);
+  const eligible = (item: Item) => options.showAll || isIncluded(item);
+  const paths = options.matchingIds && withAncestors(items, new Set(items.filter(item => eligible(item) && options.matchingIds!.has(item.id)).map(item => item.id)));
+  const isDrawn = (item: Item) => eligible(item) && (!paths || paths.has(item.id));
   const firstParentId = focus?.id ?? null;
   const roots = (childMap.get(firstParentId) ?? []).filter(isDrawn);
   const queue: LayoutEntry[] = [];
@@ -349,7 +353,7 @@ function pointerPosition(event: { clientX: number; clientY: number }, svg: SVGSV
 }
 
 export function Sunburst({
-  items, selectedId, focusId, showAll, onSelect, onHighlight, onFocus, onAllocate,
+  items, matchingIds, selectedId, focusId, showAll, onSelect, onHighlight, onFocus, onAllocate,
   disabled = false, mode = 'Navigate', sort = 'Order', onEffort, onCreate, onContextMenu, onShowHidden, compact = false, settings = DEFAULT_WORKSPACE_SETTINGS, colorPropertyId,
 }: SunburstProps) {
   const colorProperty = presentationProperty(settings, colorPropertyId);
@@ -367,7 +371,7 @@ export function Sunburst({
     if (touchTimer.current !== null) clearTimeout(touchTimer.current);
     touchTimer.current = null; touchPress.current = null;
   };
-  useEffect(() => () => { cancelNavigation(); cancelTouch(); }, [mode, focusId]);
+  useEffect(() => () => { cancelNavigation(); cancelTouch(); }, [mode, focusId, matchingIds]);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [svgSize, setSvgSize] = useState(650);
   const display = useSunburstDisplay();
@@ -388,7 +392,7 @@ export function Sunburst({
     setRangePreview(null);
     setHoveredId(null);
     rangeDirty.current = false;
-  }, [mode, focusId, disabled, showAll, sort]);
+  }, [mode, focusId, disabled, showAll, sort, matchingIds]);
   const preview = drag?.kind === 'Importance' ? { id: drag.id, share: drag.value } : rangePreview;
   const displayedItems = useMemo(() => {
     if (disabled) return items;
@@ -401,18 +405,18 @@ export function Sunburst({
   const compareItems = useMemo(() => viewComparator(items, sort, settings, colorPropertyId), [items, sort, settings, colorPropertyId]);
   const efforts = useMemo(() => computeEfforts(displayedItems, settings), [displayedItems, settings]);
   const layout = useMemo(() => buildSunburstLayout(displayedItems, {
-    focusId, showAll, efforts, compareItems, maxDepth: compact ? 2 : display.maxDepth, ringWeights: display.ringWeights,
+    focusId, showAll, matchingIds, efforts, compareItems, maxDepth: compact ? 2 : display.maxDepth, ringWeights: display.ringWeights,
     // The compact Topic sectors include the origin rather than reserving a
     // central hole. Keep enough physical space for their short familiar names.
     minFirstRingWidth: focusId === null ? (compact ? 26 : Math.min(11, display.fontSize) * 1.3 + 28) * VIEW_SIZE / svgSize : 0,
-  }), [displayedItems, efforts, compareItems, focusId, showAll, display.maxDepth, display.ringWeights, display.fontSize, svgSize, compact]);
+  }), [displayedItems, efforts, compareItems, focusId, showAll, display.maxDepth, display.ringWeights, display.fontSize, svgSize, compact, matchingIds]);
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const focus = focusId === null ? null : itemById.get(focusId) ?? null;
   const parent = focus?.parentId ? itemById.get(focus.parentId) ?? null : null;
   const selected = selectedId === null ? null : itemById.get(selectedId) ?? null;
   const selectedSegment = layout.find((segment) => segment.id === selectedId) ?? null;
   const handleSegment = layout.find(segment => segment.id === (drag?.id ?? hoveredId ?? selectedId)) ?? null;
-  const allocationDisabled = disabled || showAll;
+  const allocationDisabled = disabled || showAll || matchingIds !== undefined;
   const focusTrail = useMemo(() => {
     const ids = new Set<string>();
     let cursor = focus;
@@ -423,8 +427,8 @@ export function Sunburst({
     return ids;
   }, [focus, itemById]);
   const overview = useMemo(() => !focus ? [] : buildSunburstLayout(displayedItems, {
-    focusId: null, showAll, efforts, compareItems, maxDepth: 3, innerRadius: 52, outerRadius: 460,
-  }), [displayedItems, efforts, compareItems, focus, showAll]);
+    focusId: null, showAll, matchingIds, efforts, compareItems, maxDepth: 3, innerRadius: 52, outerRadius: 460,
+  }), [displayedItems, efforts, compareItems, focus, showAll, matchingIds]);
   const zoomOut = () => { if (focus) onFocus(focus.parentId); };
   const zoomInto = (segment: SunburstSegment) => {
     if (segment.hasVisibleChildren) onFocus(segment.id);
@@ -462,7 +466,7 @@ export function Sunburst({
     }
   };
   const beginDrag = (event: PointerEvent<SVGElement>, segment: SunburstSegment, kind: DragState['kind']) => {
-    if (event.button !== 0 || dragRef.current || disabled || (kind === 'Importance' && (showAll || segment.siblingCount < 2))) return;
+    if (event.button !== 0 || dragRef.current || disabled || (kind === 'Importance' && (allocationDisabled || segment.siblingCount < 2))) return;
     event.preventDefault();
     event.stopPropagation();
     const svg = svgRef.current;
@@ -574,13 +578,14 @@ export function Sunburst({
             const appearance = propertyPresentation(itemById.get(segment.id)!, colorProperty);
             const selectedClass = segment.id === selectedId ? ' lm-sunburst__segment--selected' : '';
             const ghostClass = !segment.included ? ' lm-sunburst__segment--ghost' : '';
+            const contextClass = matchingIds && !matchingIds.has(segment.id) ? ' lm-sunburst__segment--context' : '';
             return (
               <g key={segment.id}
-                className={`lm-sunburst__segment${selectedClass}${ghostClass}`}
+                className={`lm-sunburst__segment${selectedClass}${ghostClass}${contextClass}`}
                 style={{ '--segment-color': appearance.color } as CSSProperties}
                 onContextMenu={event => { if (pointerType.current === 'touch' && (mode === 'Navigate' || omni)) { event.preventDefault(); return; } if (onContextMenu) { event.preventDefault(); event.stopPropagation(); cancelNavigation(); onContextMenu(segment.id, event.clientX, event.clientY); } }}
                 role="treeitem" tabIndex={0}
-                aria-label={`${segment.title}${appearance.label ? `, ${appearance.label}` : ''}, ${formatPercent(segment.actualShare)} share, ${formatPercent(layers.actual)} effort${segment.included ? '' : ', excluded'}`}
+                aria-label={`${segment.title}${appearance.label ? `, ${appearance.label}` : ''}, ${formatPercent(segment.actualShare)} share, ${formatPercent(layers.actual)} effort${segment.included ? '' : ', excluded'}${contextClass ? ', ancestor of matching Items' : ''}`}
                 aria-selected={segment.id === selectedId}
                 aria-description={segment.hasVisibleChildren ? 'Open details. Right-click or long-press for actions; double-click or Shift+Enter to zoom into branch.' : 'Open details. Right-click or long-press for actions.'}
                 onPointerEnter={(event) => { if (event.pointerType !== 'touch' && !dragRef.current) setHoveredId(segment.id); }}
@@ -699,7 +704,7 @@ export function Sunburst({
         </output>}
         {layout.length === 0 && <div className="lm-sunburst__empty">
           <strong>{focus?.title ?? settings.name}</strong>
-          <span role="status">{items.some(item => item.parentId === (focus?.id ?? null)) ? 'No included children' : focus ? 'No children yet' : 'No Items yet'}</span>
+          <span role="status">{matchingIds ? 'No Items match these filters in this branch.' : items.some(item => item.parentId === (focus?.id ?? null)) ? 'No included children' : focus ? 'No children yet' : 'No Items yet'}</span>
           <div className="lm-sunburst__empty-actions">
             {focus && <button onClick={() => onSelect(focus.id)}>Open details</button>}
             {focus && !disabled && onCreate && <button onClick={() => onCreate(focus.id)}>+ Add child</button>}
@@ -707,6 +712,7 @@ export function Sunburst({
           </div>
         </div>}
       </div>
+      {matchingIds && !compact && <p className="lm-sunburst__filter-note">Filtered view · clear filters to resize importance</p>}
       {fallbackCreates.length > 0 && <div className="lm-sunburst__create-list" aria-label="Add children to small slices">
         {fallbackCreates.map((segment) => <button key={segment.id} type="button" disabled={disabled}
           aria-label={`Add child to ${segment.title}`} onClick={() => onCreate?.(segment.id)}><span aria-hidden="true">＋</span> {segment.title}</button>)}

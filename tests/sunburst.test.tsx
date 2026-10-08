@@ -643,3 +643,15 @@ describe('configurable sunburst colors', () => {
     expect(screen.getAllByRole('treeitem')[0]!.style.getPropertyValue('--segment-color')).toBe('#7b8178');
   });
 });
+
+it('keeps effort and details available while disabling allocation in the filtered wheel', () => {
+  const view = mount([item('a1', null, 1), item('a2', null, 3), item('a3', 'a1', 1)], {mode: 'Omni', matchingIds: new Set(['a3'])});
+  expect(screen.queryByRole('treeitem', {name: /Item a2/})).toBeNull();
+  expect(screen.getByRole('treeitem', {name: /Item a1/}).getAttribute('aria-label')).toContain('ancestor of matching Items');
+  expect(screen.queryByRole('slider', {name: /Drag importance/})).toBeNull();
+  fireEvent.keyDown(screen.getByRole('slider', {name: 'Drag effort for Item a3'}), {key: 'ArrowUp'});
+  expect(view.onEffort).toHaveBeenCalledExactlyOnceWith('a3', 1);
+  fireEvent.click(screen.getByRole('treeitem', {name: /Item a3/}));
+  expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a3');
+  expect(view.onAllocate).not.toHaveBeenCalled();
+});

@@ -5,6 +5,7 @@ import type { ViewSort } from './view-sort';
 export type WheelMode = 'Navigate' | 'Omni' | 'Importance' | 'Effort' | 'Create';
 
 export interface SunburstProps {
+  matchingIds?: ReadonlySet<string>;
   settings?: WorkspaceSettings; colorPropertyId?: string | null;
   items: Item[]; selectedId: string | null; focusId: string | null; showAll: boolean;
   onSelect: (id: string) => void; onHighlight?: (id: string) => void; onFocus: (id: string | null) => void;

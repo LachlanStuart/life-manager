@@ -16,7 +16,8 @@ type Drop = { id: string; position: 'before' | 'after' | 'inside' };
 type Gesture = { id: string; pointerId: number; x: number; y: number; active: boolean; drop: Drop | null };
 type Undo = { command: Extract<ItemCommand, { type: 'restore-arrangement' }>; title: string; id: string };
 
-export function Outline({ items, settings, propertyId, sort, selectedId, disabled, historical, revision, active, onOpen, onCommand }: {
+export function Outline({ matchingIds, items, settings, propertyId, sort, selectedId, disabled, historical, revision, active, onOpen, onCommand }: {
+  matchingIds?: ReadonlySet<string>;
   items: Item[]; settings: WorkspaceSettings; propertyId?: string | null; sort: ViewSort; selectedId: string | null;
   disabled: boolean; historical: boolean; revision: number; active: boolean;
   onOpen: (id: string) => void; onCommand: (command: ItemCommand, revision: number) => Promise<void>;
@@ -42,10 +43,10 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
   const rowsRef = useRef<HTMLDivElement>(null);
   const createRef = useRef<HTMLInputElement>(null);
   const locked = disabled || pending;
-  const model = useMemo(() => outlineModel(items, expanded, all, query, settings, sort, propertyId), [items, expanded, all, query, settings, sort, propertyId]);
+  const model = useMemo(() => outlineModel(items, expanded, all, query, settings, sort, propertyId, matchingIds), [items, expanded, all, query, settings, sort, propertyId, matchingIds]);
   const efforts = useMemo(() => computeEfforts(items, settings), [items, settings]);
   const property = selectedProperty(settings, propertyId);
-  const selectedIds = items.filter(item => selection.has(item.id)).map(item => item.id);
+  const selectedIds = items.filter(item => selection.has(item.id) && (!matchingIds || matchingIds.has(item.id))).map(item => item.id);
   const toggle = (id: string) => setExpanded(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const focusRow = (id: string) => {
     const row = Array.from(rowsRef.current?.querySelectorAll<HTMLElement>('[data-outline-id]') ?? []).find(row => row.dataset.outlineId === id);
@@ -69,6 +70,13 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
     return () => { window.removeEventListener('keydown', escape); clearHover(); };
   }, []);
   useEffect(() => { if (!active || disabled) { cancelDrag(); setMoving(null); setEditing(null); setAddingTo(undefined); } }, [active, disabled]);
+  useEffect(() => {
+    cancelDrag();
+    if (matchingIds) setSelection(current => {
+      const next = new Set([...current].filter(id => matchingIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [matchingIds]);
   useEffect(() => { if (addingTo !== undefined && active) createRef.current?.focus(); }, [addingTo, active]);
 
   const issue = async (command: ItemCommand) => {
@@ -115,7 +123,7 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
     if (row && id && !invalid && rowsRef.current?.contains(row)) {
       const rect = row.getBoundingClientRect();
       const ratio = (event.clientY - rect.top) / rect.height;
-      const position = sort !== 'Order' || query.trim() ? 'inside' : ratio < .25 ? 'before' : ratio > .75 ? 'after' : 'inside';
+      const position = sort !== 'Order' || model.filtering ? 'inside' : ratio < .25 ? 'before' : ratio > .75 ? 'after' : 'inside';
       target = { id, position };
     }
     current.drop = target;
@@ -165,7 +173,7 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
     const count = descendantsOf(items, item.id).size;
     if (window.confirm(`Delete “${item.title}”${count ? ` and ${count} descendant${count === 1 ? '' : 's'}` : ''}? Historical snapshots will be preserved.`)) void issue({ type: 'delete', id: item.id });
   };
-  const orderedSelected = () => outlineModel(items, new Set(items.map(item => item.id)), true, '', settings, 'Order', propertyId).rows.filter(row => selection.has(row.item.id)).map(row => row.item.id);
+  const orderedSelected = () => outlineModel(items, new Set(items.map(item => item.id)), true, '', settings, 'Order', propertyId).rows.filter(row => selectedIds.includes(row.item.id)).map(row => row.item.id);
   const undoAvailable = undo && undo.command.expected.length === items.length && undo.command.expected.every(expected => {
     const item = items.find(item => item.id === expected.id);
     return item && item.parentId === expected.parentId && item.order === expected.order && item.weight === expected.weight && Boolean(item.allocationAuto) === Boolean(expected.allocationAuto) && item.included === expected.included;
@@ -181,7 +189,7 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
     </div>
     {selecting && <div className="lm-outline__bulk" aria-label="Selected Item actions">
       <span>{selectedIds.length} selected</span>
-      <button onClick={() => setSelection(new Set(model.rows.map(row => row.item.id)))}>Select shown rows</button>
+      <button onClick={() => setSelection(new Set(model.rows.filter(row => !row.contextOnly).map(row => row.item.id)))}>Select shown rows</button>
       <button onClick={() => setSelection(new Set())}>Clear selection</button>
       <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: true })}>Include</button>
       <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: false })}>Exclude</button>
@@ -202,7 +210,7 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
     <div className="lm-outline__rows" ref={rowsRef} role="tree" aria-label="Item hierarchy" aria-multiselectable={selecting || undefined}>
       {model.rows.map(({ item, depth, hasChildren, open, contextOnly }, index) => <div key={item.id}>
         <div className={`lm-outline__row${selectedId === item.id ? ' lm-outline__row--current' : ''}`} role="treeitem" tabIndex={0} aria-level={depth + 1}
-          aria-expanded={hasChildren ? open : undefined} aria-selected={selecting ? selection.has(item.id) : undefined} aria-label={item.title}
+          aria-expanded={hasChildren ? open : undefined} aria-selected={selecting ? selectedIds.includes(item.id) : undefined} aria-label={item.title}
           data-outline-id={item.id} data-depth={depth} data-hidden={!model.visible.has(item.id)} data-context={contextOnly}
           data-drop={drag?.drop?.id === item.id ? drag.drop.position : undefined} data-dragging={drag?.active && drag.id === item.id}
           style={{ '--outline-depth': depth } as CSSProperties}
@@ -216,17 +224,17 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
             if (event.key === 'Home') focusRow(model.rows[0]!.item.id);
             if (event.key === 'End') focusRow(model.rows[model.rows.length - 1]!.item.id);
             if (event.key === 'ArrowRight' && hasChildren) { if (!open) toggle(item.id); else focusRow(model.rows[index + 1]!.item.id); }
-            if (event.key === 'ArrowLeft') { if (hasChildren && open && !query.trim()) toggle(item.id); else if (item.parentId) focusRow(item.parentId); }
+            if (event.key === 'ArrowLeft') { if (hasChildren && open && !model.filtering) toggle(item.id); else if (item.parentId) focusRow(item.parentId); }
             if (event.key === 'Enter') onOpen(item.id);
             if (event.key === 'F2' && !locked) setEditing({ id: item.id, title: item.title });
-            if (event.key === ' ' && selecting) setSelection(current => { const next = new Set(current); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); return next; });
+            if (event.key === ' ' && selecting && (!matchingIds || matchingIds.has(item.id))) setSelection(current => { const next = new Set(current); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); return next; });
           }}>
           <div className="lm-outline__identity">
-            {selecting && <input type="checkbox" aria-label={`Select ${item.title}`} checked={selection.has(item.id)} onChange={event => setSelection(current => { const next = new Set(current); if (event.target.checked) next.add(item.id); else next.delete(item.id); return next; })} />}
+            {selecting && <input type="checkbox" aria-label={`Select ${item.title}`} disabled={Boolean(matchingIds && !matchingIds.has(item.id))} checked={selectedIds.includes(item.id)} onChange={event => setSelection(current => { const next = new Set(current); if (event.target.checked) next.add(item.id); else next.delete(item.id); return next; })} />}
             <button className="lm-outline__grip" aria-label={`Drag ${item.title}`} title="Drag to move; use Move to for a distant destination" disabled={locked}
               onPointerDown={event => { if (event.button !== 0 || locked) return; event.preventDefault(); gesture.current = { id: item.id, pointerId: event.pointerId, x: event.clientX, y: event.clientY, active: false, drop: null }; event.currentTarget.setPointerCapture?.(event.pointerId); }}
               onPointerMove={pointerMove} onPointerUp={event => finishDrag(event)} onPointerCancel={event => finishDrag(event, true)} onLostPointerCapture={cancelDrag}>⠿</button>
-            <button className="lm-outline__toggle" aria-label={`${open ? 'Collapse' : 'Expand'} ${item.title}`} disabled={!hasChildren || Boolean(query.trim())} onClick={() => toggle(item.id)}>{hasChildren ? open ? '▾' : '▸' : '·'}</button>
+            <button className="lm-outline__toggle" aria-label={`${open ? 'Collapse' : 'Expand'} ${item.title}`} disabled={!hasChildren || model.filtering} onClick={() => toggle(item.id)}>{hasChildren ? open ? '▾' : '▸' : '·'}</button>
             <div className="lm-outline__name">
               {editing?.id === item.id ? <input autoFocus aria-label={`Rename ${item.title}`} value={editing.title} maxLength={500} onChange={event => setEditing({ id: item.id, title: event.target.value })} onBlur={saveTitle}
                 onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); cancelEdit.current = true; event.currentTarget.blur(); setEditing(null); focusRow(item.id); } if (event.key === 'Enter') event.currentTarget.blur(); }} />
@@ -254,7 +262,7 @@ export function Outline({ items, settings, propertyId, sort, selectedId, disable
         {addingTo === item.id && creation(depth + 1)}
       </div>)}
       {addingTo === null && creation(0)}
-      {!model.rows.length && <p className="lm-outline__empty">{query.trim() ? 'No matching Items.' : all ? 'Add an Item to start your outline.' : 'No Items are included. Switch to All Items to choose some.'}</p>}
+      {!model.rows.length && <p className="lm-outline__empty">{model.filtering ? 'No matching Items.' : all ? 'Add an Item to start your outline.' : 'No Items are included. Switch to All Items to choose some.'}</p>}
     </div>
     <div className="lm-outline__footer"><span>{model.rows.length} shown · {items.length} total</span><span title="Allocation is relative to included siblings. Gray percentages are automatic.">Allocation = share within parent · gray = Auto</span></div>
     {moving && items.some(item => item.id === moving[0]) && <Modal title={moving.length === 1 ? `Move ${items.find(item => item.id === moving[0])!.title}` : `Move ${moving.length} Items`} error={error} onClose={() => !pending && setMoving(null)}>
