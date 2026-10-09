@@ -10,6 +10,9 @@ function move<T>(values: T[], from: number, by: number) {
   if (to < 0 || to >= values.length) return next;
   const [value] = next.splice(from, 1); next.splice(to, 0, value!); return next;
 }
+function unsetLabel(property: EnumProperty): string {
+  return property.id === 'status' ? 'No status' : property.unsetLabel;
+}
 
 export function WorkspaceSettingsEditor({ settings, items, disabled = false, onSave }: {
   settings: WorkspaceSettings; items: Item[]; disabled?: boolean;
@@ -50,7 +53,7 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
           <label>Unset color<input type="color" value={property.unsetColor} onChange={event => edit(property.id, {unsetColor: event.target.value})} /></label>
         </div>
         <label>Default for new Items<select aria-label={`${property.name} default for new Items`} value={property.defaultValue ?? ''} onChange={event => edit(property.id, {defaultValue: event.target.value || null})}>
-          <option value="">{property.unsetLabel}</option>{property.options.map(option => <option key={option.id} value={option.id}>{option.label || 'New option'}</option>)}
+          <option value="">{unsetLabel(property)}</option>{property.options.map(option => <option key={option.id} value={option.id}>{option.label || 'New option'}</option>)}
         </select></label>
         <div className="lm-property-options">
           {property.options.map((option, index) => <div className="lm-property-option" key={option.id}>
@@ -77,7 +80,7 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
           const replacementProperty = draft.properties.find(value => value.id === property.id);
           return <label key={`${property.id}:${option.id}`}>{property.name}: {option.label} ({count} Items)
             {replacementProperty ? <select aria-label={`Replace ${property.name}: ${option.label}`} value={replacements[property.id]?.[option.id] ?? ''} onChange={event => setReplacements({...replacements, [property.id]: {...replacements[property.id], [option.id]: event.target.value || null}})}>
-              <option value="">{replacementProperty.unsetLabel}</option>{replacementProperty.options.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}
+              <option value="">{unsetLabel(replacementProperty)}</option>{replacementProperty.options.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}
             </select> : <span>Property and current values will be removed.</span>}
           </label>;
         })}

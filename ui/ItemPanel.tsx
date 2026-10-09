@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Item, ItemCommand, T3LaunchReply } from '../src/types';
 import { DEFAULT_WORKSPACE_SETTINGS, lifecycleBehavior, propertyValue } from '../src/properties';
-import { PropertySelect, propertyPatch, selectedProperty } from './PropertySelect';
+import { PropertySelect, propertyChoices, propertyPatch, selectedProperty } from './PropertySelect';
 import { childrenOf, computeEfforts, effectiveIncluded, localShare, allocationLimit } from '../src/domain';
 import type { ItemPanelProps } from './contracts';
 import { NotesEditor } from './NotesEditor';
@@ -275,8 +275,7 @@ export function ItemPanel({
             {property && <select aria-label={settings ? `Selected children ${property.name}` : 'Selected children status'} value={'\0'} disabled={locked || !selected.size}
               onChange={event => bulk(propertyPatch(property.id, event.target.value || null))}>
               <option value={'\0'} disabled>{property.name}…</option>
-              <option value="">{property.unsetLabel}</option>
-              {property.options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+              {propertyChoices(property).map(option => <option key={option.id ?? 'unset'} value={option.id ?? ''}>{option.label}</option>)}
             </select>}
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ included: true })}>Include</button>
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ included: false })}>Hide</button>

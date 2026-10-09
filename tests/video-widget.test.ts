@@ -239,3 +239,14 @@ it('releases completed custom lifecycle references while skipped references stil
   const legacySkip = workspace([item('owner', null), item('skip', 'owner', { status: 'Skip', resourceUri: pathToFileURL(join(root, 'Movie.mp4')).href })]);
   expect(await videoWidget.render({ widgetId: 'local-video', itemId: 'owner', config: { root } }, legacySkip)).not.toContain('Movie.mp4');
 });
+
+
+it('treats a blank Status as the configured Cut default for video references', async () => {
+  const root = await tempMedia();
+  const state = workspace([item('owner', null), item('reference', 'owner', { status: null, resourceUri: pathToFileURL(join(root, 'Movie.mp4')).href })]);
+  state.settings = structuredClone(DEFAULT_WORKSPACE_SETTINGS);
+  state.settings.properties.find(property => property.id === 'status')!.defaultValue = 'Cut';
+  const html = await videoWidget.render({ widgetId: 'local-video', itemId: 'owner', config: { root, exclude: [] } }, state);
+  expect(html).toContain('Movie.mp4');
+  expect(state.dashboard.items[1]!.status).toBeNull();
+});

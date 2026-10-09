@@ -51,13 +51,8 @@ async function updateDockVisibility() {
 }
 
 function trayImage() {
-  const size = 36;
-  const pixels = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const dx = x - 17.5, dy = y - 17.5, radius = Math.hypot(dx, dy);
-    if (radius < 4 || (radius > 7 && radius < 10 && dx < 6) || (radius > 13 && radius < 16 && dy > -10)) pixels[(y * size + x) * 4 + 3] = 255;
-  }
-  const icon = nativeImage.createFromBitmap(pixels, { width: size, height: size, scaleFactor: 2 });
+  const icon = nativeImage.createFromBuffer(readFileSync(join(resources, 'tray-template.png')), { scaleFactor: 2 });
+  if (icon.isEmpty()) throw new Error('The Life Manager menu-bar icon could not be loaded.');
   icon.setTemplateImage(true);
   return icon;
 }

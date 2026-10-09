@@ -1,14 +1,18 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
+import { effectiveIncluded } from '../src/domain';
 import { type Item, type ItemCommand, type WorkspaceSettings } from '../src/types';
 import { buildKanbanModel, reorderedSiblingIds, type KanbanDropPosition } from './kanban-helpers';
-import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
+import { effectivePropertyValue } from './PropertySelect';
 import { presentationProperty, propertyPresentation } from './property-presentation';
 import type { ViewSort } from './view-sort';
 import './kanban.css';
 
 export interface KanbanProps {
   matchingIds?: ReadonlySet<string>;
+  showAll?: boolean;
+  onCreate?: (parentId: string | null, values: Record<string, string | null>) => void;
   items: Item[];
   sort?: ViewSort;
   settings?: WorkspaceSettings;
@@ -86,10 +90,10 @@ function columnTargetAtPoint(board: HTMLElement | null, clientX: number, clientY
   return column ? { kind: 'column', status: column.dataset.kanbanColumn || null } : null;
 }
 
-export function Kanban({ matchingIds, items, focusId, selectedId, disabled, onSelect, onContextMenu, onCommand, sort = 'Order', settings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId, colorPropertyId }: KanbanProps) {
+export function Kanban({ showAll = false, onCreate, matchingIds, items, focusId, selectedId, disabled, onSelect, onContextMenu, onCommand, sort = 'Order', settings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId, colorPropertyId }: KanbanProps) {
   const groupProperty = presentationProperty(settings, groupPropertyId);
   const colorProperty = presentationProperty(settings, colorPropertyId);
-  const model = React.useMemo(() => buildKanbanModel(items, focusId, sort, settings, groupPropertyId, matchingIds), [items, focusId, sort, settings, groupPropertyId, matchingIds]);
+  const model = React.useMemo(() => buildKanbanModel(items, focusId, sort, settings, groupPropertyId, matchingIds, showAll), [items, focusId, sort, settings, groupPropertyId, matchingIds, showAll]);
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const suppressClick = React.useRef(false);
   const dragRef = React.useRef<DragState | null>(null);
@@ -130,7 +134,7 @@ export function Kanban({ matchingIds, items, focusId, selectedId, disabled, onSe
   React.useEffect(() => {
     // Changing the focused branch changes the board underneath the pointer.
     cancelDrag();
-  }, [focusId, sort, settings, groupPropertyId, matchingIds, cancelDrag]);
+  }, [focusId, sort, settings, groupPropertyId, matchingIds, showAll, cancelDrag]);
 
   React.useEffect(() => {
     const onBlur = () => cancelDrag();
@@ -211,7 +215,7 @@ export function Kanban({ matchingIds, items, focusId, selectedId, disabled, onSe
     if (!target || !moving || target.kind === 'card' && target.targetId === moving.id) return;
     const commands: ItemCommand[] = [];
     const targetStatus = target.status;
-    if (groupProperty && targetStatus !== propertyValue(moving, groupProperty.id)) {
+    if (groupProperty && targetStatus !== effectivePropertyValue(moving, groupProperty)) {
       commands.push({ type: 'update', id: moving.id, patch: groupProperty.id === 'status'
         ? { status: targetStatus } : { properties: { [groupProperty.id]: targetStatus } } });
     }
@@ -296,7 +300,7 @@ export function Kanban({ matchingIds, items, focusId, selectedId, disabled, onSe
                       const dropPosition = activeDrop && drag?.target?.kind === 'card' ? drag.target.position : null;
                       return (
                         <article
-                          className={`lm-kanban__card${selectedId === card.item.id ? ' lm-kanban__card--selected' : ''}${isDragging ? ' lm-kanban__card--dragging' : ''}${dropPosition ? ` lm-kanban__card--drop-${dropPosition}` : ''}`}
+                          className={`lm-kanban__card${!effectiveIncluded(items, card.item.id) ? ' lm-kanban__card--excluded' : ''}${selectedId === card.item.id ? ' lm-kanban__card--selected' : ''}${isDragging ? ' lm-kanban__card--dragging' : ''}${dropPosition ? ` lm-kanban__card--drop-${dropPosition}` : ''}`}
                           data-lm-kanban-card="true"
                           data-kanban-card={card.item.id}
                           data-kanban-status={column.status ?? ''}
@@ -356,6 +360,7 @@ export function Kanban({ matchingIds, items, focusId, selectedId, disabled, onSe
                 </section>
               ))}
               {column.groups.length === 0 && <div className="lm-kanban__empty">Drop here</div>}
+              {onCreate && <button className="lm-kanban__new" disabled={locked} aria-label={`New item in ${column.label}`} onClick={() => onCreate(focusId, groupProperty ? { [groupProperty.id]: column.status } : {})}>+ New</button>}
             </div>
           </section>
         ))}
@@ -365,7 +370,7 @@ export function Kanban({ matchingIds, items, focusId, selectedId, disabled, onSe
           width: drag.width, minHeight: drag.height, '--lm-kanban-card-color': byId.has(drag.id) ? propertyPresentation(byId.get(drag.id)!, colorProperty).color : undefined, '--lm-kanban-card-font-size': `${drag.fontSize}px` } as React.CSSProperties}>
         <span className="lm-kanban__card-title">{byId.get(drag.id)?.title}</span>
       </div>, document.body)}
-      {model.cards.length === 0 && <p className="lm-kanban__empty-board">{matchingIds ? 'No Items match these filters in this branch.' : 'No included Items in this branch.'}</p>}
+      {model.cards.length === 0 && <p className="lm-kanban__empty-board">{matchingIds ? 'No Items match these filters in this branch.' : showAll ? 'No Items in this branch.' : 'No included Items in this branch.'}</p>}
     </section>
   );
 }

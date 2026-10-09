@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from './Icons';
 import type { Workspace } from '../src/types';
 export function PeriodControl({ workspace, snapshotId, busy, onSelect, onPlan, onNext, onReset }: {
   workspace: Workspace | null; snapshotId?: string; busy: boolean; onSelect: (id?: string) => void; onPlan: () => void; onNext: () => void; onReset: () => void;
@@ -19,10 +20,11 @@ export function PeriodControl({ workspace, snapshotId, busy, onSelect, onPlan, o
   const phase = snapshot ? snapshot.kind : planned ? 'Active' : 'Planning';
   const choose = (id?: string) => { setOpen(false); onSelect(id); };
   return <div className="lm-period-picker" ref={root}>
-    <button ref={button} type="button" aria-label="Dashboard period" aria-expanded={open} aria-haspopup="dialog" disabled={!workspace || busy} onClick={() => setOpen(value => !value)}>
-      {period?.name ?? 'Period'} <span>({phase})</span> <span aria-hidden="true">⌄</span>
+    <button ref={button} type="button" aria-label="Dashboard period" title={`${period?.name ?? 'Period'} (${phase})`} aria-expanded={open} aria-haspopup="dialog" disabled={!workspace || busy} onClick={() => setOpen(value => !value)}>
+      <Icon name="calendar" />
     </button>
     {open && <div className="lm-period-panel" role="dialog" aria-label="Choose a period">
+      <strong>{period?.name ?? 'Period'} ({phase})</strong>
       <div className="lm-period-flow" aria-label="Period phases">
         <button type="button" disabled aria-current={!snapshotId && !planned ? 'step' : undefined}>Planning</button><span aria-hidden="true">»</span>
         <button type="button" aria-label="Planning is finished" title="Finish planning" aria-current={!snapshotId && planned ? 'step' : undefined} disabled={!workspace || busy || planned || !!snapshotId} onClick={onPlan}>Active</button><span aria-hidden="true">»</span>

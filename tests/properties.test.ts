@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import initSqlJs from 'sql.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { computeEfforts, mutateItems, seedItems } from '../src/domain';
-import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
+import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue, lifecycleBehavior, propertyValue } from '../src/properties';
 import { createLifeManagerActions, workspaceSchema } from '../src/rpc';
 import { createLifeManagerStore, initializeDatabase, STORE_MIGRATIONS, type StoreDatabase } from '../src/store';
 import { createWidgetRegistry } from '../src/widgets';
@@ -24,6 +24,22 @@ function setup() {
 function item(items: Item[], id = 'build') { return items.find(value => value.id === id)!; }
 
 describe('configurable enum properties', () => {
+  it('uses the Status default as the effective value for null Items without rewriting storage', () => {
+    const config = settings();
+    const item = seedItems()[0]!;
+    const nullItem = { ...item, status: null, effortOverride: null };
+    const status = config.properties.find(property => property.id === 'status')!;
+    status.defaultValue = 'Done';
+    expect(effectivePropertyValue(nullItem, status)).toBe('Done');
+    expect(lifecycleBehavior(nullItem, config)).toBe('complete');
+    expect(computeEfforts([nullItem], config)[nullItem.id]).toBe(100);
+    status.defaultValue = 'Skip';
+    expect(effectivePropertyValue(nullItem, status)).toBe('Skip');
+    expect(lifecycleBehavior(nullItem, config)).toBe('skip');
+    expect(computeEfforts([nullItem], config)[nullItem.id]).toBe(0);
+    expect(nullItem.status).toBeNull();
+  });
+
   it('resets effort, allocation and chosen properties atomically without changing snapshots', () => {
     const { actions } = setup();
     const config = settings(); config.properties.push(priority(), { ...priority(), id: 'energy' });

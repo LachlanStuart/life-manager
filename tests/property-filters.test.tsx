@@ -40,16 +40,18 @@ it('tolerates corrupt or unavailable local storage', () => {
   expect(() => savePropertyFilters({status: ['Done']})).not.toThrow();
 });
 
-it('combines excluded values across properties, with defaults distinct from unset', () => {
+it('combines excluded values across properties, treating null Status as its default', () => {
   expect(matchingItemIds(items, {})).toBeUndefined();
   expect([...matchingItemIds(items, {status: ['Done', 'Later', null]})!]).toEqual(['ready', 'hidden-child']);
   expect([...matchingItemIds(items, {status: ['Done', 'Later', null], project: [null, 'b']})!]).toEqual(['ready']);
-  expect([...matchingItemIds(items, {status: ['Now', 'Done', null]})!]).toEqual(['hidden']);
+  expect([...matchingItemIds(items, {status: ['Now', 'Done', null]})!]).toEqual(['unset', 'hidden']);
+  expect([...matchingItemIds(items, {status: ['Later']}, settings)!]).toEqual(['root', 'ready', 'finished', 'hidden-child']);
   expect([...matchingItemIds(items, {project: [null, 'a', 'b']})!]).toEqual([]);
 });
 
 it('ignores removed properties and option IDs while keeping explicit None filters', () => {
   expect(activePropertyFilters({missing: ['x'], project: ['deleted'], status: ['Done', 'Done']}, settings)).toEqual({status: ['Done']});
+  expect(activePropertyFilters({status: [null]}, settings)).toEqual({status: ['Later']});
   expect(activePropertyFilters({project: [null, 'a', 'b']}, settings)).toEqual({project: [null, 'a', 'b']});
   expect(activePropertyFilters({project: [null, 'a', 'b']}, {...settings, properties: []})).toEqual({});
 });

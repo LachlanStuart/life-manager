@@ -16,7 +16,7 @@ Life Manager organises personal pursuits and supporting knowledge, makes intende
 
 **Lifecycle status**: An Item’s value in the lifecycle property. The starting Status property offers Later, Now, Doing, Blocked, Done, Skip, and Cut.
 
-**Unset**: No selected option. Changing a creation default does not fill unset values on existing Items.
+**Unset**: No stored option. Custom properties expose this as a distinct choice. Blank Status values behave as the configured Status default in the UI and lifecycle calculations; changing that default does not rewrite stored values.
 
 **Skip**: The starting Status option for a routine Item that is irrelevant for the current review.
 

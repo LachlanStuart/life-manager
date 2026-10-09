@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import type { Item, ItemCommand, ItemPatch, WorkspaceSettings } from '../src/types';
 import { allocationLimit, childrenOf, computeEfforts, localShare, mutateItems } from '../src/domain';
 import { ItemControls } from './ItemControls';
-import { selectedProperty, propertyPatch } from './PropertySelect';
+import { selectedProperty, propertyPatch, propertyChoices } from './PropertySelect';
 import { Icon } from './Icons';
 import { Modal } from './Modal';
 import { MoveItemForm } from './MoveItemForm';
@@ -18,14 +18,13 @@ type Drop = { id: string; position: 'before' | 'after' | 'inside' };
 type Gesture = { id: string; pointerId: number; x: number; y: number; active: boolean; drop: Drop | null };
 type Undo = { command: Extract<ItemCommand, { type: 'restore-arrangement' }>; title: string; id: string };
 
-export function Outline({ matchingIds, items, settings, propertyId, sort, selectedId, disabled, historical, revision, active, onOpen, onCommand }: {
+export function Outline({ matchingIds, items, settings, propertyId, sort, selectedId, disabled, historical, revision, active, showAll = true, onShowAllChange, onOpen, onCommand }: {
   matchingIds?: ReadonlySet<string>;
   items: Item[]; settings: WorkspaceSettings; propertyId?: string | null; sort: ViewSort; selectedId: string | null;
-  disabled: boolean; historical: boolean; revision: number; active: boolean;
+  disabled: boolean; historical: boolean; revision: number; active: boolean; showAll?: boolean; onShowAllChange?: (showAll: boolean) => void;
   onOpen: (id: string) => void; onCommand: (command: ItemCommand, revision: number) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(() => new Set(items.filter(item => item.parentId === null).map(item => item.id)));
-  const [all, setAll] = useState(true);
   const [query, setQuery] = useState('');
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState(new Set<string>());
@@ -38,7 +37,6 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
   const pendingRef = useRef(false);
   const [error, setError] = useState('');
   const [undo, setUndo] = useState<Undo | null>(null);
-  const [notice, setNotice] = useState('');
   const [drag, setDrag] = useState<Gesture | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const hover = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
@@ -46,7 +44,7 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
   const createRef = useRef<HTMLInputElement>(null);
   const bulkMenu = useRef<HTMLDetailsElement>(null);
   const locked = disabled || pending;
-  const model = useMemo(() => outlineModel(items, expanded, all, query, settings, sort, propertyId, matchingIds), [items, expanded, all, query, settings, sort, propertyId, matchingIds]);
+  const model = useMemo(() => outlineModel(items, expanded, showAll, query, settings, sort, propertyId, matchingIds), [items, expanded, showAll, query, settings, sort, propertyId, matchingIds]);
   const efforts = useMemo(() => computeEfforts(items, settings), [items, settings]);
   const property = selectedProperty(settings, propertyId);
   const selectedIds = items.filter(item => selection.has(item.id) && (!matchingIds || matchingIds.has(item.id))).map(item => item.id);
@@ -56,7 +54,7 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     row?.focus(); row?.scrollIntoView?.({ block: 'nearest' });
   };
   const revealRow = (id: string, hierarchy: Pick<Item, 'id' | 'parentId'>[]) => {
-    setQuery(''); setAll(true);
+    setQuery(''); onShowAllChange?.(true);
     const byId = new Map(hierarchy.map(item => [item.id, item]));
     setExpanded(current => {
       const result = new Set(current); let parent = byId.get(id)?.parentId;
@@ -109,7 +107,6 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     if (await issue(command)) {
       const title = ids.length === 1 ? items.find(item => item.id === ids[0])!.title : `${ids.length} selected Items`;
       setUndo({ title, id: ids[0]!, command: { type: 'restore-arrangement', placements: items.map(placement), expected: next.map(item => ({ ...placement(item), included: item.included })) } });
-      setNotice(`Moved ${title} to ${items.find(item => item.id === parentId)?.title ?? settings.name}.`);
       setMoving(null);
       // A move must stay inspectable even if it leaves the search/dashboard filter.
       revealRow(ids[0]!, next);
@@ -187,6 +184,28 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     if (window.confirm(`Delete “${item.title}”${count ? ` and ${count} descendant${count === 1 ? '' : 's'}` : ''}? Historical snapshots will be preserved.`)) void issue({ type: 'delete', id: item.id });
   };
   const orderedSelected = () => outlineModel(items, new Set(items.map(item => item.id)), true, '', settings, 'Order', propertyId).rows.filter(row => selectedIds.includes(row.item.id)).map(row => row.item.id);
+  const deleteSelected = () => {
+    if (locked || historical || !selectedIds.length) return;
+    const selected = new Set(selectedIds);
+    const roots = selectedIds.filter(id => {
+      let parent = items.find(item => item.id === id)?.parentId ?? null;
+      while (parent !== null) {
+        if (selected.has(parent)) return false;
+        parent = items.find(item => item.id === parent)?.parentId ?? null;
+      }
+      return true;
+    });
+    // Selected descendants are already covered by their selected ancestor's
+    // subtree; leave them out of the confirmation count and command payload.
+    const descendants = new Set(roots.flatMap(id => [...descendantsOf(items, id)]).filter(id => !selected.has(id)));
+    const selectedLabel = `${selectedIds.length} selected Item${selectedIds.length === 1 ? '' : 's'}`;
+    const descendantLabel = descendants.size ? ` and ${descendants.size} descendant${descendants.size === 1 ? '' : 's'}` : '';
+    if (!window.confirm(`Delete ${selectedLabel}${descendantLabel}? Historical snapshots will be preserved.`)) return;
+    void issue({ type: 'delete-many', ids: roots }).then(saved => { if (saved) setSelection(new Set()); });
+  };
+  const expandable = items.some(item => childrenOf(items, item.id).length > 0);
+  const shouldExpand = expandable && !model.filtering && items.some(item => childrenOf(items, item.id).length > 0 && !expanded.has(item.id));
+  const expansionLabel = shouldExpand ? 'Expand all' : 'Collapse all';
   const undoAvailable = undo && undo.command.expected.length === items.length && undo.command.expected.every(expected => {
     const item = items.find(item => item.id === expected.id);
     return item && item.parentId === expected.parentId && item.order === expected.order && item.weight === expected.weight && Boolean(item.allocationAuto) === Boolean(expected.allocationAuto) && item.included === expected.included;
@@ -195,16 +214,34 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     <div className="lm-outline__toolbar">
       <strong>{settings.name}</strong>
       <input type="search" aria-label="Find in outline" placeholder="Find in outline…" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setQuery(''); }} />
-      <select aria-label="Outline visibility" value={all ? 'all' : 'dashboard'} onChange={event => setAll(event.target.value === 'all')}><option value="all">All Items</option><option value="dashboard">Dashboard only</option></select>
-      <details className="lm-outline__expansion"><summary aria-label="Expand outline" title="Expand or collapse all"><span>Expand</span><span className="lm-outline__expand-icon" aria-hidden="true">↕</span></summary><div><button onClick={event => { setExpanded(new Set(items.map(item => item.id))); event.currentTarget.closest('details')!.open = false; }}>Expand all</button><button onClick={event => { setExpanded(new Set()); event.currentTarget.closest('details')!.open = false; }}>Collapse all</button></div></details>
+      <button className="lm-outline__expansion" aria-label={expansionLabel} title={expansionLabel} disabled={model.filtering || !expandable} onClick={() => setExpanded(new Set(shouldExpand ? items.map(item => item.id) : []))}><span className="lm-outline__expansion-label">{expansionLabel}</span><span className="lm-outline__expand-icon" aria-hidden="true">↕</span></button>
       <button className="lm-outline__select" aria-label="Select" aria-pressed={selecting} disabled={disabled} onClick={() => { setSelecting(value => !value); setSelection(new Set()); }}>{selecting ? 'Done' : 'Select'}</button>
-      <button className="lm-outline__add" aria-label="Add Item" title="Add Item" disabled={locked} onClick={() => beginAdd(null)}>+<span> Add Item</span></button>
+      <button className="lm-outline__add" aria-label="New" title="New" disabled={locked} onClick={() => beginAdd(null)}>+<span> New</span></button>
+      {undoAvailable && <button className="lm-outline__undo" disabled={locked} onClick={() => {
+        if (!undo) return;
+        void issue(undo.command).then(saved => { if (saved) { revealRow(undo.id, undo.command.placements); setUndo(null); } });
+      }}>Undo move</button>}
     </div>
+    {selecting && <div className="lm-outline__bulk" role="toolbar" aria-label="Selected Item actions">
+      <span role="status">{selectedIds.length} selected</span>
+      <button onClick={() => setSelection(new Set(model.rows.filter(row => !row.contextOnly).map(row => row.item.id)))} aria-label="Select shown rows">All shown</button>
+      <button onClick={() => setSelection(new Set())} aria-label="Clear selection" disabled={!selectedIds.length}>Clear</button>
+      {!historical && <button className="lm-outline__danger" disabled={locked || !selectedIds.length} onClick={deleteSelected}>Delete</button>}
+      <details ref={bulkMenu} className="lm-outline__bulk-menu" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeBulkMenu(); } }}>
+        <summary aria-label="Bulk actions" title="Selected Item actions">Actions <span aria-hidden="true">⌄</span></summary>
+        <div className="lm-outline__bulk-options">
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: true })}>Include</button>
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: false })}>Exclude</button>
+          {property && <select aria-label={`Set selected ${property.name}`} value="" disabled={locked || !selectedIds.length} onChange={event => bulk(propertyPatch(property.id, JSON.parse(event.target.value) as string | null))}>
+            <option value="" disabled>{property.name}…</option>{propertyChoices(property).map(option => <option key={option.id ?? 'unset'} value={JSON.stringify(option.id)}>{option.label}</option>)}
+          </select>}
+          <button disabled={locked || !selectedIds.length} onClick={() => { closeBulkMenu(); setMoving(orderedSelected()); }}>Move selected…</button>
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ allocationAuto: true })}>Allocation to Auto</button>
+          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ effortOverride: null })}>Effort to Auto</button>
+        </div>
+      </details>
+    </div>}
     {error && <p className="lm-outline__error" role="alert">{error}</p>}
-    {notice && <div className="lm-outline__notice" role="status"><span>{notice}</span>{undoAvailable && <button disabled={locked} onClick={() => {
-      if (!undo) return;
-      void issue(undo.command).then(saved => { if (saved) { revealRow(undo.id, undo.command.placements); setUndo(null); setNotice(`Undid move of ${undo.title}.`); } });
-    }}>Undo move</button>}<button aria-label="Dismiss move notice" onClick={() => { setNotice(''); setUndo(null); }}>×</button></div>}
     {drag?.active && <div className="lm-outline__drop-message" role="status">{drag.drop ? `${drag.drop.position === 'inside' ? 'Move into' : `Place ${drag.drop.position}`} ${items.find(item => item.id === drag.drop?.id)?.title}` : 'Choose a destination'}</div>}
     <div className="lm-outline__head" aria-hidden="true"><span>Item</span><span className="lm-outline__columns"><span>Included</span><span>{property?.name ?? ''}</span><span title="Share within parent">Allocation</span><span>Effort</span><span /></span><span /></div>
     <div className="lm-outline__rows" ref={rowsRef} role="tree" aria-label="Item hierarchy" aria-multiselectable={selecting || undefined}>
@@ -261,26 +298,8 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
         {addingTo === item.id && creation(depth + 1)}
       </div>)}
       {addingTo === null && creation(0)}
-      {!model.rows.length && <p className="lm-outline__empty">{model.filtering ? 'No matching Items.' : all ? 'Add an Item to start your outline.' : 'No Items are included. Switch to All Items to choose some.'}</p>}
+      {!model.rows.length && <p className="lm-outline__empty">{model.filtering ? 'No matching Items.' : showAll ? 'Add an Item to start your outline.' : 'No Items are included. Switch to All Items to choose some.'}</p>}
     </div>
-    {selecting && <div className="lm-outline__bulk" role="toolbar" aria-label="Selected Item actions">
-      <span role="status">{selectedIds.length} selected</span>
-      <button onClick={() => setSelection(new Set(model.rows.filter(row => !row.contextOnly).map(row => row.item.id)))} aria-label="Select shown rows">All shown</button>
-      <button onClick={() => setSelection(new Set())} aria-label="Clear selection" disabled={!selectedIds.length}>Clear</button>
-      <details ref={bulkMenu} className="lm-outline__bulk-menu" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeBulkMenu(); } }}>
-        <summary aria-label="Bulk actions" title="Selected Item actions">Actions <span aria-hidden="true">⌃</span></summary>
-        <div className="lm-outline__bulk-options">
-          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: true })}>Include</button>
-          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ included: false })}>Exclude</button>
-          {property && <select aria-label={`Set selected ${property.name}`} value="" disabled={locked || !selectedIds.length} onChange={event => bulk(propertyPatch(property.id, JSON.parse(event.target.value) as string | null))}>
-            <option value="" disabled>{property.name}…</option><option value="null">{property.unsetLabel}</option>{property.options.map(option => <option key={option.id} value={JSON.stringify(option.id)}>{option.label}</option>)}
-          </select>}
-          <button disabled={locked || !selectedIds.length} onClick={() => { closeBulkMenu(); setMoving(orderedSelected()); }}>Move selected…</button>
-          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ allocationAuto: true })}>Allocation to Auto</button>
-          <button disabled={locked || !selectedIds.length} onClick={() => bulk({ effortOverride: null })}>Effort to Auto</button>
-        </div>
-      </details>
-    </div>}
     {moving && items.some(item => item.id === moving[0]) && <Modal title={moving.length === 1 ? `Move ${items.find(item => item.id === moving[0])!.title}` : `Move ${moving.length} Items`} error={error} onClose={() => !pending && setMoving(null)}>
       <MoveItemForm item={items.find(item => item.id === moving[0])!} movingIds={moving} items={items} workspaceName={settings.name} disabled={locked} onMove={parentId => void arrange(moving, parentId)} onCancel={() => setMoving(null)} />
     </Modal>}

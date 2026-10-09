@@ -492,3 +492,21 @@ it('uses configured labels and nullable values in the context menu', () => {
   fireEvent.click(screen.getByRole('menuitemradio', { name: 'No priority' }));
   expect(onProperty).toHaveBeenCalledWith('priority', null);
 });
+
+it('uses the Status default for null values and removes the Unset status choice', () => {
+  const item = { ...items[1]!, status: null };
+  render(<ItemContextMenu item={item} x={10} y={10} disabled={false} settings={customSettings} propertyId="status"
+    onProperty={vi.fn()} onOpen={vi.fn()} onClose={vi.fn()} />);
+  expect(screen.getByRole('menuitemradio', { name: 'Later' }).getAttribute('aria-checked')).toBe('true');
+  expect(screen.queryByRole('menuitemradio', { name: 'Unset' })).toBeNull();
+  expect(screen.queryByRole('menuitemradio', { name: 'No status' })).toBeNull();
+});
+
+it('keeps a neutral No status choice when Status has no default', () => {
+  const settings = { ...customSettings, properties: customSettings.properties.map(property => property.id === 'status' ? { ...property, defaultValue: null } : property) };
+  const item = { ...items[1]!, status: null };
+  render(<ItemContextMenu item={item} x={10} y={10} disabled={false} settings={settings} propertyId="status"
+    onProperty={vi.fn()} onOpen={vi.fn()} onClose={vi.fn()} />);
+  expect(screen.getByRole('menuitemradio', { name: 'No status' }).getAttribute('aria-checked')).toBe('true');
+  expect(screen.queryByRole('menuitemradio', { name: 'Unset' })).toBeNull();
+});

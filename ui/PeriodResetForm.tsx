@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { propertyValue } from '../src/properties';
 import type { Item, ItemCommand, ItemPatch, WorkspaceSettings } from '../src/types';
+import { propertyChoices } from './PropertySelect';
 
 export function PeriodResetForm({ items, settings, busy, onCancel, onApply }: {
   items: Item[]; settings: WorkspaceSettings; busy: boolean;
@@ -46,8 +47,7 @@ export function PeriodResetForm({ items, settings, busy, onCancel, onApply }: {
           <label><input type="checkbox" checked={selected[property.id] ?? false} onChange={event => setSelected(current => ({ ...current, [property.id]: event.target.checked }))} />Set {property.name} to</label>
           <select aria-label={`${property.name} reset value`} disabled={!selected[property.id]} value={values[property.id] ?? ''}
             onChange={event => setValues(current => ({ ...current, [property.id]: event.target.value || null }))}>
-            <option value="">{property.unsetLabel}{property.defaultValue === null ? ' (default)' : ''}</option>
-            {property.options.map(option => <option key={option.id} value={option.id}>{option.label}{option.id === property.defaultValue ? ' (default)' : ''}</option>)}
+            {propertyChoices(property).map(option => <option key={option.id ?? 'unset'} value={option.id ?? ''}>{option.label}{option.id === property.defaultValue ? ' (default)' : ''}</option>)}
           </select>
         </div>
         {selected[property.id] && <small>{affected(items.filter(item => propertyValue(item, property.id) !== values[property.id]).length)}</small>}

@@ -80,6 +80,19 @@ describe('kanban model', () => {
     expect(kanbanItems(hiddenParent, 'root').map((entry) => entry.id)).toEqual(['b']);
   });
 
+  it('traverses excluded branches when Show all is enabled', () => {
+    const hiddenParent: Item = { ...branchItems[0]!, id: 'hidden-parent', parentId: null, title: 'Hidden parent', included: false, order: 2 };
+    const hiddenChild: Item = { ...branchItems[1]!, id: 'hidden-child', parentId: 'hidden-parent', title: 'Hidden child', included: true, order: 0 };
+    const allItems = [...branchItems, hiddenParent, hiddenChild];
+    expect(kanbanItems(allItems, null)).toEqual(expect.arrayContaining([branchItems.find(entry => entry.id === 'nested')!, branchItems.find(entry => entry.id === 'b')!, branchItems.find(entry => entry.id === 'other')!]));
+    expect(kanbanItems(allItems, null, 'Order', DEFAULT_WORKSPACE_SETTINGS, undefined, true).map((entry) => entry.id)).toEqual([
+      'nested', 'nested-hidden', 'b', 'hidden', 'other', 'hidden-child',
+    ]);
+    expect(buildKanbanModel(allItems, null, 'Order', DEFAULT_WORKSPACE_SETTINGS, undefined, undefined, true).cards.map((card) => card.item.id)).toEqual([
+      'nested', 'nested-hidden', 'b', 'hidden', 'other', 'hidden-child',
+    ]);
+  });
+
   it('uses inclusion rather than status or weight to suppress parent cards', () => {
     const finished = branchItems.map((entry) => entry.id === 'nested' ? { ...entry, status: 'Done' as const, weight: 0 } : entry);
     expect(kanbanItems(finished, 'root').map((entry) => entry.id)).toEqual(['nested', 'b']);
@@ -94,7 +107,7 @@ describe('kanban model', () => {
 
   it('keeps requested status order and visually groups cards by their immediate parent path', () => {
     const model = buildKanbanModel(branchItems, 'root');
-    expect(model.columns.map((column) => column.status)).toEqual(['Now', 'Doing', 'Blocked', 'Done', 'Later', 'Skip', 'Cut', null]);
+    expect(model.columns.map((column) => column.status)).toEqual(['Now', 'Doing', 'Blocked', 'Done', 'Later', 'Skip', 'Cut']);
     expect(model.columns[0]?.groups).toEqual([]);
     expect(model.columns[1]?.groups[0]?.parentPath.map((entry) => entry.title)).toEqual(['Build', 'Alpha']);
     expect(model.columns[4]?.groups[0]?.cards.map((card) => card.item.id)).toEqual(['b']);
@@ -398,7 +411,7 @@ describe('configurable Kanban properties', () => {
       .toEqual([['Reading', ['a']], ['Making', ['b']], ['Uncategorised', ['c']]]);
     mountBoard();
     expect(screen.getByRole('button', { name: 'a, Reading' }).style.getPropertyValue('--lm-kanban-card-color')).toBe('#c88d51');
-    expect(screen.getByRole('button', { name: 'c, Uncategorised' }).style.getPropertyValue('--lm-kanban-card-color')).toBe('#b4b8ae');
+    expect(screen.getByRole('button', { name: 'c, Uncategorised' }).style.getPropertyValue('--lm-kanban-card-color')).toBe('#7b8178');
   });
 
   it('dragging changes only the grouped custom property, including clearing its value', async () => {
@@ -411,8 +424,9 @@ describe('configurable Kanban properties', () => {
   });
 
   it('clears scalar status when dropping into its unset column', async () => {
-    const { onCommand } = mountBoard({ groupPropertyId: 'status' });
-    dragFromTo(screen.getByRole('button', { name: 'a, Now' }), screen.getByRole('listitem', { name: /^Unset:/ }));
+    const statusUnsetSettings = { ...categorySettings, properties: categorySettings.properties.map(property => property.id === 'status' ? { ...property, defaultValue: null } : property) };
+    const { onCommand } = mountBoard({ settings: statusUnsetSettings, groupPropertyId: 'status' });
+    dragFromTo(screen.getByRole('button', { name: 'a, Now' }), screen.getByRole('listitem', { name: /^No status:/ }));
     await waitFor(() => expect(onCommand).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: 'a', patch: { status: null } }));
   });
 

@@ -80,3 +80,9 @@
 @media (prefers-reduced-motion: reduce) {
   .lm-kanban__card { transition: none; }
 }
+
+.lm-kanban__new { display: block; width: auto; margin: 8px 0 0 auto; padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; color: #657260; font: inherit; font-size: 12px; cursor: pointer; }
+.lm-kanban__new:hover { background: #edf0e6; }
+.lm-kanban__new:disabled { opacity: .45; cursor: default; }
+
+.lm-kanban__card--excluded { opacity: .6; font-style: italic; }

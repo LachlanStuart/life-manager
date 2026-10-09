@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Item, WorkspaceSettings } from '../src/types';
-import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
-import { selectedProperty } from './PropertySelect';
+import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue } from '../src/properties';
+import { propertyChoices, selectedProperty } from './PropertySelect';
 import { Icon } from './Icons';
 
 export function ItemContextMenu({ item, x, y, disabled, settings, propertyId, onProperty, onStatus, onOpen, onClose, onInclude, onMove, onZoom, canZoom = true }: {
@@ -11,8 +11,8 @@ export function ItemContextMenu({ item, x, y, disabled, settings, propertyId, on
   onInclude?: () => void; onMove?: () => void; onZoom?: () => void; canZoom?: boolean;
 }) {
   const property = selectedProperty(settings ?? DEFAULT_WORKSPACE_SETTINGS, propertyId);
-  const value = property ? propertyValue(item, property.id) : null;
-  const options = property ? [{ id: null, label: property.unsetLabel, color: property.unsetColor }, ...property.options] : [];
+  const value = property ? effectivePropertyValue(item, property) : null;
+  const options = property ? propertyChoices(property) : [];
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: x, top: y });
   useLayoutEffect(() => {

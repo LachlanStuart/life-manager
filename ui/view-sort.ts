@@ -1,5 +1,5 @@
 import { computeEfforts, siblingShares } from '../src/domain';
-import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
+import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue } from '../src/properties';
 import { presentationProperty } from './property-presentation';
 import type { Item, Status, WorkspaceSettings } from '../src/types';
 
@@ -13,7 +13,7 @@ export function viewComparator(items: readonly Item[], sort: ViewSort = 'Order',
   const property = presentationProperty(settings, propertyId);
   const rank = (item: Item) => {
     if (!property) return 0;
-    const index = property.options.findIndex(option => option.id === propertyValue(item, property.id));
+    const index = property.options.findIndex(option => option.id === effectivePropertyValue(item, property));
     return index < 0 ? property.options.length : index;
   };
   if (sort === 'Importance') {

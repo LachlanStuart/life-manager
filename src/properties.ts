@@ -30,12 +30,23 @@ export function workspaceSettings(workspace?: Pick<Workspace, 'settings'>): Work
 export function propertyValue(item: Item, propertyId: string): string | null {
   return propertyId === 'status' ? item.status ?? null : item.properties?.[propertyId] ?? null;
 }
+/**
+ * Return the value used by the status presentation and lifecycle rules.
+ *
+ * Item storage keeps an explicit null so older and imported data remains
+ * lossless. The status UI treats that null as the configured default, while
+ * custom properties continue to expose their own unset value.
+ */
+export function effectivePropertyValue(item: Item, property: EnumProperty): string | null {
+  const value = propertyValue(item, property.id);
+  return property.id === 'status' ? value ?? property.defaultValue : value;
+}
 export function propertyOption(property: EnumProperty, value: string | null): EnumOption | undefined {
   return property.options.find(option => option.id === value);
 }
 export function lifecycleBehavior(item: Item, settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS): 'normal' | 'complete' | 'skip' {
   const property = settings.properties.find(property => property.id === settings.lifecyclePropertyId);
-  return property ? propertyOption(property, propertyValue(item, property.id))?.behavior ?? 'normal' : 'normal';
+  return property ? propertyOption(property, effectivePropertyValue(item, property))?.behavior ?? 'normal' : 'normal';
 }
 export function defaultPropertyValues(settings: WorkspaceSettings): Pick<Item, 'status' | 'properties'> {
   return {

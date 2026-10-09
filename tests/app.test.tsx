@@ -220,7 +220,8 @@ describe('standalone workspace', () => {
   });
   it('Show all changes display only', async () => {
     const { screen, mutations } = setup(); await screen.findByText('Select Tend');
-    fireEvent.click(screen.getByLabelText('Show all')); expect(mutations).toHaveLength(0);
+    fireEvent.click(screen.getByLabelText('Filters'));
+    fireEvent.click(screen.getByRole('button', { name: 'Show excluded items' })); expect(mutations).toHaveLength(0);
   });
   it('keeps Kanban in navigation and returns from an Item to the board', async () => {
     const { screen, mutations } = setup('/?view=kanban');
@@ -540,4 +541,27 @@ it('lets an explicit link override saved filters and keeps unfiltered history un
   await screen.findByRole('treeitem', {name: 'Tend'});
   expect(screen.getByRole('treeitem', {name: 'Build'})).toBeDefined();
   expect(JSON.parse(localStorage.getItem('life-manager.property-filters')!)).toEqual({});
+});
+
+it('creates from a Kanban column with its status and the focused parent', async () => {
+  const { screen, mutations } = setup('/?view=kanban&focus=tend');
+  await screen.findByRole('button', { name: 'New item in Doing' });
+  fireEvent.click(screen.getByRole('button', { name: 'New item in Doing' }));
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Follow up' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create Item' }));
+  await waitFor(() => expect(mutations).toHaveLength(1));
+  expect(mutations[0].command).toMatchObject({ type: 'create', parentId: 'tend', title: 'Follow up', patch: { status: 'Doing' } });
+});
+
+it('shares excluded-item visibility between Outline and Kanban through Filters', async () => {
+  const { screen, mutations } = setup('/?view=outline', [{ id: 'hidden', parentId: 'tend', order: 0, title: 'Hidden task', status: 'Later', notes: '', included: false, weight: 1, effortOverride: null }]);
+  await screen.findByRole('tree', { name: 'Item hierarchy' });
+  expect(screen.queryByRole('treeitem', { name: 'Hidden task' })).toBeNull();
+  fireEvent.click(screen.getByLabelText('Filters'));
+  fireEvent.click(screen.getByRole('button', { name: 'Show excluded items' }));
+  expect(screen.getByRole('treeitem', { name: 'Hidden task' })).toBeTruthy();
+  fireEvent.click(screen.getByLabelText('Close filters'));
+  fireEvent.click(screen.getByRole('button', { name: 'Kanban' }));
+  expect(await screen.findByRole('button', { name: 'Hidden task, Later' })).toBeTruthy();
+  expect(mutations).toHaveLength(0);
 });

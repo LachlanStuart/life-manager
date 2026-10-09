@@ -10,14 +10,16 @@ import type { ViewSort } from '../ui/view-sort';
 
 const item = (id: string, parentId: string | null, extra: Partial<Item> = {}): Item => ({ id, title: id, parentId, order: 0, status: 'Later', notes: '', included: true, weight: 1, allocationAuto: true, effortOverride: null, ...extra });
 const fixture = () => [item('Build', null), item('Garden', 'Build'), item('Sketch', 'Garden'), item('Test', 'Garden', { order: 1 }), item('Learn', null, { order: 1, included: false }), item('Japanese', 'Learn')];
-function setup({ disabled = false, historical = false, sort = 'Order' as ViewSort, reject = false, matchingIds = undefined as ReadonlySet<string> | undefined } = {}) {
+function setup({ disabled = false, historical = false, sort = 'Order' as ViewSort, reject = false, matchingIds = undefined as ReadonlySet<string> | undefined, showAll: initialShowAll = true } = {}) {
   const commands: ItemCommand[] = [];
   let current = fixture();
   const open = vi.fn();
   function Harness() {
     const [items, setItems] = useState(current);
     const [active, setActive] = useState(true);
+    const [showAll, setShowAll] = useState(initialShowAll);
     return <><button onClick={() => setActive(value => !value)}>Switch view</button><Outline matchingIds={matchingIds} items={items} settings={settings} propertyId="status" sort={sort} selectedId={null} disabled={disabled} historical={historical} revision={commands.length} active={active} onOpen={open}
+      showAll={showAll} onShowAllChange={setShowAll}
       onCommand={async command => { if (reject) throw new Error('Revision conflict'); current = mutateItems(current, command, settings); commands.push(command); setItems(current); }} /></>;
   }
   const screen = render(<Harness />);
@@ -42,9 +44,19 @@ it('starts at two levels, distinguishes inherited hiding, and preserves expansio
   expect(screen.getByRole('treeitem', { name: 'Sketch' })).toBeTruthy();
   fireEvent.click(screen.getByText('Switch view')); fireEvent.click(screen.getByText('Switch view'));
   expect(screen.getByRole('treeitem', { name: 'Sketch' })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Outline visibility'), { target: { value: 'dashboard' } });
-  expect(screen.queryByRole('treeitem', { name: 'Japanese' })).toBeNull();
   expect(commands).toEqual([]);
+});
+
+it('uses a contextual expansion button and exposes the shared New action', () => {
+  const { screen } = setup();
+  expect(screen.getByRole('button', { name: 'Expand all' })).toBeTruthy();
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+  expect(screen.getByRole('button', { name: 'Collapse all' })).toBeTruthy();
+  expect(screen.getByRole('treeitem', { name: 'Sketch' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+  expect(screen.queryByRole('treeitem', { name: 'Sketch' })).toBeNull();
 });
 
 it('search reveals matching descendants with ancestors and restores prior collapse on clearing', () => {
@@ -112,8 +124,22 @@ it('moves through the searchable picker, preserves children, and undoes placemen
   await waitFor(() => expect(current().find(item => item.id === 'Garden')?.parentId).toBe('Japanese'));
   expect(current().find(item => item.id === 'Sketch')?.parentId).toBe('Garden');
   await waitFor(() => expect((screen.getByText('Undo move') as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.queryByLabelText('Dismiss move notice')).toBeNull();
   fireEvent.click(screen.getByText('Undo move'));
   await waitFor(() => expect(current().find(item => item.id === 'Garden')?.parentId).toBe('Build'));
+});
+
+it('asks the shared visibility control to reveal a moved Item', async () => {
+  const { screen, current } = setup({ showAll: false });
+  expect(screen.queryByRole('treeitem', { name: 'Learn' })).toBeNull();
+  fireEvent.click(screen.getByLabelText('Actions for Garden'));
+  fireEvent.click(within(screen.getByLabelText('Actions for Garden').parentElement!).getByText('Move to…'));
+  const dialog = screen.getByRole('dialog', { name: 'Move Garden' });
+  fireEvent.change(within(dialog).getByLabelText('Find a destination'), { target: { value: 'Learn' } });
+  fireEvent.change(within(dialog).getByLabelText('Move to'), { target: { value: 'Learn' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }));
+  await waitFor(() => expect(current().find(item => item.id === 'Garden')?.parentId).toBe('Learn'));
+  expect(screen.getByRole('treeitem', { name: 'Learn' })).toBeTruthy();
 });
 
 it.each(['inside', 'before', 'after'] as const)('drags to %s a row with a clear target', async position => {
@@ -207,14 +233,14 @@ it('keeps filtered ancestors as context and applies bulk actions only to matchin
 });
 
 
-it('keeps selection actions in a dismissible bottom bar and omits the persistent footer', () => {
+it('keeps selection actions beside the toggle and omits the persistent footer', () => {
   const { screen } = setup();
   expect(screen.queryByRole('toolbar', { name: 'Selected Item actions' })).toBeNull();
   expect(screen.queryByText(/Allocation =/)).toBeNull();
   expect(screen.queryByText(/shown ·/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Select' }));
   const toolbar = screen.getByRole('toolbar', { name: 'Selected Item actions' });
-  expect(screen.getByRole('tree').compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(toolbar.compareDocumentPosition(screen.getByRole('tree')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect((screen.getByLabelText('Bulk actions').parentElement as HTMLDetailsElement).open).toBe(false);
   fireEvent.click(screen.getByLabelText('Bulk actions'));
   expect((screen.getByLabelText('Bulk actions').parentElement as HTMLDetailsElement).open).toBe(true);
@@ -225,4 +251,35 @@ it('keeps selection actions in a dismissible bottom bar and omits the persistent
   expect((screen.getByLabelText('Bulk actions').parentElement as HTMLDetailsElement).open).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Select' }));
   expect(screen.queryByRole('toolbar', { name: 'Selected Item actions' })).toBeNull();
+});
+
+it('bulk deletes selected roots once, confirms only unique descendants, and clears after success', async () => {
+  const { screen, commands } = setup();
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+  fireEvent.click(screen.getByLabelText('Select Build'));
+  fireEvent.click(screen.getByLabelText('Select Garden'));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  expect(confirm).toHaveBeenCalledWith('Delete 2 selected Items and 2 descendants? Historical snapshots will be preserved.');
+  await waitFor(() => expect(commands.at(-1)).toEqual({ type: 'delete-many', ids: ['Build'] }));
+  expect(screen.getByText('0 selected')).toBeTruthy();
+});
+
+it('keeps bulk delete selection after a rejected command', async () => {
+  const { screen } = setup({ reject: true });
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+  fireEvent.click(screen.getByLabelText('Select Garden'));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  await screen.findByRole('alert');
+  expect((screen.getByLabelText('Select Garden') as HTMLInputElement).checked).toBe(true);
+});
+
+
+it('uses default Status choices in the bulk menu without a separate Unset choice', () => {
+  const { screen } = setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+  const picker = screen.getByLabelText('Set selected Status');
+  expect(within(picker).queryByRole('option', { name: 'Unset' })).toBeNull();
+  expect(within(picker).getByRole('option', { name: 'Later' })).toBeTruthy();
 });

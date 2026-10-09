@@ -21,6 +21,7 @@ await build({ entryPoints: [join(root, 'desktop/worker.ts')], outfile: join(stag
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
 });
 for (const file of ['settings.html', 'settings.css', 'settings.js']) await cp(join(root, 'desktop', file), join(stage, file));
+await cp(join(root, 'desktop/tray-template.png'), join(stage, 'tray-template.png'));
 await cp(join(root, 'dist'), join(stage, 'dist'), { recursive: true });
 await mkdir(join(stage, 'skills/life-manager'), { recursive: true });
 await cp(join(root, 'skills/life-manager/SKILL.md'), join(stage, 'skills/life-manager/SKILL.md'));
@@ -45,7 +46,7 @@ console.log(`Packaging Electron ${electronVersion} for macOS arm64…`);
 const paths = await packager({
   dir: stage, out: join(root, 'release'), name: 'Life Manager', executableName: 'Life Manager',
   appBundleId: 'com.lachlanstuart.life-manager', appCategoryType: 'public.app-category.productivity',
-  platform: 'darwin', arch: 'arm64', electronVersion, overwrite: true, asar: false, prune: false,
+  platform: 'darwin', arch: 'arm64', electronVersion, overwrite: true, asar: false, prune: false, icon: join(root, 'desktop/life-manager.icns'),
   extendInfo: { LSUIElement: true },
   afterCopy: [async ({ buildPath, electronVersion, arch }) => {
     await rebuild({ buildPath, electronVersion, arch, onlyModules: ['better-sqlite3'], force: true });

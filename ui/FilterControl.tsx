@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { WorkspaceSettings } from '../src/types';
 import type { PropertyFilters } from './property-filters';
+import { propertyChoices } from './PropertySelect';
 import { Icon } from './Icons';
 import './filters.css';
 
-export function FilterControl({ settings, filters, onChange }: {
+export function FilterControl({ settings, filters, onChange, showAll = false, onShowAllChange }: {
+  showAll?: boolean; onShowAllChange?: (show: boolean) => void;
   settings: WorkspaceSettings; filters: PropertyFilters; onChange: (filters: PropertyFilters) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -39,15 +41,15 @@ export function FilterControl({ settings, filters, onChange }: {
   };
   return <>
     <button ref={trigger} className="lm-filter-button" aria-label={hiddenCount ? `Filters (${hiddenCount} hidden values)` : 'Filters'}
-      aria-haspopup="dialog" aria-expanded={open} data-active={hiddenCount > 0} onClick={() => setOpen(value => !value)}>
-      <Icon name="filter" /><span>Filter</span>{hiddenCount > 0 && <b>{hiddenCount}</b>}
+      aria-haspopup="dialog" aria-expanded={open} data-active={hiddenCount > 0 || showAll} onClick={() => setOpen(value => !value)}>
+      <Icon name="filter" />{hiddenCount > 0 && <b>{hiddenCount}</b>}
     </button>
     {open && createPortal(<div ref={popup} role="dialog" aria-label="Filter Items" className="lm-filters" style={position}
       onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }}>
-      <header><strong>Filter Items</strong><button onClick={() => onChange({})} disabled={!hiddenCount}>Reset all</button><button aria-label="Close filters" onClick={close}>×</button></header>
-      <p>Show checked values. Changes apply immediately.</p>
+      <header><strong>Filter Items</strong><button onClick={() => { onChange({}); onShowAllChange?.(false); }} disabled={!hiddenCount && !showAll}>Reset all</button><button aria-label="Close filters" onClick={close}>×</button></header>
+      {onShowAllChange && <button className="lm-filters__inclusion" aria-pressed={showAll} onClick={() => onShowAllChange(!showAll)}><Icon name={showAll ? 'eye' : 'eye-off'} />Show excluded items<span aria-hidden="true">{showAll ? '✓' : ''}</span></button>}
       {settings.properties.map(property => {
-        const values = [{id: null, label: property.unsetLabel, color: property.unsetColor}, ...property.options];
+        const values = propertyChoices(property);
         const excluded = filters[property.id] ?? [];
         return <fieldset key={property.id}><legend>{property.name}</legend>
           <div className="lm-filters__shortcuts"><button aria-label={`Show all ${property.name} values`} onClick={() => setExcluded(property.id, [])}>All</button>

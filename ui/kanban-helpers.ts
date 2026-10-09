@@ -1,7 +1,8 @@
 import { childrenOf, siblingShares } from '../src/domain';
 import { STATUS_ORDER, viewComparator, type ViewSort } from './view-sort';
-import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
+import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue } from '../src/properties';
 import { NEUTRAL_PROPERTY_COLOR, presentationProperty } from './property-presentation';
+import { propertyChoices } from './PropertySelect';
 import type { Item, WorkspaceSettings } from '../src/types';
 
 /** The board keeps the working states together and leaves archival states at the end. */
@@ -78,7 +79,7 @@ function pathToParent(
  * Parents remain navigation/grouping context; childless or fully deferred branches
  * appear as cards themselves. The focused Item itself is not a card.
  */
-export function kanbanItems(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, propertyId?: string | null): Item[] {
+export function kanbanItems(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, propertyId?: string | null, showAll = false): Item[] {
   const compare = viewComparator(items, sort, settings, propertyId);
   const byId = itemIndex(items);
   const roots = focusId === null
@@ -86,8 +87,8 @@ export function kanbanItems(items: readonly Item[], focusId: string | null, sort
     : childrenOf(items, focusId);
   const result: Item[] = [];
   const visit = (item: Item) => {
-    if (!isEffectivelyIncluded(byId, item)) return;
-    const children = childrenOf(items, item.id).filter((child) => child.included);
+    if (!showAll && !isEffectivelyIncluded(byId, item)) return;
+    const children = childrenOf(items, item.id).filter((child) => showAll || child.included);
     if (children.length === 0) result.push(item);
     else for (const child of children.sort(compare)) visit(child);
   };
@@ -128,11 +129,11 @@ export function branchRelativeShares(items: readonly Item[], focusId: string | n
 }
 
 /** Build the visual columns and parent-path groups used by the board. */
-export function buildKanbanModel(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId?: string | null, matchingIds?: ReadonlySet<string>): KanbanBoardModel {
+export function buildKanbanModel(items: readonly Item[], focusId: string | null, sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, groupPropertyId?: string | null, matchingIds?: ReadonlySet<string>, showAll = false): KanbanBoardModel {
   const byId = itemIndex(items);
   const shares = branchRelativeShares(items, focusId);
   const property = presentationProperty(settings, groupPropertyId);
-  const visible = kanbanItems(items, focusId, sort, settings, groupPropertyId).filter(item => !matchingIds || matchingIds.has(item.id));
+  const visible = kanbanItems(items, focusId, sort, settings, groupPropertyId, showAll).filter(item => !matchingIds || matchingIds.has(item.id));
   const cards = visible.map((item): KanbanCard => {
     const share = Math.max(0, Math.min(1, shares.get(item.id) ?? 0));
     return {
@@ -143,13 +144,14 @@ export function buildKanbanModel(items: readonly Item[], focusId: string | null,
       parentPath: pathToParent(byId, item.parentId, focusId),
     };
   });
+  const choices = property ? propertyChoices(property) : [];
   const columns = property
-    ? [...property.options.map(option => ({ status: option.id as string | null, label: option.label, color: option.color })),
-      { status: null, label: property.unsetLabel, color: property.unsetColor }]
+    ? [...choices.filter(choice => choice.id !== null), ...choices.filter(choice => choice.id === null)]
+      .map(choice => ({ status: choice.id, label: choice.label, color: choice.color }))
     : [{ status: null, label: 'Items', color: NEUTRAL_PROPERTY_COLOR }];
   const byStatus = new Map<string | null, KanbanCard[]>(columns.map(column => [column.status, []]));
   for (const card of cards) {
-    const value = property ? propertyValue(card.item, property.id) : null;
+    const value = property ? effectivePropertyValue(card.item, property) : null;
     (byStatus.get(value) ?? byStatus.get(null)!).push(card);
   }
   return {

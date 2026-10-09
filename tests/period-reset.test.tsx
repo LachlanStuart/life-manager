@@ -19,17 +19,17 @@ it('preselects Auto resets and prepares independent property values without appl
   expect((screen.getByLabelText('Set Status to') as HTMLInputElement).checked).toBe(false);
   expect((screen.getByLabelText('Status reset value') as HTMLSelectElement).value).toBe('Later');
   expect(screen.getByRole('option', { name: 'Later (default)' })).toBeTruthy();
-  expect(screen.getByRole('option', { name: 'Unset (default)' })).toBeTruthy();
+  expect(screen.getByRole('option', { name: 'Unset (default)' })).toBeTruthy(); // The custom Priority property retains explicit Unset.
   fireEvent.click(screen.getByLabelText('Return importance to Auto'));
   fireEvent.click(screen.getByLabelText('Set Status to'));
-  fireEvent.change(screen.getByLabelText('Status reset value'), { target: { value: '' } });
+  fireEvent.change(screen.getByLabelText('Status reset value'), { target: { value: 'Now' } });
   fireEvent.click(screen.getByLabelText('Set Priority to'));
   expect(onApply).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Apply resets to 4 Items' }));
   expect(onApply).toHaveBeenCalledExactlyOnceWith({ type: 'bulk', ids: items.map(item => item.id),
-    patch: { effortOverride: null, status: null, properties: { priority: null } } });
+    patch: { effortOverride: null, status: 'Now', properties: { priority: null } } });
   const result = mutateItems(items, onApply.mock.calls[0]![0], settings);
-  expect(result.every(item => item.effortOverride === null && item.status === null && item.properties?.priority === null && !item.allocationAuto)).toBe(true);
+  expect(result.every(item => item.effortOverride === null && item.status === 'Now' && item.properties?.priority === null && !item.allocationAuto)).toBe(true);
 });
 
 it('disables confirmation when nothing changes, including an empty workspace', () => {
