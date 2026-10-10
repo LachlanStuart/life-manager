@@ -3,7 +3,8 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { mutateItems } from '../src/domain';
-import type { Workspace } from '../src/types';
+import type { Workspace, WorkspaceSettings } from '../src/types';
+import { DEFAULT_WORKSPACE_SETTINGS } from '../src/properties';
 import type { ItemPanelProps, SunburstProps } from '../ui/contracts';
 import { LifeManagerPage } from '../app';
 import { parseRoute, routeUrl } from '../ui/navigation';
@@ -17,9 +18,9 @@ function fixture(): Workspace {
   ] }, periods: [{ id: 'period-1', name: 'First period', openedAt: '2026-09-13T00:00:00Z', closedAt: null }],
   snapshots: [{ id: 'opening-1', periodId: 'period-1', kind: 'opening', capturedAt: '2026-09-13T00:00:00Z', updatedAt: '2026-09-13T00:00:00Z' }], widgets: [], promptTemplates: [], recycleBin: [] };
 }
-function setup(path = '/', extraItems: Workspace['dashboard']['items'] = [], recycleBinSupported = true) {
+function setup(path = '/', extraItems: Workspace['dashboard']['items'] = [], recycleBinSupported = true, settings?: WorkspaceSettings) {
   window.history.replaceState(null, '', path);
-  let current = fixture(); current.dashboard.items.push(...extraItems); const historical = structuredClone(current); historical.dashboard.snapshotId = 'opening-1'; historical.dashboard.items[0]!.notes = 'Original notes';
+  let current = fixture(); if (settings) current.settings = settings; current.dashboard.items.push(...extraItems); const historical = structuredClone(current); historical.dashboard.snapshotId = 'opening-1'; historical.dashboard.items[0]!.notes = 'Original notes';
   if (!recycleBinSupported) delete current.recycleBin;
   const mutations: any[] = [];
   const deletedBranches = new Map<string, Workspace['dashboard']['items']>();
@@ -555,6 +556,34 @@ it('opens Outline from its URL and retains its expansion through details and vie
   expect(parseRoute(new URL('http://localhost/life-manager/#/?view=outline'), true).view).toBe('outline');
 });
 
+it('applies default hiding except for Kanban grouping, while preserving explicit overrides across views', async () => {
+  const settings = structuredClone(DEFAULT_WORKSPACE_SETTINGS);
+  settings.properties[0]!.options.find(option => option.id === 'Doing')!.showByDefault = false;
+  settings.properties.push({id: 'category', name: 'Category', defaultValue: null, unsetLabel: 'Unsorted', unsetColor: '#aaaaaa', options: []});
+  const {screen, mutations} = setup('/?view=outline', [], true, settings);
+  await screen.findByRole('treeitem', {name: 'Tend'});
+  expect(screen.queryByRole('treeitem', {name: 'Build'})).toBeNull();
+  fireEvent.click(screen.getByRole('button', {name: 'Kanban'}));
+  await screen.findByRole('button', {name: 'Build, Doing'});
+  fireEvent.change(screen.getByLabelText('Group by'), {target: {value: 'category'}});
+  expect(screen.queryByRole('button', {name: 'Build, Doing'})).toBeNull();
+  fireEvent.change(screen.getByLabelText('Group by'), {target: {value: 'status'}});
+  expect(screen.getByRole('button', {name: 'Build, Doing'})).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', {name: 'Filters'}));
+  fireEvent.click(within(screen.getByRole('dialog', {name: 'Filter Items'})).getByRole('button', {name: 'Doing'}));
+  expect(screen.queryByRole('button', {name: 'Build, Doing'})).toBeNull();
+  fireEvent.click(screen.getByRole('button', {name: 'Show everything'}));
+  expect(screen.getByRole('button', {name: 'Build, Doing'})).toBeTruthy();
+  expect(parseRoute(new URL(window.location.href)).filters).toEqual({status: [], category: []});
+  fireEvent.click(screen.getByRole('button', {name: 'Close filters'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Outline'}));
+  await screen.findByRole('treeitem', {name: 'Build'});
+  fireEvent.click(screen.getByRole('button', {name: 'Filters'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Reset to defaults'}));
+  expect(screen.queryByRole('treeitem', {name: 'Build'})).toBeNull();
+  expect(mutations).toEqual([]);
+});
+
 it('shares quick filters between Outline and Kanban, preserves URLs and never mutates Items', async () => {
   const {screen, mutations} = setup('/?view=outline');
   await screen.findByRole('treeitem', {name: 'Tend'});
@@ -571,7 +600,7 @@ it('shares quick filters between Outline and Kanban, preserves URLs and never mu
   expect(screen.queryByRole('button', {name: 'Build, Doing'})).toBeNull();
   expect(parseRoute(new URL(window.location.href)).filters).toEqual({status: ['Doing']});
   fireEvent.click(screen.getByRole('button', {name: /Filters/}));
-  fireEvent.click(screen.getByRole('button', {name: 'Reset all'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Reset to defaults'}));
   expect(screen.getByRole('button', {name: 'Build, Doing'})).toBeDefined();
   window.history.replaceState(null, '', filteredUrl);
   fireEvent.popState(window);
@@ -580,7 +609,7 @@ it('shares quick filters between Outline and Kanban, preserves URLs and never mu
   expect(mutations).toEqual([]);
 });
 
-it('restores filters after restarting at a fresh URL and remembers Reset all', async () => {
+it('restores filters after restarting at a fresh URL and remembers Reset to defaults', async () => {
   let screen = setup('/?view=outline').screen;
   await screen.findByRole('treeitem', {name: 'Build'});
   fireEvent.click(screen.getByRole('button', {name: 'Filters'}));
@@ -592,7 +621,7 @@ it('restores filters after restarting at a fresh URL and remembers Reset all', a
   expect(screen.queryByRole('button', {name: 'Build, Doing'})).toBeNull();
   expect(parseRoute(new URL(window.location.href)).filters).toEqual({status: ['Doing']});
   fireEvent.click(screen.getByRole('button', {name: /Filters/}));
-  fireEvent.click(screen.getByRole('button', {name: 'Reset all'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Reset to defaults'}));
   cleanup();
 
   screen = setup('/?view=outline').screen;

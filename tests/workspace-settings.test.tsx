@@ -8,6 +8,20 @@ import { seedItems } from '../src/domain';
 import { PROPERTY_COLORS } from '../ui/property-colors';
 
 afterEach(cleanup);
+it('saves option and Unset default visibility separately from the creation default', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<WorkspaceSettingsEditor settings={DEFAULT_WORKSPACE_SETTINGS} items={[]} onSave={save} />);
+  fireEvent.click(screen.getByText('Status', {selector: 'summary'}));
+  expect((screen.getByLabelText('Status Done show by default') as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(screen.getByLabelText('Status Done show by default'));
+  fireEvent.change(screen.getByLabelText('Status default for new Items'), {target: {value: ''}});
+  fireEvent.click(screen.getByLabelText('Status No status show by default'));
+  fireEvent.click(screen.getByText('Save workspace'));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  const property = save.mock.calls[0]![0].settings.properties[0];
+  expect(property).toMatchObject({defaultValue: null, unsetShowByDefault: false});
+  expect(property.options.find((option: {id: string}) => option.id === 'Done').showByDefault).toBe(false);
+});
 it('adds a property without invalid empty replacement maps and keeps its editor open while typing', async () => {
   const save = vi.fn().mockResolvedValue(undefined);
   render(<WorkspaceSettingsEditor settings={DEFAULT_WORKSPACE_SETTINGS} items={seedItems()} onSave={save} />);

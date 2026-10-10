@@ -61,6 +61,7 @@ export const itemCommandSchema = z.discriminatedUnion('type', [
     type: z.literal('allocate'),
     id: idSchema,
     share: z.number().finite().min(0).max(100).nullable(),
+    siblingIds: z.array(idSchema).min(2).max(10_000).optional(),
   }).strict(),
   z.object({
     type: z.literal('bulk'),
@@ -121,9 +122,11 @@ export const workspaceSettingsSchema = z.object({
     id: idSchema, name: z.string().trim().min(1).max(500),
     unsetLabel: z.string().trim().min(1).max(500), unsetColor: z.string().regex(/^#[0-9a-f]{6}$/i),
     defaultValue: idSchema.nullable(),
+    unsetShowByDefault: z.boolean().optional(),
     options: z.array(z.object({
       id: idSchema, label: z.string().trim().min(1).max(500), color: z.string().regex(/^#[0-9a-f]{6}$/i),
       behavior: z.enum(['normal', 'complete', 'skip']).optional(),
+      showByDefault: z.boolean().optional(),
     }).strict()).max(500),
   }).strict()).max(100),
 }).strict();

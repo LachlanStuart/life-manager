@@ -9,6 +9,41 @@ import {
 } from '../src/domain';
 import type { Item } from '../src/types';
 
+describe('allocation among filtered siblings', () => {
+  it.each([
+    [30, 30, 40, false, false, false],
+    [3, 3, 4, false, false, false],
+    [0, 0, 40, true, true, false],
+    [20, 0, 0, false, true, true],
+    [60, 60, 80, false, false, false],
+  ])('preserves the subset budget and hidden shares (%s/%s/%s)', (a, b, c, autoA, autoB, autoC) => {
+    const items = [item('a', null, {weight: Number(a), allocationAuto: Boolean(autoA)}),
+      item('b', null, {weight: Number(b), allocationAuto: Boolean(autoB)}),
+      item('c', null, {weight: Number(c), allocationAuto: Boolean(autoC)}),
+      item('child', 'a', {weight: 7}), item('excluded', null, {included: false, weight: 19})];
+    const budget = localShare(items, 'a') + localShare(items, 'b');
+    const result = mutateItems(items, {type: 'allocate', id: 'a', share: 200 / 3, siblingIds: ['a', 'b']});
+    expect(localShare(result, 'a')).toBeCloseTo(budget * 2 / 3);
+    expect(localShare(result, 'b')).toBeCloseTo(budget / 3);
+    expect(localShare(result, 'c')).toBeCloseTo(localShare(items, 'c'));
+    expect(result.find(value => value.id === 'c')!.allocationAuto).toBe(Boolean(autoC));
+    expect(result.slice(3)).toEqual(items.slice(3));
+    expect(items[0]!.weight).toBe(Number(a));
+  });
+
+  it('handles zero-share siblings and rejects malformed or empty-budget subsets', () => {
+    const items = [item('a', null, {weight: 60}), item('b', null, {weight: 0}), item('c', null, {weight: 40}), item('child', 'a'), item('excluded', null, {included: false})];
+    const result = mutateItems(items, {type: 'allocate', id: 'a', share: 50, siblingIds: ['a', 'b']});
+    expect(['a', 'b', 'c'].map(id => localShare(result, id))).toEqual([30, 30, 40]);
+    for (const siblingIds of [[], ['a'], ['b', 'c'], ['a', 'a'], ['a', 'missing'], ['a', 'child'], ['a', 'excluded']]) {
+      expect(() => mutateItems(items, {type: 'allocate', id: 'a', share: 50, siblingIds})).toThrow();
+    }
+    expect(() => mutateItems(items, {type: 'allocate', id: 'a', share: null, siblingIds: ['a', 'b']})).toThrow(/numeric/);
+    expect(() => mutateItems([item('a', null, {weight: 0}), item('b', null, {weight: 0}), item('c', null)],
+      {type: 'allocate', id: 'a', share: 50, siblingIds: ['a', 'b']})).toThrow(/no share/);
+  });
+});
+
 function item(id: string, parentId: string | null, patch: Partial<Item> = {}): Item {
   return {
     id,

@@ -644,7 +644,7 @@ describe('configurable sunburst colors', () => {
   });
 });
 
-it('keeps effort and details available while disabling allocation in the filtered wheel', () => {
+it('keeps effort and details available but offers no allocation for lone filtered siblings', () => {
   const view = mount([item('a1', null, 1), item('a2', null, 3), item('a3', 'a1', 1)], {mode: 'Omni', matchingIds: new Set(['a3'])});
   expect(screen.queryByRole('treeitem', {name: /Item a2/})).toBeNull();
   expect(screen.getByRole('treeitem', {name: /Item a1/}).getAttribute('aria-label')).toContain('ancestor of matching Items');
@@ -654,4 +654,41 @@ it('keeps effort and details available while disabling allocation in the filtere
   fireEvent.click(screen.getByRole('treeitem', {name: /Item a3/}));
   expect(view.onSelect).toHaveBeenCalledExactlyOnceWith('a3');
   expect(view.onAllocate).not.toHaveBeenCalled();
+});
+
+it('drags and previews importance within the shown siblings in Omni, preserving hidden importance', () => {
+  const items = [item('a1', null, 30), item('a2', null, 30), item('a3', null, 40)];
+  const view = mount(items, {mode: 'Omni', matchingIds: new Set(['a1', 'a2'])});
+  const handle = screen.getByRole('slider', {name: 'Drag importance for Item a1'});
+  expect(handle.getAttribute('aria-valuenow')).toBe('50');
+  fireEvent.pointerDown(handle, pointAt(180));
+  fireEvent.pointerMove(view.svg, pointAt(240));
+  expect(screen.getByRole('treeitem', {name: /Item a1/}).getAttribute('aria-label')).toContain('40% share');
+  expect(screen.getByRole('treeitem', {name: /Item a2/}).getAttribute('aria-label')).toContain('20% share');
+  expect(screen.getByText('Item a1 · Importance of shown siblings')).toBeTruthy();
+  fireEvent.pointerUp(view.svg, pointAt(240));
+  expect(view.onAllocate.mock.calls[0]![0]).toBe('a1');
+  expect(view.onAllocate.mock.calls[0]![1]).toBeCloseTo(200 / 3);
+  expect(view.onAllocate.mock.calls[0]![2]).toEqual(['a1', 'a2']);
+});
+
+it('uses filtered shares for keyboard and range edits and cancels a drag when the filter changes', () => {
+  const items = [item('a1', null, 30), item('a2', null, 30), item('a3', null, 40)];
+  const matchingIds = new Set(['a1', 'a2']);
+  const view = mount(items, {mode: 'Importance', selectedId: 'a1', matchingIds});
+  fireEvent.keyDown(screen.getByRole('treeitem', {name: /Item a1/}), {key: 'ArrowUp'});
+  expect(view.onAllocate).toHaveBeenLastCalledWith('a1', 51, ['a1', 'a2']);
+  const range = screen.getByRole('slider', {name: 'Intended share for Item a1'});
+  fireEvent.change(range, {target: {value: '75'}});
+  expect(screen.getByRole('treeitem', {name: /Item a1/}).getAttribute('aria-label')).toContain('45% share');
+  fireEvent.keyUp(range, {key: 'ArrowUp'});
+  expect(view.onAllocate).toHaveBeenLastCalledWith('a1', 75, ['a1', 'a2']);
+  view.onAllocate.mockClear();
+  fireEvent.pointerDown(screen.getByRole('slider', {name: 'Drag importance for Item a1'}), pointAt(180));
+  fireEvent.pointerMove(view.svg, pointAt(240));
+  view.rerender(<Sunburst items={items} matchingIds={new Set(['a1'])} mode="Importance" selectedId="a1" focusId={null} showAll={false}
+    onSelect={view.onSelect} onFocus={view.onFocus} onAllocate={view.onAllocate} />);
+  fireEvent.pointerUp(view.svg, pointAt(240));
+  expect(view.onAllocate).not.toHaveBeenCalled();
+  expect((screen.getByRole('slider', {name: 'Intended share for Item a1'}) as HTMLInputElement).disabled).toBe(true);
 });

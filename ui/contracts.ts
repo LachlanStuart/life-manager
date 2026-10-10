@@ -9,7 +9,7 @@ export interface SunburstProps {
   settings?: WorkspaceSettings; colorPropertyId?: string | null;
   items: Item[]; selectedId: string | null; focusId: string | null; showAll: boolean;
   onSelect: (id: string) => void; onHighlight?: (id: string) => void; onFocus: (id: string | null) => void;
-  onAllocate: (id: string, share: number) => void; disabled?: boolean;
+  onAllocate: (id: string, share: number, siblingIds?: string[]) => void; disabled?: boolean;
   mode?: WheelMode;
   sort?: ViewSort;
   compact?: boolean;

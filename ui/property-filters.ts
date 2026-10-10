@@ -2,7 +2,7 @@ import type { Item, WorkspaceSettings } from '../src/types';
 import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue, propertyValue } from '../src/properties';
 import { propertyChoices } from './PropertySelect';
 
-/** Values switched off in the view. An absent property shows all its values. */
+/** Explicit hidden-value overrides. Absent properties use configured defaults; [] shows all. */
 export type PropertyFilters = Record<string, (string | null)[]>;
 
 const storageKey = 'life-manager.property-filters';
@@ -25,9 +25,12 @@ export function parsePropertyFilters(raw: string | null): PropertyFilters {
   } catch { return {}; }
 }
 
-export function activePropertyFilters(filters: PropertyFilters | undefined, settings: WorkspaceSettings): PropertyFilters {
+export function activePropertyFilters(filters: PropertyFilters | undefined, settings: WorkspaceSettings, groupPropertyId?: string | null): PropertyFilters {
   return Object.fromEntries(settings.properties.flatMap(property => {
-    const selected = new Set((filters?.[property.id] ?? []).map(value =>
+    const defaults = property.id === groupPropertyId ? [] : propertyChoices(property)
+      .filter(choice => choice.id === null ? property.unsetShowByDefault === false : property.options.find(option => option.id === choice.id)?.showByDefault === false)
+      .map(choice => choice.id);
+    const selected = new Set((filters?.[property.id] ?? defaults).map(value =>
       property.id === 'status' && property.defaultValue !== null && value === null ? property.defaultValue : value));
     const excluded = propertyChoices(property).map(value => value.id).filter(value => selected.has(value));
     return excluded.length ? [[property.id, excluded]] : [];

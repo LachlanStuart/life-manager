@@ -24,6 +24,37 @@ function setup() {
 function item(items: Item[], id = 'build') { return items.find(value => value.id === id)!; }
 
 describe('configurable enum properties', () => {
+  it('round-trips default visibility through settings, snapshots and exports without altering Items', () => {
+    const {actions} = setup();
+    const config = settings();
+    config.properties.push({...priority(), unsetShowByDefault: false});
+    config.properties[0]!.options.find(option => option.id === 'Done')!.showByDefault = false;
+    const originalItems = actions.workspace().dashboard.items;
+    const saved = actions.saveSettings({settings: config});
+    expect(saved.settings).toEqual(config);
+    expect(saved.dashboard.items).toEqual(originalItems);
+    expect(workspaceSchema.parse(saved).settings).toEqual(config);
+    const planned = actions.plan().snapshots.find(snapshot => snapshot.kind === 'planned')!;
+    const changed = structuredClone(config);
+    changed.properties[0]!.options.find(option => option.id === 'Done')!.showByDefault = true;
+    actions.saveSettings({settings: changed});
+    expect(actions.workspace({snapshotId: planned.id}).settings).toEqual(config);
+    expect(actions.exportData().current.settings).toEqual(changed);
+    expect(() => actions.saveSettings({settings: {...config, properties: [{...config.properties[0]!, unsetShowByDefault: 'no' as never}]}})).toThrow();
+  });
+
+  it('accepts subset allocations through the shared API and preserves hidden shares after storage', () => {
+    const {actions} = setup();
+    actions.mutate({command: {type: 'create', id: 'a', parentId: 'build', title: 'A', patch: {weight: 30}}});
+    actions.mutate({command: {type: 'create', id: 'b', parentId: 'build', title: 'B', patch: {weight: 30}}});
+    actions.mutate({command: {type: 'create', id: 'c', parentId: 'build', title: 'C', patch: {weight: 40}}});
+    const before = actions.workspace();
+    const result = actions.mutate({expectedRevision: before.dashboard.revision, command: {type: 'allocate', id: 'a', share: 200 / 3, siblingIds: ['a', 'b']}});
+    expect(result.dashboard.items.find(item => item.id === 'a')!.weight).toBeCloseTo(40);
+    expect(result.dashboard.items.find(item => item.id === 'b')!.weight).toBeCloseTo(20);
+    expect(result.dashboard.items.find(item => item.id === 'c')!.weight).toBeCloseTo(40);
+    expect(actions.workspace().dashboard.items).toEqual(result.dashboard.items);
+  });
   it('uses the Status default as the effective value for null Items without rewriting storage', () => {
     const config = settings();
     const item = seedItems()[0]!;

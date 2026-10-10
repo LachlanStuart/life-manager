@@ -207,7 +207,7 @@ export function LifeManagerPage() {
   const channel = (id: string | null | undefined) => id === null ? null : settings.properties.some(property => property.id === id) ? id! : settings.properties.find(property => property.id === 'status')?.id ?? settings.properties[0]?.id ?? null;
   const colorPropertyId = channel(colorChannel), groupPropertyId = channel(groupChannel);
   const items = workspace?.dashboard.items ?? [];
-  const filters = useMemo(() => activePropertyFilters(route.filters, settings), [route.filters, settings]);
+  const filters = useMemo(() => activePropertyFilters(route.filters, settings, route.view === 'kanban' ? groupPropertyId : undefined), [route.filters, settings, route.view, groupPropertyId]);
   const matchingIds = useMemo(() => matchingItemIds(items, filters, settings), [items, filters, settings]);
   const changeFilters = (filters: PropertyFilters) => {
     const next = {...routeRef.current, filters: Object.keys(filters).length ? filters : undefined};
@@ -270,7 +270,7 @@ export function LifeManagerPage() {
         <option value="">None</option>{settings.properties.map(property => <option key={property.id} value={property.id}>{property.name}</option>)}
       </select></label>}
       <SortControl propertyName={settings.properties.find(property => property.id === editPropertyId)?.name} value={viewSort} onChange={sort => setViewSorts(current => ({...current, [route.view ?? 'sunburst']: sort}))} />
-      <FilterControl settings={settings} filters={filters} onChange={changeFilters} showAll={showAll} onShowAllChange={setShowAll} />
+      <FilterControl settings={settings} filters={filters} overrides={route.filters ?? {}} onChange={changeFilters} showAll={showAll} onShowAllChange={setShowAll} />
       {historical && <button disabled={busy} onClick={() => void run(async () => { await saveNotes(); setCorrecting(value => !value); })}>{correcting ? 'Finish correction' : 'Correct this snapshot'}</button>}
       {historical && <span className="lm-snapshot-badge">{correcting ? 'Correcting snapshot' : 'Snapshot'}</span>}
     </div>
@@ -321,7 +321,7 @@ export function LifeManagerPage() {
 
         <div className="lm-wheel-space"><Sunburst matchingIds={matchingIds} settings={settings} colorPropertyId={colorPropertyId} sort={viewSort} items={items} selectedId={highlightId ?? route.itemId} focusId={route.focusId && items.some(item => item.id === route.focusId) ? route.focusId : null} showAll={showAll} mode={mode}
           onSelect={id => { setHighlightId(id); select(id); }} onHighlight={setHighlightId} onFocus={focus} onShowHidden={() => setShowAll(true)} onCreate={beginCreate} onContextMenu={(id, x, y) => setContextItem({id, x, y})} disabled={readOnly || busy}
-          onAllocate={(id, share) => void run(() => command({ type: 'allocate', id, share }))} onEffort={(id, effortOverride) => void run(() => command({ type: 'update', id, patch: { effortOverride } }))} /></div>
+          onAllocate={(id, share, siblingIds) => void run(() => command({ type: 'allocate', id, share, ...(siblingIds ? {siblingIds} : {}) }))} onEffort={(id, effortOverride) => void run(() => command({ type: 'update', id, patch: { effortOverride } }))} /></div>
         </>}
       </section>
       {route.itemId && <><div className="lm-divider" role="separator" aria-label="Resize Item pane" aria-orientation="vertical" tabIndex={0} aria-valuemin={30} aria-valuemax={82} aria-valuenow={paneWidth}

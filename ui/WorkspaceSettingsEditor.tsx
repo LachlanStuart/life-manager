@@ -57,6 +57,10 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
         <label>Default for new Items<select aria-label={`${property.name} default for new Items`} value={property.defaultValue ?? ''} onChange={event => edit(property.id, {defaultValue: event.target.value || null})}>
           <option value="">{unsetLabel(property)}</option>{property.options.map(option => <option key={option.id} value={option.id}>{option.label || 'New option'}</option>)}
         </select></label>
+        {(property.id !== 'status' || property.defaultValue === null) && <label className="lm-property-visibility">
+          <input type="checkbox" aria-label={`${property.name} ${unsetLabel(property)} show by default`} checked={property.unsetShowByDefault !== false}
+            onChange={event => edit(property.id, {unsetShowByDefault: event.target.checked})} />{unsetLabel(property)}: Show by default
+        </label>}
         <div className="lm-property-options">
           {property.options.map((option, index) => <div className="lm-property-option" key={option.id}>
             <ColorPicker label={`${option.label || 'New option'} color`} value={option.color} disabled={locked} onChange={color => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, color} : value)})} />
@@ -64,6 +68,8 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
             <button type="button" aria-label={`Move ${option.label} up`} disabled={index === 0} onClick={() => edit(property.id, {options: move(property.options, index, -1)})}>↑</button>
             <button type="button" aria-label={`Move ${option.label} down`} disabled={index === property.options.length - 1} onClick={() => edit(property.id, {options: move(property.options, index, 1)})}>↓</button>
             <button type="button" aria-label={`Remove ${option.label}`} onClick={() => edit(property.id, {options: property.options.filter(value => value.id !== option.id), defaultValue: property.defaultValue === option.id ? null : property.defaultValue})}>×</button>
+            <label className="lm-property-visibility"><input type="checkbox" aria-label={`${property.name} ${option.label || 'New option'} show by default`} checked={option.showByDefault !== false}
+              onChange={event => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, showByDefault: event.target.checked} : value)})} />Show by default</label>
             {draft.lifecyclePropertyId === property.id && <label className="lm-property-behavior">Effort behavior<select aria-label={`${option.label || 'New option'} effort behavior`} value={option.behavior ?? 'normal'} onChange={event => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, behavior: event.target.value as 'normal' | 'complete' | 'skip'} : value)})}>
               <option value="normal">Normal</option><option value="complete">Completed</option><option value="skip">No calculated effort</option>
             </select></label>}

@@ -73,6 +73,7 @@ export function validateSettings(settings: WorkspaceSettings): void {
     ids.add(property.id);
     text(property.name, 'Property name', 500);
     text(property.unsetLabel, 'Unset label', 500);
+    if (property.unsetShowByDefault !== undefined && typeof property.unsetShowByDefault !== 'boolean') throw new Error('Unset default visibility must be a boolean');
     if (!/^#[0-9a-f]{6}$/i.test(property.unsetColor)) throw new Error('Unset color must be a six-digit hex color');
     if (!Array.isArray(property.options) || property.options.length > 500) throw new Error('Property options are invalid');
     const values = new Set<string>();
@@ -82,6 +83,7 @@ export function validateSettings(settings: WorkspaceSettings): void {
       if (values.has(option.id)) throw new Error(`Duplicate option id: ${option.id}`);
       values.add(option.id);
       text(option.label, 'Option label', 500);
+      if (option.showByDefault !== undefined && typeof option.showByDefault !== 'boolean') throw new Error('Option default visibility must be a boolean');
       if (!/^#[0-9a-f]{6}$/i.test(option.color)) throw new Error('Option color must be a six-digit hex color');
       if (option.behavior !== undefined && !['normal', 'complete', 'skip'].includes(option.behavior)) throw new Error('Option behavior is invalid');
     }

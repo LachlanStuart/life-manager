@@ -22,6 +22,47 @@ const items = [item('root', null, {status: 'Done'}), item('ready', 'root', {stat
   item('unset', null, {status: null}), item('hidden', null, {included: false, order: 2}), item('hidden-child', 'hidden', {status: 'Now'})];
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 
+function hiddenDefaults(): WorkspaceSettings {
+  const configured = structuredClone(settings);
+  configured.properties[0]!.options.find(option => option.id === 'Done')!.showByDefault = false;
+  configured.properties[1]!.unsetShowByDefault = false;
+  configured.properties[1]!.options[1]!.showByDefault = false;
+  return configured;
+}
+
+it('resolves default visibility, explicit overrides, and the Kanban grouping exception independently', () => {
+  const configured = hiddenDefaults();
+  expect(activePropertyFilters({}, configured)).toEqual({status: ['Done'], project: [null, 'b']});
+  expect(activePropertyFilters({}, configured, 'status')).toEqual({project: [null, 'b']});
+  expect(activePropertyFilters({}, configured, 'project')).toEqual({status: ['Done']});
+  expect(activePropertyFilters({status: ['Done']}, configured, 'status')).toEqual({status: ['Done'], project: [null, 'b']});
+  expect(activePropertyFilters({status: [], project: []}, configured)).toEqual({});
+  expect(activePropertyFilters({}, settings)).toEqual({});
+  configured.properties[0]!.defaultValue = 'Done';
+  expect(matchingItemIds([item('blank', null, {status: null})], activePropertyFilters({}, configured), configured)?.size).toBe(0);
+  savePropertyFilters({status: [], project: [null]});
+  expect(readPropertyFilters()).toEqual({status: [], project: [null]});
+});
+
+it('resets overrides to configured defaults and shows everything without pinning untouched properties', () => {
+  const configured = hiddenDefaults();
+  function Harness() {
+    const [overrides, setOverrides] = useState<PropertyFilters>({});
+    return <><FilterControl settings={configured} filters={activePropertyFilters(overrides, configured)} overrides={overrides} onChange={setOverrides} /><output>{JSON.stringify(overrides)}</output></>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', {name: /Filters/}));
+  const status = within(screen.getByRole('group', {name: 'Status'}));
+  expect(status.getByRole('button', {name: 'Done'}).getAttribute('aria-pressed')).toBe('false');
+  fireEvent.click(status.getByRole('button', {name: 'Done'}));
+  expect(screen.getByRole('status').textContent).toBe('{"status":[]}');
+  fireEvent.click(screen.getByRole('button', {name: 'Show everything'}));
+  expect(screen.getByRole('status').textContent).toBe('{"status":[],"project":[]}');
+  fireEvent.click(screen.getByRole('button', {name: 'Reset to defaults'}));
+  expect(screen.getByRole('status').textContent).toBe('{}');
+  expect(status.getByRole('button', {name: 'Done'}).getAttribute('aria-pressed')).toBe('false');
+});
+
 it.each([false, true])('restores saved filters only on startup, respecting explicit URL filters (demo=%s)', demo => {
   savePropertyFilters({status: ['Done'], project: [null, 'b']});
   const url = (filters?: PropertyFilters) => new URL(routeUrl({itemId: null, focusId: null, filters}, demo), 'https://example.com');
@@ -115,8 +156,8 @@ it('applies chip toggles, All/None and Reset immediately without closing the pop
   fireEvent.click(project.getByRole('button', {name: 'Project A'}));
   expect(screen.getByRole('status').textContent).toBe('{"status":["Done"],"project":[null,"b"]}');
   fireEvent.click(status.getByRole('button', {name: 'Show all Status values'}));
-  expect(screen.getByRole('status').textContent).toBe('{"project":[null,"b"]}');
-  fireEvent.click(screen.getByRole('button', {name: 'Reset all'}));
+  expect(screen.getByRole('status').textContent).toBe('{"status":[],"project":[null,"b"]}');
+  fireEvent.click(screen.getByRole('button', {name: 'Reset to defaults'}));
   expect(screen.getByRole('status').textContent).toBe('{}');
   expect(screen.getByRole('dialog', {name: 'Filter Items'})).toBeTruthy();
   fireEvent.keyDown(screen.getByRole('dialog'), {key: 'Escape'});

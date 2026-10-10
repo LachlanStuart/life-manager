@@ -33,7 +33,7 @@ export type ItemCommand =
   | { type: 'arrange'; ids: string[]; parentId: string | null; beforeId?: string }
   | { type: 'restore-arrangement'; placements: ItemPlacement[]; expected: (ItemPlacement & { included: boolean })[] }
   | { type: 'reorder'; parentId: string | null; ids: string[] }
-  | { type: 'allocate'; id: string; share: number | null }
+  | { type: 'allocate'; id: string; share: number | null; siblingIds?: string[] }
   | { type: 'bulk'; ids: string[]; patch: ItemPatch };
 export interface Period { id: string; name: string; openedAt: string; closedAt: string | null }
 export type Checkpoint = 'opening' | 'planned' | 'closing';
@@ -48,8 +48,8 @@ export interface AgentReply {
   prompt: string;
   url?: string;
 }
-export interface EnumOption { id: string; label: string; color: string; behavior?: 'normal' | 'complete' | 'skip' }
-export interface EnumProperty { id: string; name: string; options: EnumOption[]; unsetLabel: string; unsetColor: string; defaultValue: string | null }
+export interface EnumOption { id: string; label: string; color: string; behavior?: 'normal' | 'complete' | 'skip'; showByDefault?: boolean }
+export interface EnumProperty { id: string; name: string; options: EnumOption[]; unsetLabel: string; unsetColor: string; defaultValue: string | null; unsetShowByDefault?: boolean }
 export interface WorkspaceSettings { name: string; properties: EnumProperty[]; lifecyclePropertyId: string | null }
 export interface SaveSettingsInput { settings: WorkspaceSettings; expectedRevision?: number; replacements?: Record<string, Record<string, string | null>> }
 export interface DeletedItemSummary { id: string; title: string; parentId: string | null; deletedAt: string; itemCount: number }

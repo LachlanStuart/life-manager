@@ -73,6 +73,7 @@ interface LayoutEntry {
 }
 
 interface DragState {
+  context: object;
   id: string;
   kind: 'Importance' | 'Effort';
   pointerId: number;
@@ -376,7 +377,9 @@ export function Sunburst({
   const [svgSize, setSvgSize] = useState(650);
   const display = useSunburstDisplay();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [rangePreview, setRangePreview] = useState<{ id: string; share: number } | null>(null);
+  const [rangePreview, setRangePreview] = useState<{ id: string; share: number; context: object } | null>(null);
+  // A changed source view invalidates previews before the reset effect runs.
+  const editContext = useMemo(() => ({}), [items, matchingIds, focusId, mode, showAll, sort, disabled, settings, compact, display.maxDepth]);
   const rangeDirty = useRef(false);
   useEffect(() => {
     if (!svgRef.current || typeof ResizeObserver === 'undefined') return;
@@ -392,15 +395,35 @@ export function Sunburst({
     setRangePreview(null);
     setHoveredId(null);
     rangeDirty.current = false;
-  }, [mode, focusId, disabled, showAll, sort, matchingIds]);
-  const preview = drag?.kind === 'Importance' ? { id: drag.id, share: drag.value } : rangePreview;
+  }, [editContext]);
+  const filteredGroups = useMemo(() => {
+    if (!matchingIds || showAll) return undefined;
+    const segments = buildSunburstLayout(items, {focusId, showAll: false, matchingIds, efforts: {}, maxDepth: compact ? 2 : display.maxDepth});
+    const groups = new Map<string | null, {ids: string[]; budget: number}>();
+    for (const segment of segments) {
+      const group = groups.get(segment.parentId) ?? {ids: [], budget: 0};
+      group.ids.push(segment.id); group.budget += segment.actualShare;
+      groups.set(segment.parentId, group);
+    }
+    return new Map(segments.map(segment => [segment.id, groups.get(segment.parentId)!]));
+  }, [items, matchingIds, showAll, focusId, compact, display.maxDepth]);
+  const allocationSiblings = (id: string) => filteredGroups?.get(id)?.ids;
+  const maxAllocation = (id: string) => filteredGroups
+    ? (filteredGroups.get(id)?.budget ?? 0) > 0 ? 100 : 0 : allocationLimit(items, id);
+  const editShare = (segment: SunburstSegment) => matchingIds ? segment.displayShare : segment.actualShare;
+  const allocate = (id: string, share: number) => {
+    const siblingIds = allocationSiblings(id);
+    if (siblingIds) onAllocate(id, share, siblingIds); else onAllocate(id, share);
+  };
+  const preview = drag?.kind === 'Importance' && drag.context === editContext ? { id: drag.id, share: drag.value }
+    : rangePreview?.context === editContext ? rangePreview : null;
   const displayedItems = useMemo(() => {
     if (disabled) return items;
-    if (drag?.kind === 'Effort') return items.map((item) => item.id === drag.id
+    if (drag?.kind === 'Effort' && drag.context === editContext) return items.map((item) => item.id === drag.id
       ? { ...item, effortOverride: drag.value } : item);
     return preview && !showAll
-      ? mutateItems(items, { type: 'allocate', id: preview.id, share: preview.share }, settings) : items;
-  }, [disabled, drag, items, preview?.id, preview?.share, showAll, settings]);
+      ? mutateItems(items, { type: 'allocate', id: preview.id, share: preview.share, siblingIds: allocationSiblings(preview.id) }, settings) : items;
+  }, [disabled, drag, items, preview?.id, preview?.share, showAll, settings, filteredGroups, editContext]);
   // Use committed values while dragging so sorted slices do not jump under the pointer.
   const compareItems = useMemo(() => viewComparator(items, sort, settings, colorPropertyId), [items, sort, settings, colorPropertyId]);
   const efforts = useMemo(() => computeEfforts(displayedItems, settings), [displayedItems, settings]);
@@ -416,7 +439,7 @@ export function Sunburst({
   const selected = selectedId === null ? null : itemById.get(selectedId) ?? null;
   const selectedSegment = layout.find((segment) => segment.id === selectedId) ?? null;
   const handleSegment = layout.find(segment => segment.id === (drag?.id ?? hoveredId ?? selectedId)) ?? null;
-  const allocationDisabled = disabled || showAll || matchingIds !== undefined;
+  const allocationDisabled = disabled || showAll;
   const focusTrail = useMemo(() => {
     const ids = new Set<string>();
     let cursor = focus;
@@ -457,24 +480,24 @@ export function Sunburst({
     if (disabled) return;
     const step = (event.shiftKey ? 5 : 1) * (['ArrowLeft', 'ArrowDown'].includes(event.key) ? -1 : 1);
     if (!['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp'].includes(event.key)) return;
-    if (kind === 'Importance' && !allocationDisabled && segment.siblingCount > 1) {
+    if (kind === 'Importance' && !allocationDisabled && segment.siblingCount > 1 && maxAllocation(segment.id) > 0) {
       event.preventDefault();
-      onAllocate(segment.id, Math.min(allocationLimit(items, segment.id), clampShare(segment.actualShare + step)));
+      allocate(segment.id, Math.min(maxAllocation(segment.id), clampShare(editShare(segment) + step)));
     } else if (kind === 'Effort' && onEffort) {
       event.preventDefault();
       onEffort(segment.id, Math.max(0, segment.effort + step));
     }
   };
   const beginDrag = (event: PointerEvent<SVGElement>, segment: SunburstSegment, kind: DragState['kind']) => {
-    if (event.button !== 0 || dragRef.current || disabled || (kind === 'Importance' && (allocationDisabled || segment.siblingCount < 2))) return;
+    if (event.button !== 0 || dragRef.current || disabled || (kind === 'Importance' && (allocationDisabled || segment.siblingCount < 2 || maxAllocation(segment.id) <= 0))) return;
     event.preventDefault();
     event.stopPropagation();
     const svg = svgRef.current;
     if (!svg) return;
     const position = pointerPosition(event, svg);
-    const initialValue = kind === 'Importance' ? segment.actualShare : segment.effort;
+    const initialValue = kind === 'Importance' ? editShare(segment) : segment.effort;
     const state: DragState = {
-      id: segment.id, kind, pointerId: event.pointerId, initialValue,
+      id: segment.id, kind, pointerId: event.pointerId, initialValue, context: editContext,
       initialRadius: position.radius, lastAngle: position.angle, angularDelta: 0,
       span: segment.parentEndAngle - segment.parentStartAngle,
       thickness: segment.outerRadius - segment.innerRadius, value: initialValue,
@@ -489,7 +512,7 @@ export function Sunburst({
   };
   const updateDrag = (event: PointerEvent<SVGSVGElement>) => {
     const state = dragRef.current;
-    if (!state || state.pointerId !== event.pointerId || disabled) return null;
+    if (!state || state.context !== editContext || state.pointerId !== event.pointerId || disabled) return null;
     const moved = state.moved || Math.hypot(event.clientX - state.initialX, event.clientY - state.initialY) >= 4;
     if (!moved) return state;
     const position = pointerPosition(event, event.currentTarget);
@@ -498,7 +521,7 @@ export function Sunburst({
     const delta = Math.atan2(Math.sin(position.angle - state.lastAngle), Math.cos(position.angle - state.lastAngle));
     const angularDelta = state.angularDelta + delta;
     const value = state.kind === 'Importance'
-      ? Math.min(allocationLimit(items, state.id), shareForDisplacement(state.initialValue, angularDelta, state.span))
+      ? Math.min(maxAllocation(state.id), shareForDisplacement(state.initialValue, angularDelta, state.span))
       : Math.max(0, state.initialValue + (position.radius - state.initialRadius) / state.thickness * 100);
     const next = { ...state, lastAngle: position.angle, angularDelta, value, moved };
     dragRef.current = next;
@@ -506,10 +529,10 @@ export function Sunburst({
     return next;
   };
   const commitRange = (id: string, share: number) => {
-    if (!rangeDirty.current) return;
+    if (!rangeDirty.current || rangePreview?.context !== editContext) return;
     rangeDirty.current = false;
     setRangePreview(null);
-    if (!allocationDisabled) onAllocate(id, Math.min(allocationLimit(items, id), share));
+    if (!allocationDisabled) allocate(id, Math.min(maxAllocation(id), share));
   };
   const targetRadius = 22 * VIEW_SIZE / svgSize;
   const omni = mode === 'Omni';
@@ -560,7 +583,7 @@ export function Sunburst({
             const state = updateDrag(event);
             if (!state) return;
             if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-            if (state.moved && state.kind === 'Importance' && !allocationDisabled) onAllocate(state.id, state.value);
+            if (state.moved && state.kind === 'Importance' && !allocationDisabled) allocate(state.id, state.value);
             if (state.moved && state.kind === 'Effort' && !disabled) onEffort?.(state.id, state.value);
             dragRef.current = null; setDrag(null);
             window.setTimeout(() => { suppressClick.current = false; }, 0);
@@ -644,14 +667,14 @@ export function Sunburst({
             const thickness = segment.outerRadius - segment.innerRadius;
             const middleAngle = (segment.startAngle + segment.endAngle) / 2;
             return <g key={`controls-${segment.id}`}>
-                {(mode === 'Importance' || omni) && !allocationDisabled && segment.siblingCount > 1 && <g>
+                {(mode === 'Importance' || omni) && !allocationDisabled && segment.siblingCount > 1 && maxAllocation(segment.id) > 0 && <g>
                   {!omni && <path className="lm-sunburst__resize-guide"
                     d={`M ${polar(segment.innerRadius + 4, segment.endAngle).x} ${polar(segment.innerRadius + 4, segment.endAngle).y} L ${polar(segment.outerRadius - 4, segment.endAngle).x} ${polar(segment.outerRadius - 4, segment.endAngle).y}`} />}
                   <circle className="lm-sunburst__resize-handle" data-item-id={segment.id}
                     cx={polar((segment.innerRadius + segment.outerRadius) / 2, segment.endAngle).x}
                     cy={polar((segment.innerRadius + segment.outerRadius) / 2, segment.endAngle).y}
                     r={handleRadius} role="slider" tabIndex={0}
-                    aria-label={`Drag importance for ${segment.title}`} aria-valuemin={MIN_SHARE} aria-valuemax={99.9} aria-valuenow={segment.actualShare}
+                    aria-label={`Drag importance for ${segment.title}`} aria-valuemin={MIN_SHARE} aria-valuemax={99.9} aria-valuenow={editShare(segment)} aria-valuetext={`${formatPercent(editShare(segment))}${matchingIds ? " of shown siblings" : ""}`}
                     onKeyDown={event => handleKey(event, segment, 'Importance')}
                     onPointerDown={(event) => beginDrag(event, segment, 'Importance')}><title>{`Drag importance for ${segment.title}`}</title></circle>
                 </g>}
@@ -699,7 +722,7 @@ export function Sunburst({
           </g>}
         </svg>
         {drag && <output className="lm-sunburst__live" aria-live="polite">
-          <span>{itemById.get(drag.id)?.title} · {drag.kind === 'Importance' ? 'Importance' : 'Effort'}</span>
+          <span>{itemById.get(drag.id)?.title} · {drag.kind === 'Importance' ? `Importance${matchingIds ? ' of shown siblings' : ''}` : 'Effort'}</span>
           <strong>{formatPercent(drag.value)}</strong>
         </output>}
         {layout.length === 0 && <div className="lm-sunburst__empty">
@@ -712,24 +735,24 @@ export function Sunburst({
           </div>
         </div>}
       </div>
-      {matchingIds && !compact && <p className="lm-sunburst__filter-note">Filtered view · clear filters to resize importance</p>}
+      {matchingIds && !compact && <p className="lm-sunburst__filter-note">Filtered view · importance adjusts shown siblings</p>}
       {fallbackCreates.length > 0 && <div className="lm-sunburst__create-list" aria-label="Add children to small slices">
         {fallbackCreates.map((segment) => <button key={segment.id} type="button" disabled={disabled}
           aria-label={`Add child to ${segment.title}`} onClick={() => onCreate?.(segment.id)}><span aria-hidden="true">＋</span> {segment.title}</button>)}
       </div>}
       {mode === 'Importance' && selected && selectedSegment && <div className="lm-sunburst__allocation" aria-label={`Allocation for ${selected.title}`}>
         <div><strong>{selected.title}</strong></div>
-        <input type="range" min={0} max={Math.min(99.9, allocationLimit(items, selected.id))} step="any"
-          value={rangePreview?.id === selected.id ? rangePreview.share : selectedSegment.actualShare}
-          disabled={allocationDisabled || selectedSegment.siblingCount < 2} aria-label={`Intended share for ${selected.title}`}
+        <input type="range" min={0} max={Math.min(99.9, maxAllocation(selected.id))} step="any"
+          value={rangePreview?.id === selected.id ? rangePreview.share : editShare(selectedSegment)}
+          disabled={allocationDisabled || selectedSegment.siblingCount < 2 || maxAllocation(selected.id) <= 0} aria-label={`Intended share for ${selected.title}`}
           aria-describedby={showAll ? "lm-sunburst-allocation-help" : undefined}
-          onChange={(event) => { if (!allocationDisabled && selectedSegment.siblingCount >= 2) {
-            rangeDirty.current = true; setRangePreview({ id: selected.id, share: Number(event.currentTarget.value) });
+          onChange={(event) => { if (!allocationDisabled && selectedSegment.siblingCount >= 2 && maxAllocation(selected.id) > 0) {
+            rangeDirty.current = true; setRangePreview({ id: selected.id, share: Number(event.currentTarget.value), context: editContext });
           } }}
           onPointerUp={(event) => commitRange(selected.id, Number(event.currentTarget.value))}
           onKeyUp={(event) => commitRange(selected.id, Number(event.currentTarget.value))}
           onBlur={(event) => commitRange(selected.id, Number(event.currentTarget.value))} />
-        <output>{formatPercent(selectedSegment.actualShare)}</output>
+        <output>{formatPercent(editShare(selectedSegment))}{matchingIds ? " of shown siblings" : ""}</output>
         {showAll && <span id="lm-sunburst-allocation-help" className="lm-sunburst__allocation-help">Turn off Show all to adjust importance.</span>}
       </div>}
       {mode === 'Effort' && selected && selectedSegment && <div className="lm-sunburst__effort-readout">

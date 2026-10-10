@@ -403,6 +403,35 @@ export function mutateItems(items: readonly Item[], command: ItemCommand, settin
           command.share < 0 || command.share > 100)) {
         fail('share must be null or a finite percentage from 0 through 100');
       }
+      if (command.siblingIds !== undefined) {
+        assertIds(command.siblingIds, 'allocation sibling ids');
+        if (command.share === null) fail('Filtered allocation requires a numeric share');
+        const selected = new Set(command.siblingIds);
+        if (selected.size < 2 || !selected.has(item.id)) fail('Allocation siblings must include the target and at least one other sibling');
+        for (const id of selected) {
+          const sibling = requireItem(byId, id);
+          if (!sibling.included || sibling.parentId !== item.parentId) fail('Allocation siblings must be included children of the same parent');
+        }
+        const siblings = items.filter(candidate => candidate.parentId === item.parentId && candidate.included);
+        const shares = siblingShares(siblings);
+        const budget = siblings.reduce((sum, sibling) => sum + (selected.has(sibling.id) ? shares.get(sibling.id)! : 0), 0);
+        if (budget <= 0) fail('Allocation siblings have no share to redistribute');
+        const target = budget * command.share / 100;
+        const otherTotal = budget - shares.get(item.id)!;
+        const remainder = Math.max(0, budget - target);
+        const weights = new Map(siblings.map(sibling => [sibling.id, shares.get(sibling.id)!]));
+        for (const id of selected) weights.set(id, id === item.id ? target
+          : otherTotal <= 0 ? remainder / (selected.size - 1) : remainder * shares.get(id)! / otherTotal);
+        // Explicit weights must be percentages when any automatic siblings remain.
+        // Keep hidden automatic siblings automatic; the unchanged subset budget
+        // leaves their remainder intact. Edited siblings become explicit.
+        result = items.map(candidate => {
+          const weight = weights.get(candidate.id);
+          if (weight === undefined || (!selected.has(candidate.id) && candidate.allocationAuto)) return candidate;
+          return {...candidate, weight, ...(selected.has(candidate.id) ? {allocationAuto: false} : {})};
+        });
+        break;
+      }
       if (command.share === null) {
         result = items.map(candidate => candidate.id === item.id ? { ...candidate, allocationAuto: true } : candidate);
         break;
