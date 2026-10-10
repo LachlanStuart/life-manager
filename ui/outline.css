@@ -73,7 +73,6 @@
   .lm-outline__toolbar .lm-outline__undo { padding: 4px 5px; font-size: 12px; }
   .lm-outline__toolbar .lm-outline__add { font-size: 12px; white-space: nowrap; }
   .lm-outline__expansion-label { display: none; }
-  .lm-outline__expansion .lm-outline__expand-icon { display: inline; font-size: 20px; line-height: 1; }
   .lm-outline__rows { padding: 0 10px 6px; scrollbar-gutter: auto; }
   .lm-outline__row { grid-template-columns: minmax(0, 1fr) 56px; align-items: start; gap: 0; padding: 0; min-height: 0; }
   .lm-outline__identity { align-items: start; grid-row: 1; grid-column: 1; padding-left: min(calc(var(--outline-depth) * 14px), 56px); }
@@ -101,7 +100,7 @@
 /* Reserve the same scrollbar gutter as the rows so column labels stay aligned. */
 .lm-outline__head { overflow-y: hidden; scrollbar-gutter: stable; }
 
-.lm-outline__expand-icon { display: none; }
+.lm-outline__expansion { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 .lm-outline__toolbar, .lm-outline__head { flex-shrink: 0; }
 .lm-outline__expansion { white-space: nowrap; }
 .lm-outline__undo { white-space: nowrap; }

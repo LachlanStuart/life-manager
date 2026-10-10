@@ -214,7 +214,7 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     <div className="lm-outline__toolbar">
       <strong>{settings.name}</strong>
       <input type="search" aria-label="Find in outline" placeholder="Find in outline…" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setQuery(''); }} />
-      <button className="lm-outline__expansion" aria-label={expansionLabel} title={expansionLabel} disabled={model.filtering || !expandable} onClick={() => setExpanded(new Set(shouldExpand ? items.map(item => item.id) : []))}><span className="lm-outline__expansion-label">{expansionLabel}</span><span className="lm-outline__expand-icon" aria-hidden="true">↕</span></button>
+      <button className="lm-outline__expansion" aria-label={expansionLabel} title={expansionLabel} disabled={model.filtering || !expandable} onClick={() => setExpanded(new Set(shouldExpand ? items.map(item => item.id) : []))}><Icon name={shouldExpand ? 'expand-all' : 'collapse-all'} /><span className="lm-outline__expansion-label">{expansionLabel}</span></button>
       <button className="lm-outline__select" aria-label="Select" aria-pressed={selecting} disabled={disabled} onClick={() => { setSelecting(value => !value); setSelection(new Set()); }}>{selecting ? 'Done' : 'Select'}</button>
       <button className="lm-outline__add" aria-label="New" title="New" disabled={locked} onClick={() => beginAdd(null)}>+<span> New</span></button>
       {undoAvailable && <button className="lm-outline__undo" disabled={locked} onClick={() => {
