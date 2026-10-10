@@ -120,6 +120,8 @@ If upgrading a macOS checkout with an existing `.data/` workspace, stop its serv
 
 Under **Settings → Workspace and properties**, edit the workspace name and add single-choice properties. Give each property ordered options, colours, an unset label, and a default for new Items. Defaults never fill existing Items retroactively. Edit an Item’s values under **Properties**, or use the inline and child bulk pickers.
 
+New options pick distinct colours from a shared palette while unused colours remain. Click an option or unset colour to choose a palette swatch, or use **Custom color** for any RGB colour.
+
 The optional **Lifecycle property** determines calculated effort: Completed gives leaves 100%; No calculated effort gives an Item 0% even when it has children. Manual effort overrides either behaviour. Status has this role initially; colouring and grouping by another property do not change it.
 
 Settings also contains top-level Items, saved agent prompts and sunburst display preferences. Workspace configuration, Items and history are saved on the server. Display preferences such as label sizes and padding are saved in that browser.

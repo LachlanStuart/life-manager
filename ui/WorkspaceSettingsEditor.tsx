@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { EnumProperty, Item, SaveSettingsInput, WorkspaceSettings } from '../src/types';
 import { propertyValue, validateSettings } from '../src/properties';
 import { newClientId } from './navigation';
+import { ColorPicker } from './ColorPicker';
+import { DEFAULT_UNSET_COLOR, nextPropertyColor } from './property-colors';
 import './workspace-settings.css';
 
 const copy = <T,>(value: T): T => structuredClone(value);
@@ -50,14 +52,14 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
         <label>Property name<input aria-label={`Property name ${propertyIndex + 1}`} required maxLength={200} value={property.name} onChange={event => edit(property.id, {name: event.target.value})} /></label>
         <div className="lm-property-settings-row">
           <label>Unset label<input required maxLength={200} value={property.unsetLabel} onChange={event => edit(property.id, {unsetLabel: event.target.value})} /></label>
-          <label>Unset color<input type="color" value={property.unsetColor} onChange={event => edit(property.id, {unsetColor: event.target.value})} /></label>
+          <div className="lm-property-unset-color"><span>Unset color</span><ColorPicker label={`${property.name || 'New property'} unset color`} value={property.unsetColor} disabled={locked} onChange={color => edit(property.id, {unsetColor: color})} /></div>
         </div>
         <label>Default for new Items<select aria-label={`${property.name} default for new Items`} value={property.defaultValue ?? ''} onChange={event => edit(property.id, {defaultValue: event.target.value || null})}>
           <option value="">{unsetLabel(property)}</option>{property.options.map(option => <option key={option.id} value={option.id}>{option.label || 'New option'}</option>)}
         </select></label>
         <div className="lm-property-options">
           {property.options.map((option, index) => <div className="lm-property-option" key={option.id}>
-            <input type="color" aria-label={`${option.label || 'New option'} color`} value={option.color} onChange={event => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, color: event.target.value} : value)})} />
+            <ColorPicker label={`${option.label || 'New option'} color`} value={option.color} disabled={locked} onChange={color => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, color} : value)})} />
             <input required aria-label={`${property.name} option ${index + 1}`} maxLength={200} value={option.label} placeholder="Option name" onChange={event => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, label: event.target.value} : value)})} />
             <button type="button" aria-label={`Move ${option.label} up`} disabled={index === 0} onClick={() => edit(property.id, {options: move(property.options, index, -1)})}>↑</button>
             <button type="button" aria-label={`Move ${option.label} down`} disabled={index === property.options.length - 1} onClick={() => edit(property.id, {options: move(property.options, index, 1)})}>↓</button>
@@ -68,12 +70,12 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
           </div>)}
         </div>
         <div className="lm-property-actions">
-          <button type="button" onClick={() => edit(property.id, {options: [...property.options, {id: newClientId('option'), label: '', color: '#7895a3', behavior: 'normal'}]})}>+ Option</button>
+          <button type="button" onClick={() => edit(property.id, {options: [...property.options, {id: newClientId('option'), label: '', color: nextPropertyColor([property.unsetColor, ...property.options.map(option => option.color)]), behavior: 'normal'}]})}>+ Option</button>
           <button type="button" onClick={() => setDraft({...draft, properties: move(draft.properties, propertyIndex, -1)})} disabled={propertyIndex === 0}>Move property up</button>
           <button type="button" className="lm-danger" onClick={() => setDraft({...draft, lifecyclePropertyId: draft.lifecyclePropertyId === property.id ? null : draft.lifecyclePropertyId, properties: draft.properties.filter(value => value.id !== property.id)})}>Remove property</button>
         </div>
       </details>)}
-      <button type="button" onClick={() => setDraft({...draft, properties: [...draft.properties, {id: newClientId('property'), name: '', options: [], unsetLabel: 'Unset', unsetColor: '#a1a69a', defaultValue: null}]})}>+ Property</button>
+      <button type="button" onClick={() => setDraft({...draft, properties: [...draft.properties, {id: newClientId('property'), name: '', options: [], unsetLabel: 'Unset', unsetColor: DEFAULT_UNSET_COLOR, defaultValue: null}]})}>+ Property</button>
       {removed.length > 0 && <div className="lm-property-removals">
         <p>Reassign removed options for current Items. Snapshots keep their original values.</p>
         {removed.map(({property, option, count}) => {

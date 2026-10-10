@@ -48,6 +48,8 @@ Properties have stable identities, editable names, ordered options with labels a
 
 The starting **Status** property offers **Later, Now, Doing, Blocked, Done, Skip, and Cut**, with Later as its creation default. Skip represents a routine task that is irrelevant for the current review; Cut represents intentional abandonment. One property may be designated as the lifecycle property, with option behaviours Normal, Completed, or No calculated effort; choosing None disables lifecycle-derived behaviour. Status initially owns that role, with Done completed and Skip/Cut earning no calculated effort. Property values and dashboard inclusion are independent.
 
+New properties use a neutral unset colour from a shared palette. New options prefer palette colours not yet used by that property's options or unset value, balancing reuse once all colours are taken. Unset and option colour popups offer one-click palette swatches alongside custom colour input.
+
 Completing children never automatically completes their parent. Changing a parent's status never rewrites its children's statuses. Broad topics and ongoing projects can have lifecycle annotations even when overall completion has no useful meaning.
 
 Project journals, blockers, and rough next-step plans may remain in project-level notes rather than becoming child Items. Items can be created quickly at specific locations and moved within the hierarchy.

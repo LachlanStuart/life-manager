@@ -1,0 +1,12 @@
+.lm-color-picker { width: 36px; }
+.lm-color-picker .lm-color-picker__trigger { width: 36px; height: 34px; padding: 4px; display: grid; }
+.lm-color-picker__trigger span { display: block; border-radius: 3px; border: 1px solid #0002; }
+.lm-color-picker__popup { position: fixed; z-index: 70; box-sizing: border-box; width: 244px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; padding: 12px; border: 1px solid var(--theme-border, #dedfd5); border-radius: 10px; background: var(--theme-surface, #fffef9); color: var(--theme-text, #303c36); box-shadow: 0 8px 25px #303c362b; }
+.lm-color-picker__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+.lm-color-picker__heading button { flex-shrink: 0; width: 32px; }
+.lm-color-picker__palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+.lm-color-picker__palette button { min-width: 0; height: 36px; padding: 0; border: 1px solid #0002; border-radius: 6px; color: #fff; text-shadow: 0 1px 3px #000; }
+.lm-color-picker__palette button[aria-pressed=true] { outline: 2px solid var(--theme-text, #303c36); outline-offset: 2px; }
+.lm-color-picker button:focus-visible { outline: 2px solid var(--theme-accent, #2f634e); outline-offset: 2px; }
+.lm-color-picker .lm-color-picker__custom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 0; font-size: 12px; }
+.lm-color-picker .lm-color-picker__custom input { width: 44px; height: 34px; padding: 3px; }

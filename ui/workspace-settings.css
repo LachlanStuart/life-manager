@@ -4,7 +4,7 @@
 .lm-property-definition label { margin-bottom: 10px; }
 .lm-property-settings-row { display: flex; align-items: end; gap: 10px; }
 .lm-property-settings-row label:first-child { flex: 1; min-width: 0; }
-.lm-property-settings-row input[type=color], .lm-property-option input[type=color] { width: 36px; min-width: 36px; padding: 3px; height: 34px; }
+.lm-property-unset-color { display: grid; gap: 6px; margin-bottom: 10px; font-size: 12px; }
 .lm-property-options { display: grid; gap: 8px; }
 .lm-property-option { display: grid; grid-template-columns: 36px minmax(70px,1fr) repeat(3,28px); gap: 4px; align-items: center; }
 .lm-property-option button { padding: 4px; min-height: 32px; }
