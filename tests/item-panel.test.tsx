@@ -180,7 +180,7 @@ describe('ItemPanel', () => {
     await waitFor(() => expect(onCommand).toHaveBeenCalledTimes(2));
   });
 
-  it('confirms bulk deletion including descendants, then clears selection after success', async () => {
+  it('deletes selected children immediately, then clears selection after success', async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const { props } = renderPanel();
@@ -188,27 +188,20 @@ describe('ItemPanel', () => {
     expect(remove.disabled).toBe(true);
     await user.click(screen.getByRole('checkbox', { name: 'Select all children' }));
     await user.click(remove);
-    expect(confirm).toHaveBeenCalledWith('Delete 2 selected children and 1 descendant? Historical snapshots will be preserved.');
-    expect(props.onCommand).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
-    await user.click(remove);
+    expect(confirm).not.toHaveBeenCalled();
     expect(props.onCommand).toHaveBeenCalledWith({ type: 'delete-many', ids: ['done', 'hidden'] });
     await waitFor(() => expect(remove.disabled).toBe(true));
   });
 
-  it('confirms deletion from the shared controls, including descendants, and honors cancellation', async () => {
+  it('deletes immediately from the shared controls without confirmation', async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const { props } = renderPanel();
     await user.click(screen.getByRole('button', { name: 'Delete Finished child' }));
-    expect(confirm).toHaveBeenCalledWith('Delete “Finished child” and 1 descendant? Historical snapshots will be preserved.');
-    expect(props.onCommand).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
-    await user.click(screen.getByRole('button', { name: 'Delete Finished child' }));
     expect(props.onCommand).toHaveBeenCalledWith({ type: 'delete', id: 'done' });
     await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Delete Life Manager' }).disabled).toBe(false));
     await user.click(screen.getByRole('button', { name: 'Delete Life Manager' }));
-    expect(confirm).toHaveBeenCalledWith('Delete “Life Manager” and 3 descendants? Historical snapshots will be preserved.');
+    expect(confirm).not.toHaveBeenCalled();
     expect(props.onCommand).toHaveBeenCalledWith({ type: 'delete', id: 'project' });
   });
 

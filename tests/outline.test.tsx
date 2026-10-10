@@ -253,14 +253,14 @@ it('keeps selection actions beside the toggle and omits the persistent footer', 
   expect(screen.queryByRole('toolbar', { name: 'Selected Item actions' })).toBeNull();
 });
 
-it('bulk deletes selected roots once, confirms only unique descendants, and clears after success', async () => {
+it('bulk deletes selected roots once without confirmation and clears after success', async () => {
   const { screen, commands } = setup();
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   fireEvent.click(screen.getByRole('button', { name: 'Select' }));
   fireEvent.click(screen.getByLabelText('Select Build'));
   fireEvent.click(screen.getByLabelText('Select Garden'));
   fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-  expect(confirm).toHaveBeenCalledWith('Delete 2 selected Items and 2 descendants? Historical snapshots will be preserved.');
+  expect(confirm).not.toHaveBeenCalled();
   await waitFor(() => expect(commands.at(-1)).toEqual({ type: 'delete-many', ids: ['Build'] }));
   expect(screen.getByText('0 selected')).toBeTruthy();
 });

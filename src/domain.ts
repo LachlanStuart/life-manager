@@ -451,6 +451,24 @@ export function mutateItems(items: readonly Item[], command: ItemCommand, settin
       fail(`Unknown command type: ${String((command as { type?: unknown }).type)}`);
   }
 
+  return normalizeMutation(items, result, settings);
+}
+
+/** Restore a saved branch, appending its root to its surviving parent or the workspace. */
+export function restoreDeletedItems(items: readonly Item[], deleted: readonly Item[], settings: WorkspaceSettings): Item[] {
+  const deletedIds = new Set(deleted.map(item => item.id));
+  const currentIds = new Set(items.map(item => item.id));
+  let restored = [...items];
+  for (const item of deleted) {
+    if (currentIds.has(item.id)) fail(`Cannot restore: an Item with id ${item.id} already exists`);
+    const root = item.parentId === null || !deletedIds.has(item.parentId);
+    const parentId = root && item.parentId !== null && !currentIds.has(item.parentId) ? null : item.parentId;
+    restored.push({ ...item, parentId, order: root ? nextOrder(restored, parentId) : item.order });
+  }
+  return normalizeMutation(items, restored, settings);
+}
+
+function normalizeMutation(items: readonly Item[], result: Item[], settings: WorkspaceSettings): Item[] {
   // Materialize legacy ratios only when a group first acquires an automatic Item.
   // Existing snapshots stay untouched until an explicit correction mutates them.
   const autoParents = new Set(result.filter(item => item.allocationAuto).map(item => item.parentId));

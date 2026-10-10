@@ -10,7 +10,7 @@ import { Icon } from './Icons';
 import { propertyPresentation } from './property-presentation';
 import { PromptDialog } from './PromptDialog';
 import { Modal } from './Modal';
-import { ancestorTrail, descendantsOf, moveParentOptions } from './item-hierarchy';
+import { ancestorTrail, moveParentOptions } from './item-hierarchy';
 import './item-panel.css';
 import './item-row.css';
 
@@ -179,8 +179,6 @@ export function ItemPanel({
 
   const remove = (target: Item) => {
     if (locked || snapshotId || deleting) return;
-    const count = descendantsOf(items, target.id).size;
-    if (!window.confirm(`Delete “${target.title}”${count ? ` and ${count} descendant${count === 1 ? '' : 's'}` : ''}? Historical snapshots will be preserved.`)) return;
     setDeleting(true);
     void issue({ type: 'delete', id: target.id }).finally(() => setDeleting(false));
   };
@@ -284,8 +282,6 @@ export function ItemPanel({
             {!snapshotId && <button type="button" className="lm-item-panel__danger" disabled={locked || deleting || !selected.size} onClick={() => {
               const ids = children.filter(child => selected.has(child.id)).map(child => child.id);
               if (!ids.length) return;
-              const descendants = new Set(ids.flatMap(id => [...descendantsOf(items, id)]));
-              if (!window.confirm(`Delete ${ids.length} selected child${ids.length === 1 ? '' : 'ren'}${descendants.size ? ` and ${descendants.size} descendant${descendants.size === 1 ? '' : 's'}` : ''}? Historical snapshots will be preserved.`)) return;
               setDeleting(true);
               void issue({ type: 'delete-many', ids }).then(saved => { if (saved) setSelected(new Set()); }).finally(() => setDeleting(false));
             }}>Delete</button>}

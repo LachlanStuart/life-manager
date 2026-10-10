@@ -4,6 +4,7 @@ import type { LifeManagerStore } from './store.js';
 import { MAX_NOTES_CHARS } from './types.js';
 import type {
   MutationInput,
+  RestoreDeletedInput,
   SaveSettingsInput,
   PromptTemplate,
   ViewInput,
@@ -144,6 +145,8 @@ export const workspaceSchema = z.object({
   snapshots: z.array(snapshotSummarySchema),
   widgets: z.array(widgetSummarySchema),
   promptTemplates: z.array(promptTemplateSchema),
+  recycleBin: z.array(z.object({ id: idSchema, title: z.string(), parentId: nullableParentSchema,
+    deletedAt: z.string(), itemCount: z.number().int().positive() }).strict()).optional(),
 }).strict();
 
 export const viewInputSchema = z.object({ snapshotId: idSchema.optional() }).strict();
@@ -154,6 +157,7 @@ export const mutationInputSchema = viewInputSchema.extend({
 export const planInputSchema = z.object({
   expectedRevision: z.number().int().nonnegative().optional(),
 }).strict();
+export const restoreDeletedInputSchema = planInputSchema.extend({ id: idSchema }).strict();
 export const rolloverInputSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   expectedRevision: z.number().int().nonnegative().optional(),
@@ -178,6 +182,7 @@ const widgetActionResultSchema = z.object({
 export const rpcContract = {
   workspace: { input: viewInputSchema, output: workspaceSchema },
   mutate: { input: mutationInputSchema, output: workspaceSchema },
+  restoreDeleted: { input: restoreDeletedInputSchema, output: workspaceSchema },
   saveSettings: { input: saveSettingsInputSchema, output: workspaceSchema },
   plan: { input: planInputSchema, output: workspaceSchema },
   rollover: { input: rolloverInputSchema, output: workspaceSchema },
@@ -197,6 +202,7 @@ export interface WidgetRegistrySurface {
 export interface LifeManagerActions {
   workspace(input?: ViewInput): Workspace;
   mutate(input: MutationInput): Workspace;
+  restoreDeleted(input: RestoreDeletedInput): Workspace;
   saveSettings(input: SaveSettingsInput): Workspace;
   plan(input?: { expectedRevision?: number }): Workspace;
   rollover(input?: { name?: string; expectedRevision?: number }): Workspace;
@@ -224,6 +230,11 @@ export function createLifeManagerActions(
           snapshotId: result.workspace.dashboard.snapshotId,
         });
       }
+      return result.workspace;
+    },
+    restoreDeleted(input) {
+      const result = store.restoreDeleted(restoreDeletedInputSchema.parse(input), getWidgets());
+      publish({ operation: 'restoreDeleted', revision: result.workspace.dashboard.revision });
       return result.workspace;
     },
     saveSettings(input) {

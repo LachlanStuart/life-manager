@@ -180,8 +180,7 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
     <button disabled={locked || !newTitle.trim()}>Add</button><button type="button" onClick={() => setAddingTo(undefined)}>Cancel</button>
   </form>;
   const remove = (item: Item) => {
-    const count = descendantsOf(items, item.id).size;
-    if (window.confirm(`Delete “${item.title}”${count ? ` and ${count} descendant${count === 1 ? '' : 's'}` : ''}? Historical snapshots will be preserved.`)) void issue({ type: 'delete', id: item.id });
+    if (!locked && !historical) void issue({ type: 'delete', id: item.id });
   };
   const orderedSelected = () => outlineModel(items, new Set(items.map(item => item.id)), true, '', settings, 'Order', propertyId).rows.filter(row => selectedIds.includes(row.item.id)).map(row => row.item.id);
   const deleteSelected = () => {
@@ -195,12 +194,6 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
       }
       return true;
     });
-    // Selected descendants are already covered by their selected ancestor's
-    // subtree; leave them out of the confirmation count and command payload.
-    const descendants = new Set(roots.flatMap(id => [...descendantsOf(items, id)]).filter(id => !selected.has(id)));
-    const selectedLabel = `${selectedIds.length} selected Item${selectedIds.length === 1 ? '' : 's'}`;
-    const descendantLabel = descendants.size ? ` and ${descendants.size} descendant${descendants.size === 1 ? '' : 's'}` : '';
-    if (!window.confirm(`Delete ${selectedLabel}${descendantLabel}? Historical snapshots will be preserved.`)) return;
     void issue({ type: 'delete-many', ids: roots }).then(saved => { if (saved) setSelection(new Set()); });
   };
   const expandable = items.some(item => childrenOf(items, item.id).length > 0);

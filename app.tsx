@@ -8,6 +8,7 @@ import { MoveItemForm } from './ui/MoveItemForm';
 import { Icon } from './ui/Icons';
 import { WorkspaceSettingsEditor } from './ui/WorkspaceSettingsEditor';
 import { RootItemsSettings } from './ui/RootItemsSettings';
+import { RecycleBin } from './ui/RecycleBin';
 import { workspaceSettings } from './src/properties';
 import { propertyPatch, selectedProperty } from './ui/PropertySelect';
 import { FilterControl } from './ui/FilterControl';
@@ -107,10 +108,12 @@ export function LifeManagerPage() {
       if (expectedRevision !== undefined && expectedRevision !== current.dashboard.revision) throw new Error('The dashboard changed. Check the Item before trying again.');
       const next = await api<Workspace>('mutate', { snapshotId: current.dashboard.snapshotId ?? undefined, expectedRevision: current.dashboard.revision, command: value });
       accept(next); setError('');
-      if (routeRef.current.itemId && !next.dashboard.items.some(item => item.id === routeRef.current.itemId)) {
-        const previous = current.dashboard.items.find(item => item.id === routeRef.current.itemId);
-        const updated = { ...routeRef.current, itemId: previous?.parentId ?? null };
-        if (updated.focusId && !next.dashboard.items.some(item => item.id === updated.focusId)) updated.focusId = null;
+      const survivingAncestor = (id: string | null): string | null => {
+        while (id && !next.dashboard.items.some(item => item.id === id)) id = current.dashboard.items.find(item => item.id === id)?.parentId ?? null;
+        return id;
+      };
+      const updated = { ...routeRef.current, itemId: survivingAncestor(routeRef.current.itemId), focusId: survivingAncestor(routeRef.current.focusId) };
+      if (updated.itemId !== routeRef.current.itemId || updated.focusId !== routeRef.current.focusId) {
         window.history.replaceState(null, '', routeUrl(updated)); routeRef.current = updated; setRoute(updated);
       }
     } catch (cause) { setError(message(cause)); await refresh().catch(() => undefined); throw cause; }
@@ -340,6 +343,10 @@ export function LifeManagerPage() {
       onClose={() => setContextItem(null)} onOpen={() => { select(contextItem.id); setContextItem(null); }}
       onInclude={() => { const item = items.find(item => item.id === contextItem.id)!; setContextItem(null); void run(() => command({type: 'update', id: item.id, patch: {included: !item.included}})); }}
       onMove={() => { setMoveItemId(contextItem.id); setContextItem(null); }}
+      onDelete={historical ? undefined : () => {
+        const id = contextItem.id; setContextItem(null);
+        void run(async () => { await saveNotes(); await command({type: 'delete', id}); });
+      }}
       canZoom={items.some(item => item.parentId === contextItem.id && (showAll || effectiveIncluded(items, item.id)))}
       onZoom={() => { focus(contextItem.id); setContextItem(null); }}
       onProperty={(propertyId, value) => { const id = contextItem.id; setContextItem(null); void run(() => command({type: 'update', id, patch: propertyPatch(propertyId, value)})); }}
@@ -387,6 +394,19 @@ export function LifeManagerPage() {
       <details className="lm-settings-section">
         <summary>Top-level Items</summary>
         <RootItemsSettings items={items} disabled={historical || busy || !workspace} onCommand={async value => {await saveNotes(); await command(value);}} onOpen={id => {setSettingsOpen(false); select(id);}} />
+      </details>
+      <details className="lm-settings-section">
+        <summary>Recycle bin</summary>
+        {historical ? <p>Return to the current dashboard to restore deleted Items.</p> : <RecycleBin entries={workspace?.recycleBin ?? []} items={items} disabled={busy || !workspace}
+          onRestore={id => void run(async () => {
+            await saveNotes();
+            await enqueue(async () => {
+              const current = latest.current;
+              if (!current || current.dashboard.snapshotId) throw new Error('Return to the current dashboard to restore deleted Items.');
+              try { accept(await api<Workspace>('recycle-bin/restore', {id, expectedRevision: current.dashboard.revision})); }
+              catch (cause) { await refresh(); throw cause; }
+            });
+          })} />}
       </details>
       <details className="lm-settings-section">
         <summary>Prompts</summary>

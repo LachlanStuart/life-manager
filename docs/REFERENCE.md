@@ -15,6 +15,7 @@ Existing checkout-local workspaces are not moved automatically. On macOS, startu
 [src/store.ts](../src/store.ts) owns the schema and additive migrations. [src/types.ts](../src/types.ts) defines the corresponding application records:
 
 - `items`: `id`, `parent_id`, `sibling_order`, `title`, `status`, `properties_json`, Markdown `notes`, `included`, `weight`, `allocation_auto` (default false for existing Items), nullable `effort_override`, nullable `default_prompt_id`, nullable `resource_uri`.
+- `deleted_items`: one row per deleted branch, with an entry `id`, root `title`, original `parent_id`, `deleted_at`, `item_count`, and complete branch records in `items_json`. Current deletion archives the branch and removes its active rows in one transaction.
 - `prompt_templates`: `id`, `name`, `prompt`. An Item's unset default inherits from its nearest configured ancestor.
 - `periods`, `snapshots`, `life_manager_meta`: period boundaries, complete Item snapshots, workspace settings and the current revision. A snapshot stores its Item records in `items_json`, including notes and hidden Items, and its workspace configuration in `settings_json`. Current configuration is the `workspace_settings` metadata value.
 
@@ -29,13 +30,14 @@ All paths are relative to the running server. POST requests use `Content-Type: a
 | Endpoint | Input / result |
 | --- | --- |
 | `GET /api/server` | Application identifier, desktop protocol version and running instance ID. Used for automatic local workspace-owner attachment. |
-| `GET /api/workspace` | Current Items, workspace settings, periods, snapshot summaries, widgets and prompt templates. Add `?snapshotId=<id>` for a checkpoint. |
+| `GET /api/workspace` | Current Items, workspace settings, periods, snapshot summaries, widgets, prompt templates and `recycleBin` summaries. Add `?snapshotId=<id>` for a checkpoint. |
 | `GET /api/items/<id>` | Item, immediate children, ancestors, revision and period context. Supports `snapshotId`. |
 | `POST /api/mutate` | `{command, expectedRevision?, snapshotId?}`; returns the updated workspace. |
+| `POST /api/recycle-bin/restore` | `{id, expectedRevision?}`; restores the specified recycle-bin entry into the current workspace and returns it. |
 | `POST /api/settings` | `{settings, expectedRevision?, replacements?}`; saves current workspace configuration and returns the workspace. |
 | `POST /api/plan` | `{expectedRevision?}` |
 | `POST /api/rollover` | `{name?, expectedRevision?}` |
-| `GET /api/export` | Complete current/historical Items, workspace settings, and templates as JSON. |
+| `GET /api/export` | Complete current/historical Items, recycled branches, workspace settings, and templates as JSON. |
 | `GET /api/templates` | Saved templates. |
 | `POST /api/templates/save` | `{id, name, prompt}` |
 | `POST /api/templates/delete` | `{id}` |
@@ -45,7 +47,9 @@ All paths are relative to the running server. POST requests use `Content-Type: a
 | `POST /api/agent/t3` | `{location?}` → `{opened: true}` after T3 acknowledges a blank conversation on the server. The optional location selects the T3 app bundle or CLI executable; the working directory and CLI arguments remain server-controlled. |
 | `POST /api/attachments` | Raw PNG/JPEG/GIF/WebP bytes, image content type and `X-Life-Manager: 1`; returns `{url}`. Maximum 20 MB. |
 
-Commands support create, update, delete, delete-many, move, arrange, restore-arrangement, reorder, allocate and bulk updates. New Items default to automatic allocation unless an explicit `patch.weight` or optional creation `share` is supplied. Creation `share` applies a local percentage atomically with the new Item. `allocate` with `share: null` enables automatic allocation; blanks equally divide the remainder after included explicit shares. With included blanks, manual weights represent percentages; without them, weights retain proportional normalization. The additive optional `allocationAuto` field is retained in checkpoint and export Items (schema version 2); absent means manual, preserving older exports and snapshots. `delete-many` accepts `ids` and removes all selected subtrees atomically while preserving historical snapshots. See [the agent skill](../skills/life-manager/SKILL.md) for examples. Revision conflicts return HTTP 409. Other invalid operations return an error string. Browser clients receive change notifications over `/api/events` and refresh current server state.
+Commands support create, update, delete, delete-many, move, arrange, restore-arrangement, reorder, allocate and bulk updates. New Items default to automatic allocation unless an explicit `patch.weight` or optional creation `share` is supplied. Creation `share` applies a local percentage atomically with the new Item. `allocate` with `share: null` enables automatic allocation; blanks equally divide the remainder after included explicit shares. With included blanks, manual weights represent percentages; without them, weights retain proportional normalization. The additive optional `allocationAuto` field is retained in checkpoint and export Items (schema version 2); absent means manual, preserving older exports and snapshots. `delete` and `delete-many` archive current subtrees in the recycle bin atomically while preserving historical snapshots. Overlapping selections create one entry per highest selected root. See [the agent skill](../skills/life-manager/SKILL.md) for examples. Revision conflicts return HTTP 409. Other invalid operations return an error string. Browser clients receive change notifications over `/api/events` and refresh current server state.
+
+Current workspace `recycleBin` entries are `{id,title,parentId,deletedAt,itemCount}`, ordered newest first; `itemCount` includes the root. Restoration preserves Item IDs, notes and descendant structure, appends the root to its surviving original parent (otherwise the workspace root), and applies ordinary allocation normalization. Property values no longer defined by current settings become unset; removed property fields and missing prompt references are cleared. A conflicting active Item ID or stale revision rejects restoration without changing the bin. Restore has no `snapshotId` input. Historical correction deletions remain local to their snapshot and do not enter the bin. Recycle entries have no automatic expiry or permanent-deletion endpoint. Schema-version-2 exports include an additive `recycleBin` array with each summary plus its full `items`.
 
 ## Workspace settings and properties
 

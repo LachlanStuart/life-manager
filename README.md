@@ -124,6 +124,8 @@ New options pick distinct colours from a shared palette while unused colours rem
 
 The optional **Lifecycle property** determines calculated effort: Completed gives leaves 100%; No calculated effort gives an Item 0% even when it has children. Manual effort overrides either behaviour. Status has this role initially; colouring and grouping by another property do not change it.
 
+Delete an Item from its right-click menu or trash control to move it and its children to the recycle bin immediately. **Settings → Recycle bin** shows the newest deletions first. Restore returns the whole branch to its original parent, or to the top level if that parent is gone. Deleted Items stay recoverable across restarts and periods.
+
 Settings also contains top-level Items, saved agent prompts and sunburst display preferences. Workspace configuration, Items and history are saved on the server. Display preferences such as label sizes and padding are saved in that browser.
 
 | Environment variable | Default | Purpose |
@@ -168,7 +170,7 @@ See the [configuration reference](docs/REFERENCE.md#widgets) for widget examples
 
 Back up the **whole data directory**, including the SQLite database and `attachments/`. Stop the server before making a simple folder copy. For backups while the app is running, use SQLite's backup facilities and preserve the attachments alongside the database.
 
-[Download a JSON export](http://localhost:4317/api/export) from a server on the default local port, or use `/api/export` on your server's address. JSON exports include current and historical records, but do not replace an attachments backup.
+[Download a JSON export](http://localhost:4317/api/export) from a server on the default local port, or use `/api/export` on your server's address. JSON exports include current, historical and recycled Item records, but do not replace an attachments backup.
 
 Keep data directories and authorisation tokens private. [Storage details](docs/REFERENCE.md#storage) describe what is saved.
 

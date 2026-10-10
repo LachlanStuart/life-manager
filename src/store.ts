@@ -9,7 +9,7 @@ export interface StoreDatabase {
   transaction<A extends unknown[], R>(operation: (...args: A) => R): (...args: A) => R;
 }
 
-import { mutateItems, seedItems } from './domain.js';
+import { mutateItems, restoreDeletedItems, seedItems } from './domain.js';
 import { DEFAULT_WORKSPACE_SETTINGS, propertyValue, validateSettings } from './properties.js';
 import type {
   Checkpoint,
@@ -23,6 +23,8 @@ import type {
   Workspace,
   WorkspaceSettings,
   SaveSettingsInput,
+  DeletedItemSummary,
+  RestoreDeletedInput,
 } from './types.js';
 
 export const STORE_MIGRATIONS = [
@@ -69,6 +71,14 @@ export const STORE_MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS snapshots_period_idx
     ON snapshots(period_id, captured_at);`,
+  `CREATE TABLE IF NOT EXISTS deleted_items (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    parent_id TEXT,
+    deleted_at TEXT NOT NULL,
+    item_count INTEGER NOT NULL,
+    items_json TEXT NOT NULL
+  );`,
 ] as const;
 
 /** Apply only additive schema changes; existing snapshot JSON and notes remain untouched. */
@@ -124,6 +134,10 @@ interface SnapshotRow {
 }
 
 type SnapshotSummaryRow = Omit<SnapshotRow, 'items_json' | 'settings_json'>;
+interface DeletedItemRow { id: string; title: string; parent_id: string | null; deleted_at: string; item_count: number; items_json: string }
+const deletedSummary = (row: Omit<DeletedItemRow, 'items_json'>): DeletedItemSummary => ({
+  id: row.id, title: row.title, parentId: row.parent_id, deletedAt: row.deleted_at, itemCount: row.item_count,
+});
 
 export interface StoreResult {
   workspace: Workspace;
@@ -142,11 +156,13 @@ export interface ExportedLifeManagerData {
   };
   periods: Period[];
   snapshots: Array<SnapshotSummary & { revision: number; items: Item[]; settings: WorkspaceSettings }>;
+  recycleBin: Array<DeletedItemSummary & { items: Item[] }>;
 }
 
 export interface LifeManagerStore {
   workspace(input?: ViewInput, widgets?: WidgetSummary[]): Workspace;
   mutate(input: MutationInput, widgets?: WidgetSummary[]): StoreResult;
+  restoreDeleted(input: RestoreDeletedInput, widgets?: WidgetSummary[]): StoreResult;
   saveSettings(input: SaveSettingsInput, widgets?: WidgetSummary[]): StoreResult;
   plan(expectedRevision?: number, widgets?: WidgetSummary[]): StoreResult;
   rollover(
@@ -249,6 +265,10 @@ export function createLifeManagerStore(
     WHERE id = ?
   `);
   const deleteItemStatement = db.prepare('DELETE FROM items WHERE id = ?');
+  const insertDeletedStatement = db.prepare('INSERT INTO deleted_items(id, title, parent_id, deleted_at, item_count, items_json) VALUES (?, ?, ?, ?, ?, ?)');
+  const listDeletedStatement = db.prepare('SELECT id, title, parent_id, deleted_at, item_count FROM deleted_items ORDER BY deleted_at DESC, rowid DESC');
+  const getDeletedStatement = db.prepare('SELECT * FROM deleted_items WHERE id = ?');
+  const removeDeletedStatement = db.prepare('DELETE FROM deleted_items WHERE id = ?');
   const updatePropertiesStatement = db.prepare('UPDATE items SET status = ?, properties_json = ? WHERE id = ?');
   const listTemplatesStatement = db.prepare('SELECT id, name, prompt FROM prompt_templates ORDER BY name, id');
   const getTemplateStatement = db.prepare('SELECT id, name, prompt FROM prompt_templates WHERE id = ?');
@@ -394,6 +414,7 @@ export function createLifeManagerStore(
       snapshots,
       widgets,
       promptTemplates: listPromptTemplates(),
+      recycleBin: (listDeletedStatement.all() as DeletedItemRow[]).map(deletedSummary),
     };
   }
 
@@ -411,6 +432,29 @@ export function createLifeManagerStore(
         throw new Error(`Unknown prompt template: ${item.defaultPromptId}`);
       }
     }
+    const afterIds = new Set(after.map(item => item.id));
+    const deleted = before.filter(item => !afterIds.has(item.id));
+    const deletedIds = new Set(deleted.map(item => item.id));
+    const roots = deleted.filter(item => item.parentId === null || !deletedIds.has(item.parentId));
+    if (roots.length) {
+      const children = new Map<string, Item[]>();
+      for (const item of deleted) if (item.parentId !== null) {
+        const siblings = children.get(item.parentId) ?? [];
+        siblings.push(item); children.set(item.parentId, siblings);
+      }
+      const at = now().toISOString();
+      for (const root of roots) {
+        const branch = [root];
+        for (let index = 0; index < branch.length; index++) branch.push(...(children.get(branch[index]!.id) ?? []));
+        insertDeletedStatement.run(`deleted-${makeId()}`, root.title, root.parentId, at, branch.length, JSON.stringify(branch));
+      }
+    }
+    const changed = persistItems(before, after);
+    if (changed) setMeta('current_revision', revision + 1);
+    return changed;
+  });
+
+  function persistItems(before: Item[], after: Item[]): boolean {
     const beforeById = new Map(before.map((item) => [item.id, item]));
     const afterById = new Map(after.map((item) => [item.id, item]));
     let changed = false;
@@ -445,9 +489,38 @@ export function createLifeManagerStore(
         changed = true;
       }
     }
-    if (changed) setMeta('current_revision', revision + 1);
     return changed;
+  }
+
+  const restoreBranch = db.transaction((input: RestoreDeletedInput) => {
+    const revision = currentRevision();
+    if (input.expectedRevision !== undefined && input.expectedRevision !== revision) {
+      throw new Error(`Revision conflict: expected ${input.expectedRevision}, current revision is ${revision}.`);
+    }
+    const entry = getDeletedStatement.get(input.id) as DeletedItemRow | undefined;
+    if (!entry) throw new Error('This Item is no longer in the recycle bin.');
+    const settings = currentSettings();
+    const branch = parseItems(entry.items_json).map(item => {
+      const properties: Record<string, string | null> = {};
+      let status: string | null = null;
+      for (const property of settings.properties) {
+        const saved = propertyValue(item, property.id);
+        const value = property.options.some(option => option.id === saved) ? saved : null;
+        if (property.id === 'status') status = value;
+        else if (Object.hasOwn(item.properties ?? {}, property.id)) properties[property.id] = value;
+      }
+      return { ...item, status, properties,
+        defaultPromptId: item.defaultPromptId && getTemplateStatement.get(item.defaultPromptId) ? item.defaultPromptId : null };
+    });
+    const before = listItems();
+    persistItems(before, restoreDeletedItems(before, branch, settings));
+    removeDeletedStatement.run(input.id);
+    setMeta('current_revision', revision + 1);
   });
+  function restoreDeleted(input: RestoreDeletedInput, widgets: WidgetSummary[] = []): StoreResult {
+    restoreBranch(input);
+    return { workspace: workspace({}, widgets), changed: true };
+  }
 
   const mutateSnapshot = db.transaction((input: MutationInput): boolean => {
     const snapshot = getSnapshotStatement.get(input.snapshotId) as SnapshotRow | undefined;
@@ -592,6 +665,8 @@ export function createLifeManagerStore(
         items: parseItems(row.items_json),
         settings: JSON.parse(row.settings_json),
       })),
+      recycleBin: (db.prepare('SELECT * FROM deleted_items ORDER BY deleted_at DESC, rowid DESC').all() as DeletedItemRow[])
+        .map(row => ({ ...deletedSummary(row), items: parseItems(row.items_json) })),
     };
   }
 
@@ -621,5 +696,5 @@ export function createLifeManagerStore(
     }
   });
 
-  return { workspace, mutate, saveSettings, plan, rollover, exportData, listPromptTemplates, savePromptTemplate, deletePromptTemplate };
+  return { workspace, mutate, restoreDeleted, saveSettings, plan, rollover, exportData, listPromptTemplates, savePromptTemplate, deletePromptTemplate };
 }

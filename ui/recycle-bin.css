@@ -1,0 +1,6 @@
+.lm-recycle-bin ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; max-height: 50dvh; overflow-y: auto; }
+.lm-recycle-bin li { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--theme-border, #dedfd5); padding: 10px 0; }
+.lm-recycle-bin li > div { min-width: 0; display: grid; gap: 4px; }
+.lm-recycle-bin strong { font-size: 14px; overflow-wrap: anywhere; }
+.lm-recycle-bin small { font-size: 12px; color: var(--theme-muted, #747b70); overflow-wrap: anywhere; }
+.lm-recycle-bin button { flex-shrink: 0; }

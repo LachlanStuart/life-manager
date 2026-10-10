@@ -61,6 +61,18 @@ async function json<T>(response: Response, status = 200): Promise<T> {
 
 const prompt: PromptTemplate = { id: 'launch', name: 'Launch selected Item', prompt: 'Open {{item.name}} at {{item.url}} ({{item.id}})' };
 
+it('lists deleted Items and restores through HTTP with revision and snapshot validation', async () => {
+  const {get, post} = await setup();
+  const deleted = await json<Workspace>(await post('/api/mutate', {command: {type: 'delete', id: 'build'}}));
+  const entry = deleted.recycleBin![0]!;
+  expect((await json<Workspace>(await get('/api/workspace'))).recycleBin).toEqual(deleted.recycleBin);
+  await json(await post('/api/recycle-bin/restore', {id: entry.id, expectedRevision: deleted.dashboard.revision - 1}), 409);
+  expect((await post('/api/recycle-bin/restore', {id: entry.id, snapshotId: deleted.snapshots[0]!.id})).ok).toBe(false);
+  const restored = await json<Workspace>(await post('/api/recycle-bin/restore', {id: entry.id, expectedRevision: deleted.dashboard.revision}));
+  expect(restored.recycleBin).toEqual([]);
+  expect(restored.dashboard.items.some(item => item.id === 'build')).toBe(true);
+});
+
 it('only launches T3 on an explicit protected action, never while preparing a prompt', async () => {
   const { post, get, launchT3, sendToAgent } = await setup();
   await json(await post('/api/templates/save', prompt));

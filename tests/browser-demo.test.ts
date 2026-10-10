@@ -24,6 +24,19 @@ async function setup() {
 }
 
 describe('browser-only demo', () => {
+  it('persists deleted branches and restores them through the demo API', async () => {
+    const { api, db, lock, workspace } = await setup();
+    const before = await workspace();
+    const deleted = await api('mutate', {command: {type: 'delete', id: 'garden'}}) as Workspace;
+    const entry = deleted.recycleBin![0]!;
+    expect(entry.itemCount).toBeGreaterThan(1);
+    const reopened = createDemoApi(SQL, db, lock);
+    expect((await reopened('workspace') as Workspace).recycleBin).toEqual(deleted.recycleBin);
+    const restored = await reopened('recycle-bin/restore', {id: entry.id, expectedRevision: deleted.dashboard.revision}) as Workspace;
+    expect(restored.recycleBin).toEqual([]);
+    expect(restored.dashboard.items.find(item => item.id === 'garden')).toMatchObject({parentId: 'build', notes: before.dashboard.items.find(item => item.id === 'garden')!.notes});
+    expect(restored.dashboard.items).toHaveLength(before.dashboard.items.length);
+  });
   it('uses the shared seed, validates edits and restores them from IndexedDB', async () => {
     const { api, db, lock, workspace } = await setup();
     const initial = await workspace();

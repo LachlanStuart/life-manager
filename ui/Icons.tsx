@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-export type IconName = 'expand-all' | 'collapse-all' | 'calendar' | 'outline' | 'filter' | 'sort' | 'sunburst' | 'kanban' | 'Navigate' | 'Omni' | 'Importance' | 'Effort' | 'Create' | 'eye' | 'eye-off' | 'settings' | 'open-item' | 'move' | 'zoom';
+export type IconName = 'trash' | 'expand-all' | 'collapse-all' | 'calendar' | 'outline' | 'filter' | 'sort' | 'sunburst' | 'kanban' | 'Navigate' | 'Omni' | 'Importance' | 'Effort' | 'Create' | 'eye' | 'eye-off' | 'settings' | 'open-item' | 'move' | 'zoom';
 const paths: Record<IconName, ReactNode> = {
+  trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></>,
   'expand-all': <><path d="m8 7 4-4 4 4m-8 10 4 4 4-4M12 3v6m0 6v6" /></>,
   'collapse-all': <><path d="m8 3 4 4 4-4m-8 18 4-4 4 4M12 1v6m0 10v6" /></>,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h2m4 0h2m-8 3h2"/></>,

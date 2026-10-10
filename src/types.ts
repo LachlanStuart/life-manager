@@ -52,7 +52,9 @@ export interface EnumOption { id: string; label: string; color: string; behavior
 export interface EnumProperty { id: string; name: string; options: EnumOption[]; unsetLabel: string; unsetColor: string; defaultValue: string | null }
 export interface WorkspaceSettings { name: string; properties: EnumProperty[]; lifecyclePropertyId: string | null }
 export interface SaveSettingsInput { settings: WorkspaceSettings; expectedRevision?: number; replacements?: Record<string, Record<string, string | null>> }
-export interface Workspace { settings?: WorkspaceSettings; dashboard: Dashboard; periods: Period[]; snapshots: SnapshotSummary[]; widgets: WidgetSummary[]; promptTemplates: PromptTemplate[] }
+export interface DeletedItemSummary { id: string; title: string; parentId: string | null; deletedAt: string; itemCount: number }
+export interface RestoreDeletedInput { id: string; expectedRevision?: number }
+export interface Workspace { settings?: WorkspaceSettings; dashboard: Dashboard; periods: Period[]; snapshots: SnapshotSummary[]; widgets: WidgetSummary[]; promptTemplates: PromptTemplate[]; recycleBin?: DeletedItemSummary[] }
 export interface ViewInput { snapshotId?: string }
 export interface MutationInput extends ViewInput { expectedRevision?: number; command: ItemCommand }
 export interface WidgetContext { itemId: string; snapshotId?: string; config?: Record<string, unknown> }

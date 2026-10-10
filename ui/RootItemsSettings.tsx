@@ -30,11 +30,7 @@ export function RootItemsSettings({items, disabled, onCommand, onOpen}: {
       <button aria-label={`Move ${item.title} up`} disabled={locked || index === 0} onClick={() => reorder(index, -1)}>↑</button>
       <button aria-label={`Move ${item.title} down`} disabled={locked || index === roots.length - 1} onClick={() => reorder(index, 1)}>↓</button>
       <button aria-label={`Open ${item.title}`} onClick={() => onOpen(item.id)}><Icon name="open-item" /></button>
-      <button className="lm-danger" aria-label={`Delete ${item.title}`} disabled={locked} onClick={() => {
-        const descendants = new Set([item.id]);
-        for (let previous = 0; previous !== descendants.size;) {previous = descendants.size; for (const child of items) if (child.parentId && descendants.has(child.parentId)) descendants.add(child.id);}
-        if (window.confirm(`Delete “${item.title}” and its ${descendants.size - 1} descendants from the current workspace? Snapshots are preserved.`)) void run({type: 'delete', id: item.id});
-      }}>×</button>
+      <button className="lm-danger" aria-label={`Delete ${item.title}`} disabled={locked} onClick={() => void run({type: 'delete', id: item.id})}>×</button>
     </li>)}</ul>
     <form onSubmit={event => {event.preventDefault(); if (newTitle.trim()) void run({type: 'create', parentId: null, title: newTitle.trim()}).then(saved => {if (saved) setNewTitle('');});}}>
       <input aria-label="New top-level Item" placeholder="New top-level Item…" maxLength={500} value={newTitle} disabled={locked} onChange={event => setNewTitle(event.target.value)} />

@@ -21,6 +21,7 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
   window.history.replaceState(null, '', path);
   let current = fixture(); current.dashboard.items.push(...extraItems); const historical = structuredClone(current); historical.dashboard.snapshotId = 'opening-1'; historical.dashboard.items[0]!.notes = 'Original notes';
   const mutations: any[] = [];
+  const deletedBranches = new Map<string, Workspace['dashboard']['items']>();
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     const input = init?.body ? JSON.parse(String(init.body)) : {};
     const state = url.includes('snapshotId=') || input.snapshotId ? historical : current;
@@ -38,11 +39,21 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
             if (item.parentId && removed.has(item.parentId) && !removed.has(item.id)) { removed.add(item.id); changed = true; }
           }
         }
+        const branch = state.dashboard.items.filter(item => removed.has(item.id));
+        const root = branch.find(item => item.id === input.command.id)!;
+        deletedBranches.set(root.id, structuredClone(branch));
+        state.recycleBin = [{id: root.id, title: root.title, parentId: root.parentId, deletedAt: '2026-10-10T12:00:00Z', itemCount: branch.length}, ...(state.recycleBin ?? [])];
         state.dashboard.items = state.dashboard.items.filter(item => !removed.has(item.id));
       } else {
         Object.assign(state.dashboard.items.find(item => item.id === input.command.id)!, input.command.patch);
       }
       state.dashboard.revision++;
+    } else if (url === '/api/recycle-bin/restore') {
+      expect(input.expectedRevision).toBe(current.dashboard.revision);
+      current.dashboard.items.push(...deletedBranches.get(input.id)!);
+      deletedBranches.delete(input.id);
+      current.recycleBin = current.recycleBin!.filter(entry => entry.id !== input.id);
+      current.dashboard.revision++;
     } else if (url === '/api/plan') {
       current.snapshots.push({ ...current.snapshots[0]!, id: 'planned-1', kind: 'planned' }); current.dashboard.revision++;
     } else if (url === '/api/rollover') {
@@ -449,6 +460,7 @@ it('keeps historical menu navigation available while disabling changes', async (
   const child = {...fixture().dashboard.items[0]!, id: 'child', title: 'Child', parentId: 'tend'};
   const {screen, mutations} = setup('/?snapshot=opening-1', [child]); await screen.findByText('Select Tend');
   fireEvent.contextMenu(screen.getByText('Select Tend'));
+  expect(screen.queryByRole('menuitem', {name: 'Delete'})).toBeNull();
   for (const button of [screen.getByRole('menuitemcheckbox'), screen.getByRole('menuitem', {name: 'Move…'}), ...screen.getAllByRole('menuitemradio')]) {
     expect((button as HTMLButtonElement).disabled).toBe(true);
   }
@@ -456,6 +468,30 @@ it('keeps historical menu navigation available while disabling changes', async (
   fireEvent.click(screen.getByRole('menuitem', {name: 'Zoom in'}));
   await waitFor(() => expect(new URL(window.location.href).searchParams.get('focus')).toBe('tend'));
   expect(mutations).toEqual([]);
+});
+
+it('deletes from the Item menu without confirmation, saves notes, and restores from Settings', async () => {
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  const child = {...fixture().dashboard.items[0]!, id: 'child', title: 'Child', parentId: 'tend'};
+  const {screen, current, mutations} = setup('/items/child?focus=tend', [child]);
+  await screen.findByText('Child details');
+  fireEvent.change(screen.getByLabelText('Notes'), {target: {value: 'Keep these notes'}});
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Delete'}));
+  await waitFor(() => expect(current.recycleBin).toHaveLength(1));
+  expect(confirm).not.toHaveBeenCalled();
+  expect(mutations.map(value => value.command.type)).toEqual(['update', 'delete']);
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(window.location.pathname).toBe('/');
+  expect(new URL(window.location.href).searchParams.get('focus')).toBeNull();
+  fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+  fireEvent.click(screen.getByText('Recycle bin', {selector: 'summary'}));
+  const bin = screen.getByRole('list', {name: 'Deleted Items'});
+  expect(within(bin).getByText('Tend')).toBeTruthy();
+  expect(within(bin).getByText(/1 child/)).toBeTruthy();
+  fireEvent.click(within(bin).getByRole('button', {name: 'Restore Tend'}));
+  await screen.findByText('No deleted Items.');
+  expect(current.dashboard.items.find(item => item.id === 'child')!.notes).toBe('Keep these notes');
 });
 
 
