@@ -27,22 +27,23 @@ export function parsePropertyFilters(raw: string | null): PropertyFilters {
 
 export function activePropertyFilters(filters: PropertyFilters | undefined, settings: WorkspaceSettings, groupPropertyId?: string | null): PropertyFilters {
   return Object.fromEntries(settings.properties.flatMap(property => {
-    const defaults = property.id === groupPropertyId ? [] : propertyChoices(property)
+    const defaults = property.id === groupPropertyId ? [] : propertyChoices(property, 'resolved')
       .filter(choice => choice.id === null ? property.unsetShowByDefault === false : property.options.find(option => option.id === choice.id)?.showByDefault === false)
       .map(choice => choice.id);
     const selected = new Set((filters?.[property.id] ?? defaults).map(value =>
-      property.id === 'status' && property.defaultValue !== null && value === null ? property.defaultValue : value));
-    const excluded = propertyChoices(property).map(value => value.id).filter(value => selected.has(value));
+      !property.inheritFromParent && property.id === 'status' && property.defaultValue !== null && value === null ? property.defaultValue : value));
+    const excluded = propertyChoices(property, 'resolved').map(value => value.id).filter(value => selected.has(value));
     return excluded.length ? [[property.id, excluded]] : [];
   }));
 }
 
 export function matchingItemIds(items: readonly Item[], filters: PropertyFilters, settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS): ReadonlySet<string> | undefined {
   const rules = Object.entries(filters);
+  const byId = new Map(items.map(item => [item.id, item]));
   const properties = new Map(settings.properties.map(property => [property.id, property]));
   return rules.length ? new Set(items.filter(item => rules.every(([id, excluded]) => {
     const property = properties.get(id);
-    const value = property ? effectivePropertyValue(item, property) : propertyValue(item, id);
+    const value = property ? effectivePropertyValue(item, property, byId) : propertyValue(item, id);
     return !excluded.includes(value);
   })).map(item => item.id)) : undefined;
 }

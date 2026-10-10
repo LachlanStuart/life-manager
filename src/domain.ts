@@ -181,7 +181,7 @@ export function localShare(items: readonly Item[], id: string): number {
 
 /** Calculate every local branch, including branches suppressed by an excluded ancestor. */
 export function computeEfforts(items: readonly Item[], settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS): Record<string, number> {
-  validateItems(items, settings);
+  const byId = validateItems(items, settings);
   const children = new Map<string | null, Item[]>();
   for (const item of items) {
     const siblings = children.get(item.parentId) ?? [];
@@ -197,12 +197,12 @@ export function computeEfforts(items: readonly Item[], settings: WorkspaceSettin
     let effort: number;
     if (item.effortOverride !== null) {
       effort = item.effortOverride;
-    } else if (lifecycleBehavior(item, settings) === 'skip') {
+    } else if (lifecycleBehavior(item, settings, byId) === 'skip') {
       effort = 0;
     } else {
       const includedChildren = (children.get(item.id) ?? []).filter((child) => child.included);
       if (includedChildren.length === 0) {
-        effort = lifecycleBehavior(item, settings) === 'complete' ? 100 : 0;
+        effort = lifecycleBehavior(item, settings, byId) === 'complete' ? 100 : 0;
       } else {
         const shares = siblingShares(includedChildren);
         effort = includedChildren.reduce((sum, child) => sum + calculate(child) * shares.get(child.id)! / 100, 0);

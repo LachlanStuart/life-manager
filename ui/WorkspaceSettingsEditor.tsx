@@ -13,7 +13,7 @@ function move<T>(values: T[], from: number, by: number) {
   const [value] = next.splice(from, 1); next.splice(to, 0, value!); return next;
 }
 function unsetLabel(property: EnumProperty): string {
-  return property.id === 'status' ? 'No status' : property.unsetLabel;
+  return property.inheritFromParent ? 'Inherit' : property.id === 'status' ? 'No status' : property.unsetLabel;
 }
 
 export function WorkspaceSettingsEditor({ settings, items, disabled = false, onSave }: {
@@ -50,14 +50,23 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
       {draft.properties.map((property, propertyIndex) => <details className="lm-property-definition" key={property.id} ref={element => {if (element && property.name === '') element.open = true;}}>
         <summary>{property.name || 'New property'}</summary>
         <label>Property name<input aria-label={`Property name ${propertyIndex + 1}`} required maxLength={200} value={property.name} onChange={event => edit(property.id, {name: event.target.value})} /></label>
-        <div className="lm-property-settings-row">
+        {!property.inheritFromParent && <div className="lm-property-settings-row">
           <label>Unset label<input required maxLength={200} value={property.unsetLabel} onChange={event => edit(property.id, {unsetLabel: event.target.value})} /></label>
           <div className="lm-property-unset-color"><span>Unset color</span><ColorPicker label={`${property.name || 'New property'} unset color`} value={property.unsetColor} disabled={locked} onChange={color => edit(property.id, {unsetColor: color})} /></div>
-        </div>
+        </div>}
+        {!property.inheritFromParent && <button type="button" disabled={!property.options.length} onClick={() => edit(property.id, {inheritFromParent: true, fallbackValue: property.defaultValue ?? property.options[0]?.id})}>Replace Unset with Inherit</button>}
+        {property.inheritFromParent && <>
+          <label>Workspace default<select aria-label={`${property.name} workspace default`} value={property.fallbackValue ?? ''} onChange={event => edit(property.id, {fallbackValue: event.target.value || undefined})}>
+            <option value="" disabled>Choose an option…</option>{property.options.map(option => <option key={option.id} value={option.id}>{option.label || 'New option'}</option>)}
+          </select></label>
+          <p className="lm-settings-help">Inherit uses the nearest parent with a value, then the workspace default.</p>
+          {!original.properties.find(value => value.id === property.id)?.inheritFromParent && original.properties.some(value => value.id === property.id) && <p className="lm-settings-help" role="status">{items.filter(item => propertyValue(item, property.id) === null).length} current Items will inherit when saved. Historical snapshots keep their original values.</p>}
+          {draft.lifecyclePropertyId === property.id && <p className="lm-settings-help">Inherited lifecycle values also affect completion, visibility and calculated effort.</p>}
+        </>}
         <label>Default for new Items<select aria-label={`${property.name} default for new Items`} value={property.defaultValue ?? ''} onChange={event => edit(property.id, {defaultValue: event.target.value || null})}>
           <option value="">{unsetLabel(property)}</option>{property.options.map(option => <option key={option.id} value={option.id}>{option.label || 'New option'}</option>)}
         </select></label>
-        {(property.id !== 'status' || property.defaultValue === null) && <label className="lm-property-visibility">
+        {!property.inheritFromParent && (property.id !== 'status' || property.defaultValue === null) && <label className="lm-property-visibility">
           <input type="checkbox" aria-label={`${property.name} ${unsetLabel(property)} show by default`} checked={property.unsetShowByDefault !== false}
             onChange={event => edit(property.id, {unsetShowByDefault: event.target.checked})} />{unsetLabel(property)}: Show by default
         </label>}
@@ -67,7 +76,7 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
             <input required aria-label={`${property.name} option ${index + 1}`} maxLength={200} value={option.label} placeholder="Option name" onChange={event => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, label: event.target.value} : value)})} />
             <button type="button" aria-label={`Move ${option.label} up`} disabled={index === 0} onClick={() => edit(property.id, {options: move(property.options, index, -1)})}>↑</button>
             <button type="button" aria-label={`Move ${option.label} down`} disabled={index === property.options.length - 1} onClick={() => edit(property.id, {options: move(property.options, index, 1)})}>↓</button>
-            <button type="button" aria-label={`Remove ${option.label}`} onClick={() => edit(property.id, {options: property.options.filter(value => value.id !== option.id), defaultValue: property.defaultValue === option.id ? null : property.defaultValue})}>×</button>
+            <button type="button" aria-label={`Remove ${option.label}`} onClick={() => edit(property.id, {options: property.options.filter(value => value.id !== option.id), defaultValue: property.defaultValue === option.id ? null : property.defaultValue, fallbackValue: property.fallbackValue === option.id ? undefined : property.fallbackValue})}>×</button>
             <label className="lm-property-visibility"><input type="checkbox" aria-label={`${property.name} ${option.label || 'New option'} show by default`} checked={option.showByDefault !== false}
               onChange={event => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, showByDefault: event.target.checked} : value)})} />Show by default</label>
             {draft.lifecyclePropertyId === property.id && <label className="lm-property-behavior">Effort behavior<select aria-label={`${option.label || 'New option'} effort behavior`} value={option.behavior ?? 'normal'} onChange={event => edit(property.id, {options: property.options.map(value => value.id === option.id ? {...value, behavior: event.target.value as 'normal' | 'complete' | 'skip'} : value)})}>
@@ -76,12 +85,16 @@ export function WorkspaceSettingsEditor({ settings, items, disabled = false, onS
           </div>)}
         </div>
         <div className="lm-property-actions">
-          <button type="button" onClick={() => edit(property.id, {options: [...property.options, {id: newClientId('option'), label: '', color: nextPropertyColor([property.unsetColor, ...property.options.map(option => option.color)]), behavior: 'normal'}]})}>+ Option</button>
+          <button type="button" onClick={() => {
+            const id = newClientId('option');
+            edit(property.id, {options: [...property.options, {id, label: '', color: nextPropertyColor([property.unsetColor, ...property.options.map(option => option.color)]), behavior: 'normal'}],
+              ...(property.inheritFromParent && !property.fallbackValue ? {fallbackValue: id} : {})});
+          }}>+ Option</button>
           <button type="button" onClick={() => setDraft({...draft, properties: move(draft.properties, propertyIndex, -1)})} disabled={propertyIndex === 0}>Move property up</button>
           <button type="button" className="lm-danger" onClick={() => setDraft({...draft, lifecyclePropertyId: draft.lifecyclePropertyId === property.id ? null : draft.lifecyclePropertyId, properties: draft.properties.filter(value => value.id !== property.id)})}>Remove property</button>
         </div>
       </details>)}
-      <button type="button" onClick={() => setDraft({...draft, properties: [...draft.properties, {id: newClientId('property'), name: '', options: [], unsetLabel: 'Unset', unsetColor: DEFAULT_UNSET_COLOR, defaultValue: null}]})}>+ Property</button>
+      <button type="button" onClick={() => setDraft({...draft, properties: [...draft.properties, {id: newClientId('property'), name: '', options: [], unsetLabel: 'Unset', unsetColor: DEFAULT_UNSET_COLOR, defaultValue: null, inheritFromParent: true}]})}>+ Property</button>
       {removed.length > 0 && <div className="lm-property-removals">
         <p>Reassign removed options for current Items. Snapshots keep their original values.</p>
         {removed.map(({property, option, count}) => {

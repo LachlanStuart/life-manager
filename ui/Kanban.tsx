@@ -215,7 +215,7 @@ export function Kanban({ showAll = false, onCreate, matchingIds, items, focusId,
     if (!target || !moving || target.kind === 'card' && target.targetId === moving.id) return;
     const commands: ItemCommand[] = [];
     const targetStatus = target.status;
-    if (groupProperty && targetStatus !== effectivePropertyValue(moving, groupProperty)) {
+    if (groupProperty && targetStatus !== effectivePropertyValue(moving, groupProperty, byId)) {
       commands.push({ type: 'update', id: moving.id, patch: groupProperty.id === 'status'
         ? { status: targetStatus } : { properties: { [groupProperty.id]: targetStatus } } });
     }
@@ -310,7 +310,7 @@ export function Kanban({ showAll = false, onCreate, matchingIds, items, focusId,
                           aria-current={selectedId === card.item.id ? 'true' : undefined}
                           aria-label={`${card.item.title}${groupProperty ? `, ${column.label}` : ''}`}
                           aria-description={onContextMenu ? 'Open details. Right-click or long-press for actions.' : undefined}
-                          style={{ '--lm-kanban-card-color': propertyPresentation(card.item, colorProperty).color, '--lm-kanban-card-height': `${card.height}px`, '--lm-kanban-card-font-size': `${card.fontSize}px` } as React.CSSProperties}
+                          style={{ '--lm-kanban-card-color': propertyPresentation(card.item, colorProperty, byId).color, '--lm-kanban-card-height': `${card.height}px`, '--lm-kanban-card-font-size': `${card.fontSize}px` } as React.CSSProperties}
                           onPointerDown={event => {
                             pointerType.current = event.pointerType || 'mouse';
                             cancelTouch();
@@ -367,7 +367,7 @@ export function Kanban({ showAll = false, onCreate, matchingIds, items, focusId,
       </div>
       {drag?.active && createPortal(<div className="lm-kanban__card lm-kanban__drag-preview" aria-hidden="true"
         style={{ left: drag.left + drag.x - drag.startX, top: drag.top + drag.y - drag.startY,
-          width: drag.width, minHeight: drag.height, '--lm-kanban-card-color': byId.has(drag.id) ? propertyPresentation(byId.get(drag.id)!, colorProperty).color : undefined, '--lm-kanban-card-font-size': `${drag.fontSize}px` } as React.CSSProperties}>
+          width: drag.width, minHeight: drag.height, '--lm-kanban-card-color': byId.has(drag.id) ? propertyPresentation(byId.get(drag.id)!, colorProperty, byId).color : undefined, '--lm-kanban-card-font-size': `${drag.fontSize}px` } as React.CSSProperties}>
         <span className="lm-kanban__card-title">{byId.get(drag.id)?.title}</span>
       </div>, document.body)}
       {model.cards.length === 0 && <p className="lm-kanban__empty-board">{matchingIds ? 'No Items match these filters in this branch.' : showAll ? 'No Items in this branch.' : 'No included Items in this branch.'}</p>}

@@ -6,6 +6,7 @@ import { createDemoApi } from '../src/browser/demo-api';
 import * as storage from '../src/browser/storage';
 import { createLifeManagerStore, initializeDatabase } from '../src/store';
 import type { Workspace } from '../src/types';
+import { effectivePropertyValue } from '../src/properties';
 import { parseRoute, routeUrl } from '../ui/navigation';
 
 let SQL: SqlJsStatic;
@@ -24,6 +25,19 @@ async function setup() {
 }
 
 describe('browser-only demo', () => {
+  it('preserves inheritance settings and raw null values through browser storage reloads', async () => {
+    const {api, db, lock, workspace} = await setup();
+    const config = structuredClone((await workspace()).settings!);
+    Object.assign(config.properties[0]!, {inheritFromParent: true, fallbackValue: 'Later'});
+    await api('settings', {settings: config});
+    await api('mutate', {command: {type: 'update', id: 'build', patch: {status: 'Doing'}}});
+    await api('mutate', {command: {type: 'update', id: 'garden', patch: {status: null}}});
+    const restored = await createDemoApi(SQL, db, lock)('workspace') as Workspace;
+    expect(restored.settings).toEqual(config);
+    const child = restored.dashboard.items.find(item => item.id === 'garden')!;
+    expect(child.status).toBeNull();
+    expect(effectivePropertyValue(child, restored.settings!.properties[0]!, restored.dashboard.items)).toBe('Doing');
+  });
   it('persists deleted branches and restores them through the demo API', async () => {
     const { api, db, lock, workspace } = await setup();
     const before = await workspace();

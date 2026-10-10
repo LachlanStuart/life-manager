@@ -3,9 +3,9 @@ import { DEFAULT_WORKSPACE_SETTINGS, propertyValue } from '../src/properties';
 import { PropertySelect, selectedProperty } from './PropertySelect';
 import { PercentInput } from './PercentInput';
 
-export function ItemControls({ item, hidden, allocation, allocationAutomatic, allocationMax = 100, effort, disabled, allocationDisabled,
+export function ItemControls({ item, items, hidden, allocation, allocationAutomatic, allocationMax = 100, effort, disabled, allocationDisabled,
   detail = false, settings, propertyId, onProperty, onIncluded, onStatus, onAllocation, onEffort, onDelete }: {
-  item: Item; hidden: boolean; allocation: number; allocationAutomatic: boolean; allocationMax?: number; effort: number;
+  item: Item; items?: readonly Item[]; hidden: boolean; allocation: number; allocationAutomatic: boolean; allocationMax?: number; effort: number;
   disabled: boolean; allocationDisabled: boolean; detail?: boolean;
   settings?: WorkspaceSettings; propertyId?: string | null; onProperty?: (propertyId: string, value: string | null) => void;
   onIncluded: (included: boolean) => void; onStatus?: (status: Item['status']) => void;
@@ -19,7 +19,7 @@ export function ItemControls({ item, hidden, allocation, allocationAutomatic, al
       <input type="checkbox" aria-label={detail ? 'Included on dashboard' : `${item.title} included on dashboard`}
         checked={item.included} disabled={disabled} onChange={event => onIncluded(event.target.checked)} />
     </label>
-    {property && <PropertySelect property={property} value={propertyValue(item, property.id)}
+    {property && <PropertySelect item={item} items={items} property={property} value={propertyValue(item, property.id)}
       label={detail ? label! : `${item.title} ${settings ? label : 'lifecycle status'}`} disabled={disabled} inline
       onChange={value => { if (onProperty) onProperty(property.id, value); else if (property.id === 'status') onStatus?.(value); }} />}
     <PercentInput label={detail ? 'Intended attention percent' : `${item.title} allocation percent`} value={allocation}

@@ -123,8 +123,9 @@ async function activeReferences(workspace: Workspace, historical: boolean): Prom
   if (historical) return new Set();
   const settings = workspaceSettings(workspace);
   const status = settings.properties.find(property => property.id === 'status');
+  const byId = new Map(workspace.dashboard.items.map(item => [item.id, item]));
   const references = await Promise.all(workspace.dashboard.items
-    .filter(item => lifecycleBehavior(item, settings) !== 'complete' && !(settings.lifecyclePropertyId === 'status' && status && effectivePropertyValue(item, status) === 'Cut'))
+    .filter(item => lifecycleBehavior(item, settings, byId) !== 'complete' && !(settings.lifecyclePropertyId === 'status' && status && effectivePropertyValue(item, status, byId) === 'Cut'))
     .map(item => referencedPath(item)));
   return new Set(references.filter((value): value is string => value !== null));
 }

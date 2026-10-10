@@ -598,7 +598,7 @@ export function Sunburst({
             const labelClip = `${clipPrefix}-slice-${segmentIndex}`;
             const thickness = segment.outerRadius - segment.innerRadius;
             const angularGap = Math.min(0.012, 2.2 / Math.max(1, segment.innerRadius));
-            const appearance = propertyPresentation(itemById.get(segment.id)!, colorProperty);
+            const appearance = propertyPresentation(itemById.get(segment.id)!, colorProperty, itemById);
             const selectedClass = segment.id === selectedId ? ' lm-sunburst__segment--selected' : '';
             const ghostClass = !segment.included ? ' lm-sunburst__segment--ghost' : '';
             const contextClass = matchingIds && !matchingIds.has(segment.id) ? ' lm-sunburst__segment--context' : '';
@@ -715,7 +715,7 @@ export function Sunburst({
             transform="translate(24 24) scale(.14)">
             <circle className="lm-sunburst__minimap-bg" cx={CENTER} cy={CENTER} r="488" />
             {overview.map((segment) => <path key={segment.id}
-              style={{ '--segment-color': propertyPresentation(itemById.get(segment.id)!, colorProperty).color } as CSSProperties}
+              style={{ '--segment-color': propertyPresentation(itemById.get(segment.id)!, colorProperty, itemById).color } as CSSProperties}
               className={`lm-sunburst__minimap-sector${focusTrail.has(segment.id) ? ' lm-sunburst__minimap-sector--focus' : ''}${!segment.included ? ' lm-sunburst__segment--ghost' : ''}`}
               d={annularSectorPath(segment.startAngle, segment.endAngle, segment.innerRadius, segment.outerRadius, .018, 4)} />)}
             <circle className="lm-sunburst__minimap-center" cx={CENTER} cy={CENTER} r="48" />

@@ -46,13 +46,13 @@ The Kanban board keeps the same hierarchy and focus. Related tasks stay grouped 
 
 The starting Status options use **Now** for work you intend to tackle, **Doing** while it's underway, and **Blocked** when something is in the way. **Done** records completion, **Later** keeps a possibility for reconsideration, **Skip** means it isn't relevant this period, and **Cut** means you've intentionally abandoned it.
 
-Choose **Group by** to organise columns by another property, and **Color by** to colour cards and the wheel independently. Each property includes an unset choice. Right-click or long-press a card for the same compact actions menu as the wheel.
+Choose **Group by** to organise columns by another property, and **Color by** to colour cards and the wheel independently. Items set to Inherit appear under their resolved option. Right-click or long-press a card for the same compact actions menu as the wheel.
 
 Parents with included children stay off the board so the actionable children take the space. A parent with no included children can remain visible as a placeholder for work you still need to define.
 
 ### Quickly narrow the view
 
-**Filter** shows all property values as toggles. Switch off Done, Cut or Blocked to concentrate on available work. For triage, choose **None** beside Status and turn on its default or Unset. Combine that with a Project value to narrow the view further. Each toggle applies immediately; **All** restores a property and **Reset all** clears every filter.
+**Filter** shows all property values as toggles. Switch off Done, Cut or Blocked to concentrate on available work. For triage, choose **None** beside Status and turn on the values you want to see. Combine that with a Project value to narrow the view further. Each toggle applies immediately; **All** restores a property and **Reset to defaults** restores configured visibility. **Show everything** enables every value.
 
 Filters carry across Sunburst, Kanban and Outline and survive refresh, browser Back and app restarts. They are saved in this client's local storage; explicit filters in a link take precedence. They do not change dashboard inclusion or effort. Outline and the wheel retain ancestors for context. Clear filters before resizing importance on the wheel.
 
@@ -118,7 +118,9 @@ If upgrading a macOS checkout with an existing `.data/` workspace, stop its serv
 
 ## Configure your workspace
 
-Under **Settings → Workspace and properties**, edit the workspace name and add single-choice properties. Give each property ordered options, colours, an unset label, and a default for new Items. Defaults never fill existing Items retroactively. Edit an Item’s values under **Properties**, or use the inline and child bulk pickers.
+Under **Settings → Workspace and properties**, edit the workspace name and add single-choice properties. Give each property ordered options, colours, a **Workspace default**, and a separate **Default for new Items**. **Inherit** uses the nearest parent with an explicit value, falling back to the workspace default. Pickers show the resolved value and its source. Explicit options override inheritance; new Status values still default to Later. Existing properties offer **Replace Unset with Inherit**, showing the affected Item count before you save. Historical snapshots keep their original behaviour.
+
+Edit an Item’s values under **Properties**, or use its inline picker. To update a branch, select children in Item details, choose any property, choose **Direct children** or **All descendants**, and select a value. **Select all** includes hidden children; choosing Inherit makes the selected scope follow its ancestors.
 
 New options pick distinct colours from a shared palette while unused colours remain. Click an option or unset colour to choose a palette swatch, or use **Custom color** for any RGB colour.
 

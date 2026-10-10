@@ -144,14 +144,14 @@ export function buildKanbanModel(items: readonly Item[], focusId: string | null,
       parentPath: pathToParent(byId, item.parentId, focusId),
     };
   });
-  const choices = property ? propertyChoices(property) : [];
+  const choices = property ? propertyChoices(property, 'resolved') : [];
   const columns = property
     ? [...choices.filter(choice => choice.id !== null), ...choices.filter(choice => choice.id === null)]
       .map(choice => ({ status: choice.id, label: choice.label, color: choice.color }))
     : [{ status: null, label: 'Items', color: NEUTRAL_PROPERTY_COLOR }];
   const byStatus = new Map<string | null, KanbanCard[]>(columns.map(column => [column.status, []]));
   for (const card of cards) {
-    const value = property ? effectivePropertyValue(card.item, property) : null;
+    const value = property ? effectivePropertyValue(card.item, property, byId) : null;
     (byStatus.get(value) ?? byStatus.get(null)!).push(card);
   }
   return {

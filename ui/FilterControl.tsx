@@ -49,7 +49,7 @@ export function FilterControl({ settings, filters, overrides = filters, onChange
       <button onClick={() => onChange(Object.fromEntries(settings.properties.map(property => [property.id, []])))} disabled={!hiddenCount}>Show everything</button>
       {onShowAllChange && <button className="lm-filters__inclusion" aria-pressed={showAll} onClick={() => onShowAllChange(!showAll)}><Icon name={showAll ? 'eye' : 'eye-off'} />Show excluded items<span aria-hidden="true">{showAll ? '✓' : ''}</span></button>}
       {settings.properties.map(property => {
-        const values = propertyChoices(property);
+        const values = propertyChoices(property, 'resolved');
         const excluded = filters[property.id] ?? [];
         return <fieldset key={property.id}><legend>{property.name}</legend>
           <div className="lm-filters__shortcuts"><button aria-label={`Show all ${property.name} values`} onClick={() => setExcluded(property.id, [])}>All</button>

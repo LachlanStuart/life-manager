@@ -1,4 +1,5 @@
-import type { EnumProperty, ItemPatch, WorkspaceSettings } from '../src/types';
+import type { EnumProperty, Item, ItemPatch, WorkspaceSettings } from '../src/types';
+import { resolvePropertyValue, type PropertyHierarchy } from '../src/properties';
 
 export { effectivePropertyValue } from '../src/properties';
 
@@ -11,13 +12,12 @@ export interface PropertyChoice {
 /**
  * Return the choices that should be exposed by an Item property picker.
  *
- * Status has a configured default, so its stored null value is represented by
- * that default in the UI. When the status default itself is null, keep a
- * neutral bucket so legacy null values still have somewhere to go, but call it
- * “No status” rather than exposing the generic Unset label.
+ * Editing exposes Inherit; grouping and filtering use only resolved options.
+ * Legacy Status folds null into its creation default, or a No status bucket.
  */
-export function propertyChoices(property: EnumProperty): PropertyChoice[] {
+export function propertyChoices(property: EnumProperty, mode: 'edit' | 'resolved' = 'edit'): PropertyChoice[] {
   const options = property.options.map(option => ({ id: option.id, label: option.label, color: option.color }));
+  if (property.inheritFromParent) return mode === 'resolved' ? options : [{id: null, label: 'Inherit', color: property.unsetColor}, ...options];
   const defaultOption = property.defaultValue === null
     ? undefined
     : property.options.find(option => option.id === property.defaultValue);
@@ -34,19 +34,26 @@ export function propertyPatch(propertyId: string, value: string | null): ItemPat
   return propertyId === 'status' ? { status: value } : { properties: { [propertyId]: value } };
 }
 
-export function PropertySelect({ property, value, label, disabled, inline = false, onChange }: {
+export function PropertySelect({ property, value, label, disabled, inline = false, item, items, onChange }: {
   property: EnumProperty; value: string | null; label: string; disabled?: boolean; inline?: boolean;
+  item?: Item; items?: PropertyHierarchy;
   onChange: (value: string | null) => void;
 }) {
-  const effectiveValue = property.id === 'status' ? value ?? property.defaultValue : value;
+  const effectiveValue = property.id === 'status' && !property.inheritFromParent ? value ?? property.defaultValue : value;
+  const resolved = item ? resolvePropertyValue(item, property, items) : null;
+  const inherited = item && property.inheritFromParent ? resolvePropertyValue({...item,
+    ...(property.id === 'status' ? {status: null} : {properties: {...item.properties, [property.id]: null}})}, property, items) : null;
+  const inheritedLabel = property.options.find(option => option.id === (inherited?.value ?? property.fallbackValue))?.label;
+  const source = resolved?.inherited ? resolved.source ? `Inherited from ${resolved.source.title}` : 'Workspace default' : undefined;
   const choices = propertyChoices(property);
   const choice = choices.find(option => option.id === effectiveValue);
-  const select = <select aria-label={label} value={effectiveValue ?? ''} disabled={disabled}
+  const displayLabel = (option: PropertyChoice) => option.id === null && property.inheritFromParent && inheritedLabel ? `Inherit · ${inheritedLabel}` : option.label;
+  const select = <select aria-label={label} title={source} value={effectiveValue ?? ''} disabled={disabled}
     onChange={event => onChange(event.target.value || null)}>
-    {choices.map(option => <option key={option.id ?? 'unset'} value={option.id ?? ''}>{option.label}</option>)}
+    {choices.map(option => <option key={option.id ?? 'unset'} value={option.id ?? ''}>{displayLabel(option)}</option>)}
   </select>;
-  return inline ? <span className="lm-inline-choice lm-item-panel__status" style={{ color: choice?.color ?? property.unsetColor }}>
-    <span aria-hidden="true">{choice?.label ?? (property.id === 'status' ? 'No status' : property.unsetLabel)}<span className="lm-inline-chevron">⌄</span></span>
+  return inline ? <span className="lm-inline-choice lm-item-panel__status" title={source} style={{ color: property.options.find(option => option.id === resolved?.value)?.color ?? choice?.color ?? property.unsetColor }}>
+    <span aria-hidden="true">{choice ? displayLabel(choice) : property.id === 'status' ? 'No status' : property.unsetLabel}<span className="lm-inline-chevron">⌄</span></span>
     {select}
-  </span> : select;
+  </span> : source ? <span className="lm-property-inheritance">{select}<small>{source}</small></span> : select;
 }

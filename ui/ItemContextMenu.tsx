@@ -1,17 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Item, WorkspaceSettings } from '../src/types';
-import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue } from '../src/properties';
+import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue, propertyValue, resolvePropertyValue } from '../src/properties';
 import { propertyChoices, selectedProperty } from './PropertySelect';
 import { Icon } from './Icons';
 
-export function ItemContextMenu({ item, x, y, disabled, settings, propertyId, onProperty, onStatus, onOpen, onClose, onInclude, onMove, onZoom, onDelete, canZoom = true }: {
-  item: Item; x: number; y: number; disabled: boolean;
+export function ItemContextMenu({ item, items = [], x, y, disabled, settings, propertyId, onProperty, onStatus, onOpen, onClose, onInclude, onMove, onZoom, onDelete, canZoom = true }: {
+  item: Item; items?: readonly Item[]; x: number; y: number; disabled: boolean;
   settings?: WorkspaceSettings; propertyId?: string | null; onProperty?: (propertyId: string, value: string | null) => void;
   onStatus?: (status: Item['status']) => void; onOpen: () => void; onClose: () => void;
   onInclude?: () => void; onMove?: () => void; onZoom?: () => void; onDelete?: () => void; canZoom?: boolean;
 }) {
   const property = selectedProperty(settings ?? DEFAULT_WORKSPACE_SETTINGS, propertyId);
-  const value = property ? effectivePropertyValue(item, property) : null;
+  const value = property ? property.inheritFromParent ? propertyValue(item, property.id) : effectivePropertyValue(item, property, items) : null;
+  const inherited = property?.inheritFromParent ? resolvePropertyValue({...item, ...(property.id === "status" ? {status: null} : {properties: {...item.properties, [property.id]: null}})}, property, items) : null;
+  const inheritedOption = property?.options.find(option => option.id === inherited?.value);
   const options = property ? propertyChoices(property) : [];
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: x, top: y });
@@ -43,8 +45,8 @@ export function ItemContextMenu({ item, x, y, disabled, settings, propertyId, on
     {onZoom && <button type="button" role="menuitem" disabled={!canZoom} onClick={onZoom}><Icon name="zoom" />Zoom in</button>}
     {onDelete && <button type="button" role="menuitem" className="lm-danger" disabled={disabled} onClick={onDelete}><Icon name="trash" />Delete</button>}
     {options.length > 0 && <div role="separator" className="lm-item-menu__separator" />}
-    {options.map(option => <button key={option.id ?? ''} type="button" role="menuitemradio" aria-checked={value === option.id} disabled={disabled}
+    {options.map(option => <button key={option.id ?? ''} type="button" role="menuitemradio" aria-checked={value === option.id} disabled={disabled} title={option.id === null && inherited ? inherited.source ? `Inherited from ${inherited.source.title}` : "Workspace default" : undefined}
       onClick={() => { if (onProperty) onProperty(property!.id, option.id); else if (property?.id === 'status') onStatus?.(option.id); }}>
-      <i className="lm-status-dot" style={{ backgroundColor: option.color }} />{option.label}<span aria-hidden="true">{value === option.id ? '✓' : ''}</span></button>)}
+      <i className="lm-status-dot" style={{ backgroundColor: option.color }} />{option.id === null && inheritedOption ? `Inherit · ${inheritedOption.label}` : option.label}<span aria-hidden="true">{value === option.id ? '✓' : ''}</span></button>)}
   </div>;
 }

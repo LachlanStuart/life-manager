@@ -343,7 +343,7 @@ export function LifeManagerPage() {
           setResetOpen(false);
         })} />
     </Modal>}
-    {contextItem && items.some(item => item.id === contextItem.id) && <ItemContextMenu settings={settings} propertyId={editPropertyId} item={items.find(item => item.id === contextItem.id)!} x={contextItem.x} y={contextItem.y} disabled={readOnly || busy}
+    {contextItem && items.some(item => item.id === contextItem.id) && <ItemContextMenu items={items} settings={settings} propertyId={editPropertyId} item={items.find(item => item.id === contextItem.id)!} x={contextItem.x} y={contextItem.y} disabled={readOnly || busy}
       onClose={() => setContextItem(null)} onOpen={() => { select(contextItem.id); setContextItem(null); }}
       onInclude={() => { const item = items.find(item => item.id === contextItem.id)!; setContextItem(null); void run(() => command({type: 'update', id: item.id, patch: {included: !item.included}})); }}
       onMove={() => { setMoveItemId(contextItem.id); setContextItem(null); }}

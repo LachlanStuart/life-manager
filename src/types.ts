@@ -49,7 +49,7 @@ export interface AgentReply {
   url?: string;
 }
 export interface EnumOption { id: string; label: string; color: string; behavior?: 'normal' | 'complete' | 'skip'; showByDefault?: boolean }
-export interface EnumProperty { id: string; name: string; options: EnumOption[]; unsetLabel: string; unsetColor: string; defaultValue: string | null; unsetShowByDefault?: boolean }
+export interface EnumProperty { id: string; name: string; options: EnumOption[]; unsetLabel: string; unsetColor: string; defaultValue: string | null; unsetShowByDefault?: boolean; inheritFromParent?: boolean; fallbackValue?: string }
 export interface WorkspaceSettings { name: string; properties: EnumProperty[]; lifecyclePropertyId: string | null }
 export interface SaveSettingsInput { settings: WorkspaceSettings; expectedRevision?: number; replacements?: Record<string, Record<string, string | null>> }
 export interface DeletedItemSummary { id: string; title: string; parentId: string | null; deletedAt: string; itemCount: number }

@@ -10,7 +10,7 @@ import { Icon } from './Icons';
 import { propertyPresentation } from './property-presentation';
 import { PromptDialog } from './PromptDialog';
 import { Modal } from './Modal';
-import { ancestorTrail, moveParentOptions } from './item-hierarchy';
+import { ancestorTrail, descendantsOf, moveParentOptions } from './item-hierarchy';
 import './item-panel.css';
 import './item-row.css';
 
@@ -30,6 +30,11 @@ export function ItemPanel({
   const cancelChildTitle = React.useRef<string | null>(null);
   const [childTitleDrafts, setChildTitleDrafts] = React.useState<Record<string, string>>({});
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [batchPropertyId, setBatchPropertyId] = React.useState<string | null>(null);
+  const [batchDescendants, setBatchDescendants] = React.useState(false);
+  const batchProperty = configuration.properties.find(value => value.id === batchPropertyId) ?? property;
+  const propertyTargets = new Set(selected);
+  if (batchDescendants) for (const id of selected) for (const descendant of descendantsOf(items, id)) propertyTargets.add(descendant);
   const [error, setError] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -49,11 +54,12 @@ export function ItemPanel({
     ancestor.defaultPromptId && promptTemplates.some((template) => template.id === ancestor.defaultPromptId))?.defaultPromptId;
   const [templateId, setTemplateId] = React.useState(defaultId ?? promptTemplates[0]?.id ?? '');
   const locked = readOnly;
-  const finishedIds = children.filter((child) => child.included && lifecycleBehavior(child, configuration) !== 'normal').map((child) => child.id);
+  const finishedIds = children.filter((child) => child.included && lifecycleBehavior(child, configuration, items) !== 'normal').map((child) => child.id);
 
   React.useEffect(() => { setTitleDraft(item.title); titleDirty.current = false; }, [item.id, item.title]);
   React.useEffect(() => {
     setChildDraft(''); setChildFormOpen(false); setSelected(new Set()); setError(null);
+    setBatchPropertyId(null); setBatchDescendants(false);
     setChildTitleDrafts({}); cancelChildTitle.current = null;
     setDrag(null); dragRef.current = null;
   }, [item.id]);
@@ -182,7 +188,7 @@ export function ItemPanel({
     setDeleting(true);
     void issue({ type: 'delete', id: target.id }).finally(() => setDeleting(false));
   };
-  const controls = (target: Item, detail = false) => <ItemControls key={target.id} item={target} detail={detail}
+  const controls = (target: Item, detail = false) => <ItemControls items={items} key={target.id} item={target} detail={detail}
     hidden={!effectiveIncluded(items, target.id)} allocation={localShare(items, target.id)} allocationAutomatic={Boolean(target.allocationAuto)} allocationMax={allocationLimit(items, target.id)}
     effort={efforts[target.id] ?? 0} disabled={locked || deleting} allocationDisabled={showAll || !target.included}
     onIncluded={included => void issue({ type: 'update', id: target.id, patch: { included } })}
@@ -226,7 +232,7 @@ export function ItemPanel({
         <summary>Properties</summary>
         <div className="lm-item-panel__settings-fields">
           {configuration.properties.map(property => <label key={property.id}><span>{property.name}</span>
-            <PropertySelect property={property} value={propertyValue(item, property.id)} label={`Property ${property.name}`} disabled={locked || deleting}
+            <PropertySelect item={item} items={items} property={property} value={propertyValue(item, property.id)} label={`Property ${property.name}`} disabled={locked || deleting}
               onChange={value => void issue({ type: 'update', id: item.id, patch: propertyPatch(property.id, value) })} />
           </label>)}
         </div>
@@ -270,11 +276,20 @@ export function ItemPanel({
               ref={(node) => { if (node) node.indeterminate = selected.size > 0 && selected.size < children.length; }}
               onChange={(event) => setSelected(event.target.checked ? new Set(children.map((child) => child.id)) : new Set())} />
               {selected.size ? `${selected.size} selected` : 'Select all'}</label>
-            {property && <select aria-label={settings ? `Selected children ${property.name}` : 'Selected children status'} value={'\0'} disabled={locked || !selected.size}
-              onChange={event => bulk(propertyPatch(property.id, event.target.value || null))}>
-              <option value={'\0'} disabled>{property.name}…</option>
-              {propertyChoices(property).map(option => <option key={option.id ?? 'unset'} value={option.id ?? ''}>{option.label}</option>)}
-            </select>}
+            {batchProperty && <>
+              <select aria-label="Child batch property" value={batchProperty.id} disabled={locked} onChange={event => setBatchPropertyId(event.target.value)}>
+                {configuration.properties.map(value => <option key={value.id} value={value.id}>{value.name}</option>)}
+              </select>
+              <select aria-label="Child property scope" value={batchDescendants ? 'descendants' : 'children'} disabled={locked} onChange={event => setBatchDescendants(event.target.value === 'descendants')}>
+                <option value="children">Direct children</option><option value="descendants">All descendants</option>
+              </select>
+              <select aria-label={settings ? `Selected children ${batchProperty.name}` : 'Selected children status'} value={'\0'} disabled={locked || !selected.size}
+                title={`Set ${batchProperty.name} on ${propertyTargets.size} Items`} onChange={event => void issue({type: 'bulk', ids: [...propertyTargets], patch: propertyPatch(batchProperty.id, event.target.value || null)})}>
+                <option value={'\0'} disabled>Set {batchProperty.name}…</option>
+                {propertyChoices(batchProperty).map(option => <option key={option.id ?? 'unset'} value={option.id ?? ''}>{option.label}</option>)}
+              </select>
+              {selected.size > 0 && <span>{propertyTargets.size} Items</span>}
+            </>}
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ included: true })}>Include</button>
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ included: false })}>Hide</button>
             <button type="button" disabled={locked || !selected.size} onClick={() => bulk({ effortOverride: null })}>Clear effort</button>
@@ -290,7 +305,7 @@ export function ItemPanel({
             {children.map((child) => {
               const included = effectiveIncluded(items, child.id);
               return <li key={child.id} data-child-id={child.id} data-hidden={!included}
-                style={{ '--lm-row-color': propertyPresentation(child, property).color } as React.CSSProperties} className={[
+                style={{ '--lm-row-color': propertyPresentation(child, property, items).color } as React.CSSProperties} className={[
                 'lm-item-panel__child lm-property-row', !included && 'lm-item-panel__child--hidden',
                 drag?.id === child.id && 'lm-item-panel__child--dragging',
                 drag && drag.target === child.id && drag.id !== child.id && 'lm-item-panel__child--target',

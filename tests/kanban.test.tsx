@@ -423,6 +423,18 @@ describe('configurable Kanban properties', () => {
     await waitFor(() => expect(onCommand).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: 'b', patch: { properties: { category: null } } }));
   });
 
+  it('preserves Inherit within the resolved column and writes an explicit override when changing columns', async () => {
+    const settings = structuredClone(categorySettings);
+    Object.assign(settings.properties.find(property => property.id === 'category')!, {inheritFromParent: true, fallbackValue: 'reading'});
+    const inherited = cards.map(card => card.id === 'a' ? {...card, properties: {category: null}} : card);
+    const {onCommand} = mountBoard({settings, items: inherited});
+    expect(screen.queryByRole('listitem', {name: /^Inherit:/})).toBeNull();
+    dragFromTo(screen.getByRole('button', {name: 'a, Reading'}), screen.getByRole('listitem', {name: /^Reading:/}));
+    expect(onCommand).not.toHaveBeenCalled();
+    dragFromTo(screen.getByRole('button', {name: 'a, Reading'}), screen.getByRole('listitem', {name: /^Making:/}), 8);
+    await waitFor(() => expect(onCommand).toHaveBeenCalledExactlyOnceWith({type: 'update', id: 'a', patch: {properties: {category: 'making'}}}));
+  });
+
   it('clears scalar status when dropping into its unset column', async () => {
     const statusUnsetSettings = { ...categorySettings, properties: categorySettings.properties.map(property => property.id === 'status' ? { ...property, defaultValue: null } : property) };
     const { onCommand } = mountBoard({ settings: statusUnsetSettings, groupPropertyId: 'status' });

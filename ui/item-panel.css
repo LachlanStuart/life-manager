@@ -59,6 +59,8 @@
 .lm-item-panel__settings-fields > label { display: grid; gap: 4px; }
 .lm-item-panel__settings-fields > label > span { color: var(--ip-muted); font-size: 10px; }
 .lm-item-panel__settings-fields select { width: 100%; }
+.lm-property-inheritance { display: grid; gap: 4px; min-width: 0; }
+.lm-property-inheritance small { color: var(--ip-muted); font-size: 10px; }
 .lm-item-panel .lm-item-panel__danger { color: var(--theme-danger, #ac4b3e); }
 .lm-item-panel__error, .lm-item-panel__notice, .lm-item-panel__history { border-radius: 7px; padding: 9px 10px; margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .lm-item-panel__error { color: var(--theme-danger, #963c32); background: var(--theme-danger-bg, #fff0eb); }

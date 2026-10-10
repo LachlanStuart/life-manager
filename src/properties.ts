@@ -30,23 +30,35 @@ export function workspaceSettings(workspace?: Pick<Workspace, 'settings'>): Work
 export function propertyValue(item: Item, propertyId: string): string | null {
   return propertyId === 'status' ? item.status ?? null : item.properties?.[propertyId] ?? null;
 }
-/**
- * Return the value used by the status presentation and lifecycle rules.
- *
- * Item storage keeps an explicit null so older and imported data remains
- * lossless. The status UI treats that null as the configured default, while
- * custom properties continue to expose their own unset value.
- */
-export function effectivePropertyValue(item: Item, property: EnumProperty): string | null {
+export type PropertyHierarchy = readonly Item[] | Pick<ReadonlyMap<string, Item>, 'get'>;
+export interface ResolvedProperty { value: string | null; inherited: boolean; source: Item | null }
+
+/** Snapshot definitions without inheritance keep their original null semantics. */
+export function resolvePropertyValue(item: Item, property: EnumProperty, items: PropertyHierarchy = []): ResolvedProperty {
   const value = propertyValue(item, property.id);
-  return property.id === 'status' ? value ?? property.defaultValue : value;
+  if (!property.inheritFromParent) return {value: property.id === 'status' ? value ?? property.defaultValue : value, inherited: false, source: item};
+  if (value !== null) return {value, inherited: false, source: item};
+  const seen = new Set([item.id]);
+  let parentId = item.parentId;
+  while (parentId !== null && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = 'get' in items ? items.get(parentId) : items.find(candidate => candidate.id === parentId);
+    if (!parent) break;
+    const inherited = propertyValue(parent, property.id);
+    if (inherited !== null) return {value: inherited, inherited: true, source: parent};
+    parentId = parent.parentId;
+  }
+  return {value: property.fallbackValue ?? null, inherited: true, source: null};
+}
+export function effectivePropertyValue(item: Item, property: EnumProperty, items: PropertyHierarchy = []): string | null {
+  return resolvePropertyValue(item, property, items).value;
 }
 export function propertyOption(property: EnumProperty, value: string | null): EnumOption | undefined {
   return property.options.find(option => option.id === value);
 }
-export function lifecycleBehavior(item: Item, settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS): 'normal' | 'complete' | 'skip' {
+export function lifecycleBehavior(item: Item, settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, items: PropertyHierarchy = []): 'normal' | 'complete' | 'skip' {
   const property = settings.properties.find(property => property.id === settings.lifecyclePropertyId);
-  return property ? propertyOption(property, effectivePropertyValue(item, property))?.behavior ?? 'normal' : 'normal';
+  return property ? propertyOption(property, effectivePropertyValue(item, property, items))?.behavior ?? 'normal' : 'normal';
 }
 export function defaultPropertyValues(settings: WorkspaceSettings): Pick<Item, 'status' | 'properties'> {
   return {
@@ -88,6 +100,9 @@ export function validateSettings(settings: WorkspaceSettings): void {
       if (option.behavior !== undefined && !['normal', 'complete', 'skip'].includes(option.behavior)) throw new Error('Option behavior is invalid');
     }
     if (property.defaultValue !== null && !values.has(property.defaultValue)) throw new Error(`Default value is invalid for ${property.id}`);
+    if (property.inheritFromParent !== undefined && typeof property.inheritFromParent !== 'boolean') throw new Error('Property inheritance must be a boolean');
+    if (property.fallbackValue !== undefined && !values.has(property.fallbackValue)) throw new Error(`Workspace default is invalid for ${property.id}`);
+    if (property.inheritFromParent && !property.fallbackValue) throw new Error(`Choose a workspace default for ${property.name}`);
   }
   if (settings.lifecyclePropertyId !== null && !ids.has(settings.lifecyclePropertyId)) throw new Error('Lifecycle property is invalid');
 }

@@ -76,7 +76,7 @@ document.querySelector('#reset').addEventListener('click',()=>send('reset-branch
         const patch: ItemPatch = { effortOverride: null };
         if (lifecycle?.id === 'status') patch.status = lifecycle.defaultValue;
         else if (lifecycle) patch.properties = { [lifecycle.id]: lifecycle.defaultValue };
-        const resetLabel = lifecycle?.options.find(option => option.id === lifecycle.defaultValue)?.label ?? lifecycle?.unsetLabel;
+        const resetLabel = lifecycle?.options.find(option => option.id === lifecycle.defaultValue)?.label ?? (lifecycle?.inheritFromParent ? 'Inherit' : lifecycle?.unsetLabel);
         const workspace = context.mutate({
           type: 'bulk',
           ids,

@@ -455,6 +455,38 @@ it('edits configured properties and bulk values without replacing other fields o
   expect(screen.getByRole('option', { name: 'My pursuits' })).toBeTruthy();
 });
 
+it('bulk sets any property on direct children or selected descendant branches, including hidden Items', async () => {
+  const user = userEvent.setup();
+  const settings = structuredClone(customSettings);
+  Object.assign(settings.properties[2]!, {inheritFromParent: true, fallbackValue: 'home'});
+  const {props} = renderPanel({settings, propertyId: 'priority'});
+  await user.click(screen.getByRole('checkbox', {name: 'Select all children'}));
+  await user.selectOptions(screen.getByRole('combobox', {name: 'Child batch property'}), 'context');
+  await user.selectOptions(screen.getByRole('combobox', {name: 'Selected children Context'}), 'home');
+  expect(props.onCommand).toHaveBeenLastCalledWith({type: 'bulk', ids: ['done', 'hidden'], patch: {properties: {context: 'home'}}});
+  await user.selectOptions(screen.getByRole('combobox', {name: 'Child property scope'}), 'descendants');
+  await user.selectOptions(screen.getByRole('combobox', {name: 'Selected children Context'}), '');
+  expect(props.onCommand).toHaveBeenLastCalledWith({type: 'bulk', ids: ['done', 'hidden', 'grandchild'], patch: {properties: {context: null}}});
+  await user.click(screen.getByRole('checkbox', {name: 'Select Hidden child'}));
+  await user.selectOptions(screen.getByRole('combobox', {name: 'Selected children Context'}), 'home');
+  expect(props.onCommand).toHaveBeenLastCalledWith({type: 'bulk', ids: ['done', 'grandchild'], patch: {properties: {context: 'home'}}});
+});
+
+it('shows the resolved inherited value and source while editing the raw choice', async () => {
+  const user = userEvent.setup();
+  const settings = structuredClone(customSettings);
+  Object.assign(settings.properties[1]!, {inheritFromParent: true, fallbackValue: 'high'});
+  const inheritedItems = items.map(item => ({...item, properties: {priority: item.id === 'topic' ? 'settled' : null}}));
+  const {props} = renderPanel({settings, propertyId: 'priority', items: inheritedItems, item: inheritedItems[1]!});
+  expect(screen.getByRole<HTMLSelectElement>('combobox', {name: 'Priority'}).value).toBe('');
+  expect(screen.getByRole('combobox', {name: 'Priority'}).title).toBe('Inherited from Build');
+  expect(screen.getAllByRole('option', {name: 'Inherit · Settled'}).length).toBeGreaterThan(0);
+  await user.selectOptions(screen.getByRole('combobox', {name: 'Priority'}), 'high');
+  expect(props.onCommand).toHaveBeenLastCalledWith({type: 'update', id: 'project', patch: {properties: {priority: 'high'}}});
+  await user.click(screen.getByRole('button', {name: 'Hide finished'}));
+  expect(props.onCommand).toHaveBeenLastCalledWith({type: 'bulk', ids: ['done'], patch: {included: false}});
+});
+
 it('hides finished children according to the designated property behaviors even with a manual effort override', async () => {
   const user = userEvent.setup();
   const configuredItems = items.map(item => ({ ...item, included: true, effortOverride: 13,

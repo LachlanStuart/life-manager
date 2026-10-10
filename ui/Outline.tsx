@@ -243,7 +243,7 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
           aria-expanded={hasChildren ? open : undefined} aria-selected={selecting ? selectedIds.includes(item.id) : undefined} aria-label={item.title}
           data-outline-id={item.id} data-depth={depth} data-hidden={!model.visible.has(item.id)} data-context={contextOnly}
           data-drop={drag?.drop?.id === item.id ? drag.drop.position : undefined} data-dragging={drag?.active && drag.id === item.id}
-          style={{ '--outline-depth': depth, '--lm-row-color': propertyPresentation(item, property).color } as CSSProperties}
+          style={{ '--outline-depth': depth, '--lm-row-color': propertyPresentation(item, property, items).color } as CSSProperties}
           onKeyDown={event => {
             if (event.target !== event.currentTarget) return;
             const keys = ['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End', 'Enter', 'F2', ' '];
@@ -273,7 +273,7 @@ export function Outline({ matchingIds, items, settings, propertyId, sort, select
             {hasChildren && !open && <span className="lm-outline__count" title="Immediate children">{model.children.get(item.id)?.length}</span>}
             <button className="lm-outline__open" aria-label={`Open ${item.title}`} onClick={() => onOpen(item.id)}><Icon name="open-item" /></button>
           </div>
-          <ItemControls item={item} hidden={!model.visible.has(item.id)} allocation={localShare(items, item.id)} allocationAutomatic={Boolean(item.allocationAuto)} allocationMax={allocationLimit(items, item.id)}
+          <ItemControls items={items} item={item} hidden={!model.visible.has(item.id)} allocation={localShare(items, item.id)} allocationAutomatic={Boolean(item.allocationAuto)} allocationMax={allocationLimit(items, item.id)}
             effort={efforts[item.id] ?? 0} settings={settings} propertyId={propertyId} disabled={locked} allocationDisabled={!item.included}
             onIncluded={included => void issue({ type: 'update', id: item.id, patch: { included } })}
             onProperty={(id, value) => void issue({ type: 'update', id: item.id, patch: propertyPatch(id, value) })}

@@ -24,6 +24,33 @@ function setup() {
 function item(items: Item[], id = 'build') { return items.find(value => value.id === id)!; }
 
 describe('configurable enum properties', () => {
+  it('persists explicit inheritance conversion without changing old snapshots or raw null assignments', () => {
+    const {actions} = setup();
+    const config = settings(); config.properties.push({...priority(), defaultValue: null});
+    actions.saveSettings({settings: config});
+    actions.mutate({command: {type: 'update', id: 'build', patch: {properties: {priority: 'high'}}}});
+    actions.mutate({command: {type: 'create', id: 'child', parentId: 'build', title: 'Child'}});
+    const planned = actions.plan().snapshots.find(snapshot => snapshot.kind === 'planned')!;
+    const previous = actions.workspace({snapshotId: planned.id});
+    const field = config.properties[1]!;
+    field.inheritFromParent = true;
+    expect(() => actions.saveSettings({settings: config})).toThrow(/workspace default/);
+    field.fallbackValue = 'missing';
+    expect(() => actions.saveSettings({settings: config})).toThrow(/Workspace default/);
+    field.fallbackValue = 'low';
+    const saved = workspaceSchema.parse(actions.saveSettings({settings: config}));
+    expect(saved.settings).toEqual(config);
+    expect(item(saved.dashboard.items, 'child').properties!.priority).toBeNull();
+    expect(effectivePropertyValue(item(saved.dashboard.items, 'child'), field, saved.dashboard.items)).toBe('high');
+    expect(actions.workspace({snapshotId: planned.id})).toEqual(previous);
+    expect(effectivePropertyValue(item(previous.dashboard.items, 'child'), previous.settings!.properties[1]!, previous.dashboard.items)).toBeNull();
+    const opening = actions.rollover().snapshots.find(snapshot => snapshot.kind === 'opening' && snapshot.periodId !== previous.dashboard.periodId)!;
+    actions.mutate({command: {type: 'update', id: 'build', patch: {properties: {priority: 'low'}}}});
+    const historical = actions.workspace({snapshotId: opening.id});
+    expect(effectivePropertyValue(item(historical.dashboard.items, 'child'), historical.settings!.properties[1]!, historical.dashboard.items)).toBe('high');
+    expect(actions.exportData().current.settings.properties[1]).toEqual(field);
+  });
+
   it('round-trips default visibility through settings, snapshots and exports without altering Items', () => {
     const {actions} = setup();
     const config = settings();

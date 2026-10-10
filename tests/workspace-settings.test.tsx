@@ -8,6 +8,36 @@ import { seedItems } from '../src/domain';
 import { PROPERTY_COLORS } from '../ui/property-colors';
 
 afterEach(cleanup);
+it('explicitly converts existing Unset values and separates the workspace fallback from creation defaults', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<WorkspaceSettingsEditor settings={DEFAULT_WORKSPACE_SETTINGS} items={seedItems().map(item => ({...item, status: null}))} onSave={save} />);
+  fireEvent.click(screen.getByText('Status', {selector: 'summary'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Replace Unset with Inherit'}));
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole('status').textContent).toContain('current Items will inherit when saved');
+  expect(screen.getByRole<HTMLSelectElement>('combobox', {name: 'Status default for new Items'}).value).toBe('Later');
+  fireEvent.change(screen.getByLabelText('Status workspace default'), {target: {value: 'Now'}});
+  expect(screen.queryByLabelText('Status Inherit show by default')).toBeNull();
+  fireEvent.click(screen.getByText('Save workspace'));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save.mock.calls[0]![0].settings.properties[0]).toMatchObject({inheritFromParent: true, defaultValue: 'Later', fallbackValue: 'Now'});
+});
+
+it('requires another workspace default when its option is removed', async () => {
+  const settings = structuredClone(DEFAULT_WORKSPACE_SETTINGS);
+  Object.assign(settings.properties[0]!, {inheritFromParent: true, fallbackValue: 'Later'});
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<WorkspaceSettingsEditor settings={settings} items={[]} onSave={save} />);
+  fireEvent.click(screen.getByText('Status', {selector: 'summary'}));
+  fireEvent.click(screen.getByLabelText('Remove Later'));
+  fireEvent.click(screen.getByText('Save workspace'));
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert').textContent).toContain('Choose a workspace default');
+  fireEvent.change(screen.getByLabelText('Status workspace default'), {target: {value: 'Now'}});
+  fireEvent.click(screen.getByText('Save workspace'));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save.mock.calls[0]![0].settings.properties[0]).toMatchObject({defaultValue: null, fallbackValue: 'Now'});
+});
 it('saves option and Unset default visibility separately from the creation default', async () => {
   const save = vi.fn().mockResolvedValue(undefined);
   render(<WorkspaceSettingsEditor settings={DEFAULT_WORKSPACE_SETTINGS} items={[]} onSave={save} />);
@@ -37,7 +67,8 @@ it('adds a property without invalid empty replacement maps and keeps its editor 
   await waitFor(() => expect(save).toHaveBeenCalledOnce());
   expect(save.mock.calls[0]![0].settings.name).toBe('Studio');
   expect(save.mock.calls[0]![0].replacements).toEqual({});
-  expect(save.mock.calls[0]![0].settings.properties[1]).toMatchObject({name:'Customer', defaultValue:null, options:[{label:'Acme'}]});
+  expect(save.mock.calls[0]![0].settings.properties[1]).toMatchObject({name:'Customer', inheritFromParent: true, defaultValue:null, options:[{label:'Acme'}]});
+  expect(save.mock.calls[0]![0].settings.properties[1].fallbackValue).toBe(save.mock.calls[0]![0].settings.properties[1].options[0].id);
 });
 it('assigns distinct palette defaults and reuses a freed color after removing an option', async () => {
   const save = vi.fn().mockResolvedValue(undefined);

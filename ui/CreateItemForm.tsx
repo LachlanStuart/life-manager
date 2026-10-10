@@ -35,7 +35,7 @@ export function CreateItemForm({ items, parentId, disabled, settings, propertyId
   return <form onSubmit={event => { event.preventDefault(); if (!disabled && title.trim()) onCreate({ ...command, share: explicitShare }); }}>
     <label>Title<input autoFocus required maxLength={500} disabled={disabled} value={title} onChange={event => setTitle(event.target.value)} /></label>
     <div className="lm-item-panel lm-create-controls">
-      <ItemControls item={item} detail hidden={!included} allocation={localShare(preview, id)} allocationAutomatic={share === null}
+      <ItemControls items={preview} item={item} detail hidden={!included} allocation={localShare(preview, id)} allocationAutomatic={share === null}
         settings={settings} propertyId={propertyId} onProperty={changeProperty}
         allocationMax={limit} effort={computeEfforts(preview, configuration)[id] ?? 0} disabled={disabled} allocationDisabled={!included || !hasSiblings}
         onIncluded={value => { setIncluded(value); if (!value) setShare(null); }} onAllocation={setShare} onEffort={setEffort} />
@@ -43,7 +43,7 @@ export function CreateItemForm({ items, parentId, disabled, settings, propertyId
         <summary>Properties</summary>
         <div className="lm-item-panel__settings-fields">
           {configuration.properties.map(property => <label key={property.id}><span>{property.name}</span>
-            <PropertySelect property={property} value={propertyValue(item, property.id)} label={`New item ${property.name}`} disabled={disabled}
+            <PropertySelect item={item} items={preview} property={property} value={propertyValue(item, property.id)} label={`New item ${property.name}`} disabled={disabled}
               onChange={value => changeProperty(property.id, value)} />
           </label>)}
         </div>

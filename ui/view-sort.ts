@@ -10,10 +10,11 @@ export const STATUS_ORDER: readonly Status[] = ['Now', 'Doing', 'Blocked', 'Done
 /** A presentation-only sibling comparison. Ties retain the saved order. */
 export function viewComparator(items: readonly Item[], sort: ViewSort = 'Order', settings: WorkspaceSettings = DEFAULT_WORKSPACE_SETTINGS, propertyId?: string | null): (a: Item, b: Item) => number {
   const values = new Map<string, number>();
+  const byId = new Map(items.map(item => [item.id, item]));
   const property = presentationProperty(settings, propertyId);
   const rank = (item: Item) => {
     if (!property) return 0;
-    const index = property.options.findIndex(option => option.id === effectivePropertyValue(item, property));
+    const index = property.options.findIndex(option => option.id === effectivePropertyValue(item, property, byId));
     return index < 0 ? property.options.length : index;
   };
   if (sort === 'Importance') {

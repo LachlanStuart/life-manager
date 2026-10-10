@@ -10,13 +10,17 @@ Life Manager organises personal pursuits and supporting knowledge, makes intende
 
 **Item**: A place in the hierarchy with single-choice properties, notes, and optional child Items.
 
-**Property**: A named single-choice field with ordered options, option colours, an explicit unset value and an optional default for new Items.
+**Property**: A named single-choice field with ordered options, option colours, a creation default, and optional parent inheritance with a workspace fallback.
 
 **Lifecycle property**: The optional property whose option behaviours affect calculated effort and identify finished Items. It is independent of the properties chosen for colouring or grouping.
 
 **Lifecycle status**: An Item’s value in the lifecycle property. The starting Status property offers Later, Now, Doing, Blocked, Done, Skip, and Cut.
 
-**Unset**: No stored option. Custom properties expose this as a distinct choice. Blank Status values behave as the configured Status default in the UI and lifecycle calculations; changing that default does not rewrite stored values.
+**Inherit**: No explicit stored option. Resolves to the nearest ancestor with an explicit value, then to the property’s workspace default. Explicit assignments override inheritance.
+
+**Workspace default**: The concrete fallback option for an inheriting property when no ancestor supplies a value. Separate from the creation default, which may itself be Inherit.
+
+**Unset**: The legacy blank choice for properties that have not enabled inheritance. Legacy blank Status resolves to its creation default; legacy custom properties retain a distinct blank value.
 
 **Skip**: The starting Status option for a routine Item that is irrelevant for the current review.
 

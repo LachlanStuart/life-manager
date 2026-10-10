@@ -123,6 +123,8 @@ export const workspaceSettingsSchema = z.object({
     unsetLabel: z.string().trim().min(1).max(500), unsetColor: z.string().regex(/^#[0-9a-f]{6}$/i),
     defaultValue: idSchema.nullable(),
     unsetShowByDefault: z.boolean().optional(),
+    inheritFromParent: z.boolean().optional(),
+    fallbackValue: idSchema.optional(),
     options: z.array(z.object({
       id: idSchema, label: z.string().trim().min(1).max(500), color: z.string().regex(/^#[0-9a-f]{6}$/i),
       behavior: z.enum(['normal', 'complete', 'skip']).optional(),
