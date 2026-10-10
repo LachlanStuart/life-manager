@@ -91,6 +91,8 @@ For example, two equally weighted visible activities at 150% and 50% yield 100% 
 
 ## Main workspace
 
+Settings → Appearance offers Light, Dark and System (default). The preference is saved per browser or desktop client. System follows operating-system appearance changes immediately. Appearance applies across views, dialogs, notes and built-in widgets, including historical views.
+
 ### Property filters
 
 A shared Filter popup works across Sunburst, Kanban and Outline, independently of colouring, grouping and sorting. The icon-only Filter button opens property value toggles and the shared Show excluded items toggle. Custom properties include Unset; Status folds blank values into its default; all values start enabled. A tap switches a value off or on immediately while the popup stays open. Each row has All and None shortcuts, and Reset all restores the unfiltered view. The creation default is marked on its value. The toolbar badge counts disabled values. There are no rule-building or Apply steps.

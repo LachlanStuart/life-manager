@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotesEditor } from '../ui/NotesEditor';
 import { EditorView } from '@codemirror/view';
 import type { NotesEditorProps } from '../ui/contracts';
+import { ThemeContext } from '../ui/theme';
 
 beforeEach(() => {
   Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
@@ -24,6 +25,17 @@ const widget = (config: unknown = {}) => '```life-widget\n' + JSON.stringify({ i
 const feeds = [{ id: 'feed', title: 'Feed', description: 'Updates' }];
 
 describe('Markdown NotesEditor', () => {
+  it('updates editor and widget appearance without changing notes or refetching the widget', async () => {
+    const initial = props({ value: widget(), widgets: feeds });
+    const screen = render(<ThemeContext value="light"><NotesEditor {...initial} /></ThemeContext>);
+    const frame = await screen.findByTitle('Feed widget');
+    expect(frame.getAttribute('srcdoc')).toContain('color-scheme:light');
+    screen.rerender(<ThemeContext value="dark"><NotesEditor {...initial} /></ThemeContext>);
+    expect(frame.getAttribute('srcdoc')).toContain('color-scheme:dark');
+    expect(screen.container.querySelector('.mdxeditor.dark-theme')).not.toBeNull();
+    expect(initial.renderWidget).toHaveBeenCalledTimes(1);
+    expect(initial.onChange).not.toHaveBeenCalled();
+  });
   it('keeps common formatting visible and exposes extra tools through a dismissible overflow', async () => {
     const screen = render(<NotesEditor {...props({ widgets: feeds })} />);
     expect(screen.getByRole('radio', { name: 'Bold' })).toBeDefined();

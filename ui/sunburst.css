@@ -1,9 +1,9 @@
 .lm-sunburst {
-  --lm-line: #dfd9cd;
-  --lm-surface: #fffdf7;
-  --lm-ink: #343a36;
-  --lm-muted: #7b8178;
-  --lm-primary: #63866e;
+  --lm-line: var(--theme-border, #dfd9cd);
+  --lm-surface: var(--theme-surface, #fffdf7);
+  --lm-ink: var(--theme-text, #343a36);
+  --lm-muted: var(--theme-muted, #7b8178);
+  --lm-primary: var(--theme-accent, #63866e);
   position: relative;
   display: grid;
   min-width: 0;
@@ -39,7 +39,7 @@
 }
 
 .lm-sunburst__backdrop {
-  fill: color-mix(in srgb, #f1eee5 54%, transparent);
+  fill: color-mix(in srgb, var(--theme-raised, #f1eee5) 54%, transparent);
   stroke: color-mix(in srgb, var(--lm-line) 82%, transparent);
   stroke-width: 1;
 }
@@ -121,7 +121,7 @@
   filter: drop-shadow(0 2px 4px #343a362b);
 }
 .lm-sunburst__resize-handle:focus-visible,
-.lm-sunburst__effort-handle:focus-visible { stroke: #2d7957; stroke-width: 4; outline: none; }
+.lm-sunburst__effort-handle:focus-visible { stroke: var(--theme-accent, #2d7957); stroke-width: 4; outline: none; }
 .lm-sunburst__resize-guide,
 .lm-sunburst__radial-guide {
   stroke: var(--lm-ink);
@@ -151,7 +151,7 @@
 
 .lm-sunburst__center--zoomed:hover circle,
 .lm-sunburst__center--zoomed:focus-visible circle {
-  fill: #f0f0e5;
+  fill: var(--theme-hover, #f0f0e5);
   stroke: var(--lm-ink);
 }
 
@@ -222,12 +222,12 @@
   font: inherit;
   font-size: 13px;
   color: var(--lm-ink);
-  background: #e9ede3;
+  background: var(--theme-hover, #e9ede3);
   cursor: pointer;
 }
 .lm-sunburst__navigation button { background: transparent; color: var(--lm-muted); }
 .lm-sunburst__navigation button:hover,
-.lm-sunburst__empty-actions button:hover { background: #dde5d8; }
+.lm-sunburst__empty-actions button:hover { background: var(--theme-selected, #dde5d8); }
 .lm-sunburst__navigation button:focus-visible,
 .lm-sunburst__empty-actions button:focus-visible { outline: 2px solid var(--lm-primary); outline-offset: 2px; }
 .lm-sunburst__branch-hint { fill: var(--lm-muted); pointer-events: none; }
@@ -344,7 +344,7 @@
   padding: .6rem .9rem;
   border: 1px solid var(--lm-line);
   border-radius: .7rem;
-  background: #fffdf7f5;
+  background: color-mix(in srgb, var(--theme-surface, #fffdf7) 96%, transparent);
   box-shadow: 0 3px 20px #343a3610;
   pointer-events: none;
 }
@@ -352,15 +352,15 @@
 .lm-sunburst__live strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
 .lm-sunburst__create { cursor: pointer; outline: none; }
 .lm-sunburst__create circle {
-  fill: #fffdf7f2;
-  stroke: #768b72;
+  fill: color-mix(in srgb, var(--theme-surface, #fffdf7) 95%, transparent);
+  stroke: var(--theme-accent, #768b72);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
   vector-effect: non-scaling-stroke;
 }
-.lm-sunburst__create path { stroke: #46624e; stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.lm-sunburst__create path { stroke: var(--theme-accent, #46624e); stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
 .lm-sunburst__create:hover circle,
-.lm-sunburst__create:focus-visible circle { stroke-dasharray: none; fill: #e8efdf; stroke-width: 2; }
+.lm-sunburst__create:focus-visible circle { stroke-dasharray: none; fill: var(--theme-hover, #e8efdf); stroke-width: 2; }
 .lm-sunburst__create[aria-disabled="true"] { opacity: .45; cursor: default; }
 .lm-sunburst__create-list { display: flex; flex-wrap: wrap; gap: .4rem; }
 .lm-sunburst__create-list button {
@@ -368,7 +368,7 @@
   padding: .5rem .8rem;
   color: var(--lm-ink);
   background: var(--lm-surface);
-  border: 1px dashed #98a18a;
+  border: 1px dashed var(--theme-border-strong, #98a18a);
   border-radius: .6rem;
   font: inherit;
   font-size: .8rem;

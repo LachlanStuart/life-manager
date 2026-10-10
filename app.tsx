@@ -27,6 +27,8 @@ import { childrenOf, effectiveIncluded } from './src/domain';
 import { type AgentReply, type Item, type ItemCommand, type PromptTemplate, type PromptHandling, type WidgetActionInput, type WidgetActionResult, type WidgetRenderInput, type WidgetRenderResult, type Workspace } from './src/types';
 import type { WheelMode } from './ui/contracts';
 import './ui/workspace.css';
+import './ui/theme.css';
+import { ThemeContext, useThemePreference, type ThemePreference } from './ui/theme';
 import { appBase, browserDemo } from './ui/runtime';
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -41,6 +43,7 @@ function parentPath(items: Item[], item: Item) {
 }
 
 export function LifeManagerPage() {
+  const appearance = useThemePreference();
   const [route, setRoute] = useState<ViewRoute>(() => initialRoute(new URL(window.location.href)));
   const routeRef = useRef(route);
   useEffect(() => {
@@ -233,7 +236,7 @@ export function LifeManagerPage() {
   }
   const setTemplate = (id: string) => setEditingTemplate(workspace?.promptTemplates.find(value => value.id === id) ?? { id: '', name: '', prompt: '' });
 
-  return <main className="lm-workspace" aria-label="Life Manager" data-view={route.view ?? 'sunburst'} data-item-open={Boolean(route.itemId)}>
+  return <ThemeContext value={appearance.theme}><main className="lm-workspace" aria-label="Life Manager" data-view={route.view ?? 'sunburst'} data-item-open={Boolean(route.itemId)}>
     <header className="lm-header">
       <a className="lm-brand" aria-label="Life Manager" href={routeUrl({ itemId: null, focusId: null })} onClick={event => { event.preventDefault(); navigate({ itemId: null, focusId: null }); }}><img src={`${appBase}favicon.svg`} alt="" /><h1>Life Manager</h1></a>
       <div className="lm-search"><input aria-label="Find an Item" type="search" placeholder="Find an Item" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setSearch(''); }} />
@@ -359,6 +362,15 @@ export function LifeManagerPage() {
     </Modal>}
     {settingsOpen && <Modal error={error} title="Settings" onClose={() => !busy && setSettingsOpen(false)}>
       <details className="lm-settings-section">
+        <summary>Appearance</summary>
+        <label>Theme<select value={appearance.preference} onChange={event => appearance.setPreference(event.target.value as ThemePreference)}>
+          <option value="system">System (default)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select></label>
+        <p>Saved automatically for this browser or desktop client.</p>
+      </details>
+      <details className="lm-settings-section">
         <summary>Workspace and properties</summary>
         {historical && <p>Return to the current dashboard to change workspace settings.</p>}
         <WorkspaceSettingsEditor settings={settings} items={items} disabled={historical || busy || !workspace} onSave={async (input, original) => {
@@ -406,5 +418,5 @@ export function LifeManagerPage() {
         <SunburstDisplaySettings />
       </details>
     </Modal>}
-  </main>;
+  </main></ThemeContext>;
 }

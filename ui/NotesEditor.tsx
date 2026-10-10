@@ -9,6 +9,7 @@ import {
   useCodeBlockEditorContext,
 } from '@mdxeditor/editor';
 import type { NotesEditorProps } from './contracts';
+import { useTheme } from './theme';
 import { WidgetBlock, WidgetContext } from './WidgetBlock';
 import '@mdxeditor/editor/style.css';
 import './notes-editor.css';
@@ -70,6 +71,7 @@ export function NotesEditor(props: NotesEditorProps) {
 }
 
 function NotesDocument(props: NotesEditorProps) {
+  const theme = useTheme();
   const { value } = props;
   const readOnly = props.readOnly ?? Boolean(props.snapshotId);
   const editor = useRef<MDXEditorMethods>(null);
@@ -148,7 +150,7 @@ function NotesDocument(props: NotesEditorProps) {
   return <WidgetContext.Provider value={props}>
     <div className="life-notes-editor" data-read-only={readOnly} onClickCapture={openItem}>
       {notice && <p className="life-notes-editor__notice" role="status">{notice}</p>}
-      <MDXEditor ref={editor} markdown={initialMarkdown.current} readOnly={readOnly} plugins={plugins}
+      <MDXEditor className={theme === 'dark' ? 'dark-theme' : ''} ref={editor} markdown={initialMarkdown.current} readOnly={readOnly} plugins={plugins}
         contentEditableClassName="life-notes-editor__surface" placeholder="Add notes, links, images, tables, or widgets…"
         onError={() => { hadParseError.current = true; }}
         onChange={(markdown, initialNormalization) => {

@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { LifeManagerPage } from './app';
 import { browserDemo } from './ui/runtime';
 import { DemoNotice } from './ui/DemoNotice';
+import { applyTheme, readThemePreference } from './ui/theme';
+
+applyTheme(readThemePreference());
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode>{browserDemo
   ? <div className="lm-demo-shell"><DemoNotice /><LifeManagerPage /></div>

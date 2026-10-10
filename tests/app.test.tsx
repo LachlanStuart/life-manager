@@ -55,6 +55,26 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
 }
 beforeEach(() => { localStorage.clear(); vi.stubGlobal('PointerEvent', MouseEvent); HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; });
 
+it('offers System, Light and Dark appearance and remembers the choice in this client', async () => {
+  const { screen, mutations } = setup();
+  await screen.findByText('Select Tend');
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(screen.getByText('Appearance', { selector: 'summary' }));
+  const select = screen.getByRole('combobox', { name: 'Theme' }) as HTMLSelectElement;
+  expect(Array.from(select.options, option => option.value)).toEqual(['system', 'light', 'dark']);
+  expect(select.value).toBe('system');
+  fireEvent.change(select, { target: { value: 'dark' } });
+  expect(document.documentElement.dataset.theme).toBe('dark');
+  expect(localStorage.getItem('life-manager.theme')).toBe('dark');
+  expect(mutations).toEqual([]);
+  cleanup();
+  const next = setup().screen;
+  await next.findByText('Select Tend');
+  fireEvent.click(next.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(next.getByText('Appearance', { selector: 'summary' }));
+  expect((next.getByRole('combobox', { name: 'Theme' }) as HTMLSelectElement).value).toBe('dark');
+});
+
 it('defaults prompt handling to the copy dialog and remembers the choice in this client', async () => {
   const { screen, mutations } = setup();
   await screen.findByText('Select Tend');

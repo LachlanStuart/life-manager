@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useCodeBlockEditorContext, type CodeBlockEditorProps } from '@mdxeditor/editor';
 import type { NotesEditorProps } from './contracts';
+import { useTheme, type Theme } from './theme';
 
 export const WidgetContext = createContext<NotesEditorProps | null>(null);
 const HOST = 'life-manager-host';
@@ -10,8 +11,8 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function documentFor(html: string) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>body{margin:0;padding:12px;font:14px/1.5 system-ui;color:#34332e}img{max-width:100%}</style><script>
+function documentFor(html: string, theme: Theme) {
+  return `<!doctype html><html style="color-scheme:${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>body{margin:0;padding:12px;font:14px/1.5 system-ui;color:CanvasText}img{max-width:100%}</style><script>
 (() => {
   const pending = new Map(); let sequence = 0;
   const send = (kind, action, input) => {
@@ -36,6 +37,7 @@ function documentFor(html: string) {
 }
 
 export function WidgetBlock({ code }: CodeBlockEditorProps) {
+  const theme = useTheme();
   const context = useContext(WidgetContext)!;
   const { setCode } = useCodeBlockEditorContext();
   const latest = useRef(context);
@@ -64,7 +66,7 @@ export function WidgetBlock({ code }: CodeBlockEditorProps) {
     void latest.current.renderWidget({ widgetId: parsed.id, config: parsed.config,
       itemId: context.itemId, ...(context.snapshotId ? { snapshotId: context.snapshotId } : {})
     }).then(result => {
-      if (mounted) { setDocument(documentFor(result.html)); setStatus(''); }
+      if (mounted) { setDocument(result.html); setStatus(''); }
     }, error => {
       if (mounted) setStatus(error instanceof Error ? error.message : 'Widget could not load.');
     });
@@ -95,7 +97,7 @@ export function WidgetBlock({ code }: CodeBlockEditorProps) {
         }).then(result => {
           if (!mounted) return;
           reply({ kind: 'result', result: {} });
-          setDocument(documentFor(result.html));
+          setDocument(result.html);
           setFrameVersion(version => version + 1);
         }, error => reply({ kind: 'error', error: error instanceof Error ? error.message : 'Widget refresh failed' }));
         return;
@@ -116,7 +118,7 @@ export function WidgetBlock({ code }: CodeBlockEditorProps) {
     <div className="life-notes-widget__heading"><strong>{summary?.title ?? parsed?.id ?? 'Widget'}</strong>
       <span role="status">{!parsed ? 'Invalid widget configuration. Edit the JSON to repair it.' : !known ? 'Widget unavailable. Configuration retained.' : status}</span>
     </div>
-    {parsed && known && document ? <iframe key={frameVersion} ref={frameRef} title={`${summary?.title} widget`} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" srcDoc={document} className="life-notes-widget__frame" /> : null}
+    {parsed && known && document ? <iframe key={frameVersion} ref={frameRef} title={`${summary?.title} widget`} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" srcDoc={documentFor(document, theme)} className="life-notes-widget__frame" /> : null}
     <details open={!parsed || !known}><summary>Widget configuration</summary>
       <textarea aria-label="Widget configuration JSON" value={code} readOnly={readOnly} rows={5} spellCheck={false}
         onChange={event => setCode(event.target.value)} />

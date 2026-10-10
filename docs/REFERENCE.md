@@ -6,6 +6,8 @@ For installation and the everyday workflow, see the [README](../README.md).
 
 The server uses Node HTTP, SQLite (`better-sqlite3`) and a Vite/React client. MDXEditor is loaded when an Item is opened. Domain calculations are shared with the server; HTTP actions validate inputs and use revision checks to avoid silently applying stale writes.
 
+Settings → Appearance stores `system` (default), `light` or `dark` in client local storage under `life-manager.theme`, outside workspace snapshots and exports. System follows `prefers-color-scheme`, including live changes. If storage is unavailable, the selected appearance lasts for the session.
+
 The database is `life-manager.sqlite` inside the configured data directory. On macOS the server and desktop app both default to `~/Library/Application Support/Life Manager/workspace/`, outside the source checkout. Other server platforms default to `.data/` in the project root. `LIFE_MANAGER_DATA_DIR` overrides the standalone server location; the desktop directory is selected in Connection Settings. Managed images live in `attachments/` and use Markdown URLs such as `/attachments/<id>.png`. Images referenced by older snapshots are retained. Back up the database and attachments together; stop the server before making a simple filesystem copy, or use SQLite's backup facilities while it runs.
 
 Existing checkout-local workspaces are not moved automatically. On macOS, startup detects `.data/life-manager.sqlite` and requires either an explicit override or moving the entire workspace to the new location. A legacy `.data` symlink to the new default is supported. Time Machine inclusion depends on machine-specific exclusions; check the actual directory with `tmutil isexcluded` after relocation.

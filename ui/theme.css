@@ -1,0 +1,24 @@
+/* Component fallbacks preserve the light palette. These shared tokens cover dark appearance. */
+:root[data-theme='dark'] {
+  --theme-canvas: #181e1b;
+  --theme-surface: #202823;
+  --theme-raised: #252e28;
+  --theme-hover: #303c33;
+  --theme-selected: #3b4d3f;
+  --theme-border: #3a463d;
+  --theme-border-strong: #586d5a;
+  --theme-text: #e4e9e2;
+  --theme-muted: #a6b2a5;
+  --theme-accent: #a1c5a7;
+  --theme-danger: #f3a296;
+  --theme-danger-bg: #462c29;
+  --theme-danger-border: #88544b;
+  --theme-warning: #e1bf83;
+  --theme-warning-bg: #3d3424;
+}
+
+:root[data-theme='dark'] .lm-workspace .lm-primary,
+:root[data-theme='dark'] .lm-demo-notice button { background: #3d6550; border-color: #679777; color: #fff; }
+:root[data-theme='dark'] .lm-workspace .lm-primary:hover:not(:disabled) { background: #497a60; }
+:root[data-theme='dark'] .lm-inline-choice > span { color: color-mix(in srgb, currentColor 65%, #fff); }
+.lm-modal :is(input, select, textarea) { color: inherit; }

@@ -1,23 +1,23 @@
 .lm-filter-button { display: inline-flex; align-items: center; gap: 5px; }
-.lm-filter-button[data-active='true'] { color: #315c42; background: #e6eedf; }
-.lm-filter-button b { border-radius: 8px; padding: 1px 5px; font-size: 10px; background: #d6e2cd; }
-.lm-filters { position: fixed; z-index: 80; box-sizing: border-box; width: 510px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; padding: 12px; border: 1px solid #d9ddd0; border-radius: 10px; background: #fffef9; color: #303c36; box-shadow: 0 8px 25px #303c362b; font: 13px/1.4 system-ui, sans-serif; }
+.lm-filter-button[data-active='true'] { color: var(--theme-accent, #315c42); background: var(--theme-hover, #e6eedf); }
+.lm-filter-button b { border-radius: 8px; padding: 1px 5px; font-size: 10px; background: var(--theme-selected, #d6e2cd); }
+.lm-filters { position: fixed; z-index: 80; box-sizing: border-box; width: 510px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; padding: 12px; border: 1px solid var(--theme-border, #d9ddd0); border-radius: 10px; background: var(--theme-surface, #fffef9); color: var(--theme-text, #303c36); box-shadow: 0 8px 25px #303c362b; font: 13px/1.4 system-ui, sans-serif; }
 .lm-filters header { display: flex; align-items: center; gap: 8px; }
 .lm-filters header strong { flex: 1; }
-.lm-filters button { cursor: pointer; color: inherit; font: inherit; min-height: 30px; padding: 4px 8px; border: 1px solid #dedfd5; border-radius: 6px; background: transparent; }
-.lm-filters button:focus-visible { outline: 2px solid #527764; outline-offset: 2px; }
+.lm-filters button { cursor: pointer; color: inherit; font: inherit; min-height: 30px; padding: 4px 8px; border: 1px solid var(--theme-border, #dedfd5); border-radius: 6px; background: transparent; }
+.lm-filters button:focus-visible { outline: 2px solid var(--theme-accent, #527764); outline-offset: 2px; }
 .lm-filters button:disabled { opacity: .45; cursor: default; }
-.lm-filters p { font-size: 12px; color: #737c6e; margin: 7px 0 12px; }
-.lm-filters fieldset { position: relative; margin: 12px 0 0; padding: 7px 0 0; border: 0; border-top: 1px solid #e3e5db; min-width: 0; }
+.lm-filters p { font-size: 12px; color: var(--theme-muted, #737c6e); margin: 7px 0 12px; }
+.lm-filters fieldset { position: relative; margin: 12px 0 0; padding: 7px 0 0; border: 0; border-top: 1px solid var(--theme-border, #e3e5db); min-width: 0; }
 .lm-filters legend { font-weight: 650; padding-right: 8px; }
-.lm-filters__shortcuts { display: flex; gap: 4px; position: absolute; right: 0; top: -21px; background: #fffef9; padding-left: 8px; }
+.lm-filters__shortcuts { display: flex; gap: 4px; position: absolute; right: 0; top: -21px; background: var(--theme-surface, #fffef9); padding-left: 8px; }
 .lm-filters__shortcuts button { border: 0; min-height: 24px; padding: 1px 6px; font-size: 12px; }
 .lm-filters__values { display: flex; flex-wrap: wrap; gap: 6px; }
 .lm-filters__values button { display: inline-flex; align-items: center; gap: 5px; }
-.lm-filters__values button[aria-pressed='true'] { background: #eaf0e3; border-color: #aebfa5; }
-.lm-filters__values button[aria-pressed='false'] { color: #7e847b; }
+.lm-filters__values button[aria-pressed='true'] { background: var(--theme-hover, #eaf0e3); border-color: var(--theme-border-strong, #aebfa5); }
+.lm-filters__values button[aria-pressed='false'] { color: var(--theme-muted, #7e847b); }
 .lm-filters__values i { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; }
-.lm-filters__values small { font-size: 9px; color: #6e7867; }
+.lm-filters__values small { font-size: 9px; color: var(--theme-muted, #6e7867); }
 .lm-filters__check { display: inline-block; width: 10px; }
 .lm-sunburst__filter-note { margin: 0; text-align: center; font-size: 12px; color: var(--lm-muted); }
 .lm-sunburst__segment--context .lm-sunburst__label { opacity: .55; }
@@ -25,4 +25,4 @@
 
 .lm-filters .lm-filters__inclusion { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; text-align: left; }
 .lm-filters__inclusion > span { margin-left: auto; }
-.lm-filters__inclusion[aria-pressed='true'] { background: #eaf0e3; border-color: #aebfa5; }
+.lm-filters__inclusion[aria-pressed='true'] { background: var(--theme-hover, #eaf0e3); border-color: var(--theme-border-strong, #aebfa5); }
