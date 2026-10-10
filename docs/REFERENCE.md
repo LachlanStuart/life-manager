@@ -51,6 +51,8 @@ Commands support create, update, delete, delete-many, move, arrange, restore-arr
 
 Current workspace `recycleBin` entries are `{id,title,parentId,deletedAt,itemCount}`, ordered newest first; `itemCount` includes the root. Restoration preserves Item IDs, notes and descendant structure, appends the root to its surviving original parent (otherwise the workspace root), and applies ordinary allocation normalization. Property values no longer defined by current settings become unset; removed property fields and missing prompt references are cleared. A conflicting active Item ID or stale revision rejects restoration without changing the bin. Restore has no `snapshotId` input. Historical correction deletions remain local to their snapshot and do not enter the bin. Recycle entries have no automatic expiry or permanent-deletion endpoint. Schema-version-2 exports include an additive `recycleBin` array with each summary plus its full `items`.
 
+Restart the server after deploying backend changes. Rebuilding the web client alone does not reload the running server. If a current workspace response lacks `recycleBin`, the client blocks Item deletion and shows a server-restart message rather than treating the bin as empty.
+
 ## Workspace settings and properties
 
 `settings` is `{name, properties, lifecyclePropertyId}`. Each property is `{id, name, options, unsetLabel, unsetColor, defaultValue}`; each option is `{id, label, color, behavior?}`. Arrays define property and option order. Colours are six-digit hex values. IDs are stable when labels change. `defaultValue` is an option ID or `null`; `lifecyclePropertyId` is a property ID or `null`.

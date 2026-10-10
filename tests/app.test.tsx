@@ -15,11 +15,12 @@ function fixture(): Workspace {
     { id: 'tend', parentId: null, order: 0, title: 'Tend', status: 'Later', notes: 'Current notes', included: true, weight: 1, effortOverride: null },
     { id: 'build', parentId: null, order: 1, title: 'Build', status: 'Doing', notes: '', included: true, weight: 1, effortOverride: 150 },
   ] }, periods: [{ id: 'period-1', name: 'First period', openedAt: '2026-09-13T00:00:00Z', closedAt: null }],
-  snapshots: [{ id: 'opening-1', periodId: 'period-1', kind: 'opening', capturedAt: '2026-09-13T00:00:00Z', updatedAt: '2026-09-13T00:00:00Z' }], widgets: [], promptTemplates: [] };
+  snapshots: [{ id: 'opening-1', periodId: 'period-1', kind: 'opening', capturedAt: '2026-09-13T00:00:00Z', updatedAt: '2026-09-13T00:00:00Z' }], widgets: [], promptTemplates: [], recycleBin: [] };
 }
-function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
+function setup(path = '/', extraItems: Workspace['dashboard']['items'] = [], recycleBinSupported = true) {
   window.history.replaceState(null, '', path);
   let current = fixture(); current.dashboard.items.push(...extraItems); const historical = structuredClone(current); historical.dashboard.snapshotId = 'opening-1'; historical.dashboard.items[0]!.notes = 'Original notes';
+  if (!recycleBinSupported) delete current.recycleBin;
   const mutations: any[] = [];
   const deletedBranches = new Map<string, Workspace['dashboard']['items']>();
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
@@ -65,6 +66,20 @@ function setup(path = '/', extraItems: Workspace['dashboard']['items'] = []) {
   return { screen: render(<LifeManagerPage />), current, historical, mutations };
 }
 beforeEach(() => { localStorage.clear(); vi.stubGlobal('PointerEvent', MouseEvent); HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; });
+
+it('blocks deletion against an older backend and distinguishes an unavailable recycle bin from an empty one', async () => {
+  const {screen, mutations, current} = setup('/', [], false);
+  await screen.findByText('Select Tend');
+  fireEvent.contextMenu(screen.getByText('Select Tend'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Delete'}));
+  await screen.findByText(/Restart the updated server/);
+  expect(mutations).toEqual([]);
+  expect(current.dashboard.items.some(item => item.id === 'tend')).toBe(true);
+  fireEvent.click(screen.getByRole('button', {name: 'Settings'}));
+  fireEvent.click(screen.getByText('Recycle bin', {selector: 'summary'}));
+  expect(screen.queryByText('No deleted Items.')).toBeNull();
+  expect(within(screen.getByRole('dialog', {name: 'Settings'})).getAllByText(/Item deletion is paused/).length).toBeGreaterThan(0);
+});
 
 it('offers System, Light and Dark appearance and remembers the choice in this client', async () => {
   const { screen, mutations } = setup();

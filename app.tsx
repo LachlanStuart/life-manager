@@ -33,6 +33,7 @@ import { ThemeContext, useThemePreference, type ThemePreference } from './ui/the
 import { appBase, browserDemo } from './ui/runtime';
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+const recycleBinUnavailable = 'Restart the updated server to enable the recycle bin. Item deletion is paused until it is available.';
 type Draft = { itemId: string; markdown: string; snapshotId?: string };
 const ItemPanel = lazy(() => import('./ui/ItemPanel').then(module => ({ default: module.ItemPanel })));
 
@@ -105,6 +106,9 @@ export function LifeManagerPage() {
     const current = latest.current;
     if (!current || (current.dashboard.snapshotId ?? undefined) !== routeRef.current.snapshotId) throw new Error('Wait for the dashboard to load.');
     try {
+      if ((value.type === 'delete' || value.type === 'delete-many') && !current.dashboard.snapshotId && !Array.isArray(current.recycleBin)) {
+        throw new Error(recycleBinUnavailable);
+      }
       if (expectedRevision !== undefined && expectedRevision !== current.dashboard.revision) throw new Error('The dashboard changed. Check the Item before trying again.');
       const next = await api<Workspace>('mutate', { snapshotId: current.dashboard.snapshotId ?? undefined, expectedRevision: current.dashboard.revision, command: value });
       accept(next); setError('');
@@ -397,7 +401,7 @@ export function LifeManagerPage() {
       </details>
       <details className="lm-settings-section">
         <summary>Recycle bin</summary>
-        {historical ? <p>Return to the current dashboard to restore deleted Items.</p> : <RecycleBin entries={workspace?.recycleBin ?? []} items={items} disabled={busy || !workspace}
+        {historical ? <p>Return to the current dashboard to restore deleted Items.</p> : !Array.isArray(workspace?.recycleBin) ? <p>{recycleBinUnavailable}</p> : <RecycleBin entries={workspace.recycleBin} items={items} disabled={busy || !workspace}
           onRestore={id => void run(async () => {
             await saveNotes();
             await enqueue(async () => {
