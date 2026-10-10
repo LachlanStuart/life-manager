@@ -203,8 +203,8 @@ export function ItemPanel({
         <span className="lm-item-panel__current">
         <span className="lm-item-panel__title-wrap">
         <span className="lm-item-panel__title-measure" aria-hidden="true">{titleDraft || ' '}</span>
-        <input className="lm-item-panel__title" aria-label="Title" value={titleDraft} disabled={locked}
-          onChange={(event) => { titleDirty.current = true; setTitleDraft(event.target.value); }}
+        <textarea className="lm-item-panel__title" aria-label="Title" rows={1} value={titleDraft} disabled={locked}
+          onChange={(event) => { titleDirty.current = true; setTitleDraft(event.target.value.replace(/[\r\n]+/g, ' ')); }}
           onBlur={() => {
             if (cancelTitle.current) { cancelTitle.current = false; titleDirty.current = false; return; }
             if (!titleDirty.current) return;
@@ -214,7 +214,7 @@ export function ItemPanel({
             else if (!locked && title !== item.title) void issue({ type: 'update', id: item.id, patch: { title } });
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
             if (event.key === 'Escape') { cancelTitle.current = true; setTitleDraft(item.title); event.currentTarget.blur(); }
           }} />
         </span>

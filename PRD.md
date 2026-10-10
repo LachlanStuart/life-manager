@@ -172,6 +172,8 @@ A resizable detail pane presents an Item's notes, widgets, and immediate childre
 
 Within the Item view, Children appear first and Notes follow vertically in one scrolling view, without separate Children/Notes tabs. Keep section headers compact and avoid UI subtitles or explanatory taglines. Section framing should consume little space.
 
+In narrow detail panes, the title occupies a full-width row below the ancestor path, with inclusion, property, allocation, effort and delete controls on the following row. Long titles wrap and grow while editing; Enter saves and Escape cancels.
+
 Navigating to a child from the Item view opens that child in the same full-screen space. These view changes participate in browser history: Back returns to the previously viewed Item or wheel, including its prior focus. Use native browser navigation rather than implementing a competing edge-swipe gesture. The sunburst does not support reordering; sibling reordering belongs in the list/table view.
 
 Notes use a Notion-like, Markdown-esque rich editor supporting text, images, links, and tables. Notes can contain links to other Items and embedded interactive widgets.
