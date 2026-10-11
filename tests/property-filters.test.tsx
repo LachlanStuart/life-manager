@@ -111,8 +111,20 @@ it('filters board cards after leaf eligibility, preserving shares and parent pat
   expect(filtered.cards.map(card => card.item.id)).toEqual(['ready']);
   expect(filtered.cards[0]!.share).toBe(original.cards.find(card => card.item.id === 'ready')!.share);
   expect(filtered.cards[0]!.parentPath.map(item => item.id)).toEqual(['root']);
-  expect(filtered.columns.map(column => column.label)).toEqual(['Now']);
+  expect(filtered.columns.map(column => column.label)).toEqual(original.columns.map(column => column.label));
+  expect(filtered.columns.find(column => column.status === 'Done')!.groups).toEqual([]);
   expect(buildKanbanModel(items, null, 'Order', settings, 'status', new Set(['root'])).cards).toEqual([]);
+});
+
+it.each([
+  ['status', ['Now', 'Doing', 'Blocked', 'Done', 'Later', 'Skip', 'Cut']],
+  ['project', ['Project A', 'Project B', 'No project']],
+  [null, ['Items']],
+] as const)('keeps every %s column when filters match no cards', (groupPropertyId, labels) => {
+  const model = buildKanbanModel(items, null, 'Order', settings, groupPropertyId, new Set());
+  expect(model.cards).toEqual([]);
+  expect(model.columns.map(column => column.label)).toEqual(labels);
+  expect(model.columns.every(column => column.groups.length === 0)).toBe(true);
 });
 
 it('keeps wheel ancestor paths but excludes unmatched siblings and hidden branches', () => {

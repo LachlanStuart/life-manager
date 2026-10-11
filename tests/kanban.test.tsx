@@ -265,6 +265,14 @@ describe('Kanban component', () => {
     expect(second.onCommand).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps filtered-out columns available for dropping cards', async () => {
+    const { onCommand } = renderBoard({ matchingIds: new Set(['a']) });
+    expect(screen.queryByRole('button', { name: 'Beta, Later' })).toBeNull();
+    const doneColumn = screen.getByRole('listitem', { name: 'Done: 0 Items' });
+    dragFromTo(screen.getByRole('button', { name: 'Alpha, Now' }), doneColumn);
+    await waitFor(() => expect(onCommand).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: 'a', patch: { status: 'Done' } }));
+  });
+
   it('does not drop into a horizontally clipped column outside the board', () => {
     const { onCommand } = renderBoard();
     const board = document.querySelector('.lm-kanban__board')!;

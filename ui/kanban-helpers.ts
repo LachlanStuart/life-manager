@@ -174,7 +174,7 @@ export function buildKanbanModel(items: readonly Item[], focusId: string | null,
         group.cards.push(card);
       }
       return { ...column, groups: [...groups.values()] };
-    }).filter(column => !matchingIds || column.groups.length > 0),
+    }),
   };
 }
 
