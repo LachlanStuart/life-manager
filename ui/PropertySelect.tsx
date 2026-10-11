@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { EnumProperty, Item, ItemPatch, WorkspaceSettings } from '../src/types';
 import { resolvePropertyValue, type PropertyHierarchy } from '../src/properties';
 
@@ -47,13 +48,15 @@ export function PropertySelect({ property, value, label, disabled, inline = fals
   const source = resolved?.inherited ? resolved.source ? `Inherited from ${resolved.source.title}` : 'Workspace default' : undefined;
   const choices = propertyChoices(property);
   const choice = choices.find(option => option.id === effectiveValue);
+  const color = property.options.find(option => option.id === resolved?.value)?.color ?? choice?.color ?? property.unsetColor;
   const displayLabel = (option: PropertyChoice) => option.id === null && property.inheritFromParent && inheritedLabel ? `Inherit · ${inheritedLabel}` : option.label;
   const select = <select aria-label={label} title={source} value={effectiveValue ?? ''} disabled={disabled}
+    className="lm-property-select" style={{ '--lm-property-color': color } as CSSProperties}
     onChange={event => onChange(event.target.value || null)}>
     {choices.map(option => <option key={option.id ?? 'unset'} value={option.id ?? ''}>{displayLabel(option)}</option>)}
   </select>;
-  return inline ? <span className="lm-inline-choice lm-item-panel__status" title={source} style={{ color: property.options.find(option => option.id === resolved?.value)?.color ?? choice?.color ?? property.unsetColor }}>
+  return inline ? <span className="lm-inline-choice lm-item-panel__status" title={source} style={{ color }}>
     <span aria-hidden="true">{choice ? displayLabel(choice) : property.id === 'status' ? 'No status' : property.unsetLabel}<span className="lm-inline-chevron">⌄</span></span>
     {select}
-  </span> : source ? <span className="lm-property-inheritance">{select}<small>{source}</small></span> : select;
+  </span> : select;
 }

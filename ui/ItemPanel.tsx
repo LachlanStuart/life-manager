@@ -228,20 +228,15 @@ export function ItemPanel({
       </nav>
       {controls(item, true)}
       </header>
-      {configuration.properties.length > 0 && <details className="lm-item-panel__settings lm-item-panel__properties">
-        <summary>Properties</summary>
+      {currentLink?.error && <p className="lm-item-panel__error" role="alert">{currentLink.error}</p>}
+      <details className="lm-item-panel__settings">
+        <summary>Item settings</summary>
+        {showAll && <p className="lm-item-panel__hint">Turn off Show all to edit allocation.</p>}
         <div className="lm-item-panel__settings-fields">
           {configuration.properties.map(property => <label key={property.id}><span>{property.name}</span>
             <PropertySelect item={item} items={items} property={property} value={propertyValue(item, property.id)} label={`Property ${property.name}`} disabled={locked || deleting}
               onChange={value => void issue({ type: 'update', id: item.id, patch: propertyPatch(property.id, value) })} />
           </label>)}
-        </div>
-      </details>}
-      {currentLink?.error && <p className="lm-item-panel__error" role="alert">{currentLink.error}</p>}
-      <details className="lm-item-panel__settings">
-        <summary>Item settings</summary>
-      {showAll && <p className="lm-item-panel__hint">Turn off Show all to edit allocation.</p>}
-        <div className="lm-item-panel__settings-fields">
           <label><span>Parent</span><select aria-label="Parent item" value={item.parentId ?? ''} disabled={locked}
             onChange={(event) => { const parentId = event.target.value || null; if (parentId !== item.parentId) void issue({ type: 'move', id: item.id, parentId }); }}>
             <option value="">{configuration.name}</option>{parentOptions.map((parent) => <option key={parent.id} value={parent.id}>{parent.label}</option>)}
@@ -250,7 +245,6 @@ export function ItemPanel({
             onChange={(event) => void issue({ type: 'update', id: item.id, patch: { defaultPromptId: event.target.value || null } })}>
             <option value="">Inherit from parent</option>{promptTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
           </select></label>
-
         </div>
       </details>
       {error && <p className="lm-item-panel__error" role="alert">{error}</p>}

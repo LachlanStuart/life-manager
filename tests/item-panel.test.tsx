@@ -448,10 +448,9 @@ it('edits configured properties and bulk values without replacing other fields o
   expect(changed.find(item => item.id === 'done')).toMatchObject({ status: 'Done', properties: { context: 'home', priority: 'high' } });
   await user.selectOptions(screen.getByRole('combobox', { name: 'Selected children Priority' }), '');
   expect(props.onCommand).toHaveBeenCalledWith({ ...command, patch: { properties: { priority: null } } });
-  await user.click(screen.getByText('Properties'));
+  await user.click(screen.getByText('Item settings'));
   await user.selectOptions(screen.getByRole('combobox', { name: 'Property Stage' }), 'Now');
   expect(props.onCommand).toHaveBeenCalledWith({ type: 'update', id: 'project', patch: { status: 'Now' } });
-  await user.click(screen.getByText('Item settings'));
   expect(screen.getByRole('option', { name: 'My pursuits' })).toBeTruthy();
 });
 
@@ -499,7 +498,7 @@ it('hides finished children according to the designated property behaviors even 
 it('keeps every configured property read only in historical details', async () => {
   const user = userEvent.setup();
   const { props } = renderPanel({ settings: customSettings, propertyId: 'priority', readOnly: true, snapshotId: 'history' });
-  await user.click(screen.getByText('Properties'));
+  await user.click(screen.getByText('Item settings'));
   for (const name of ['Priority', 'Property Priority', 'Property Stage', 'Property Context', 'Selected children Priority']) {
     expect(screen.getByRole<HTMLSelectElement>('combobox', { name }).disabled).toBe(true);
   }
