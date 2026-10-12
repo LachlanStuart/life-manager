@@ -120,22 +120,22 @@ it('defaults prompt handling to the copy dialog and remembers the choice in this
   expect((next.getByRole('combobox', { name: 'Prompt handling' }) as HTMLSelectElement).value).toBe('codex');
 });
 
-it('persists the T3 installation location across client restarts', async () => {
+it('persists the T3 webhook URL across client restarts', async () => {
   const { screen } = setup();
   await screen.findByText('Select Tend');
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   fireEvent.click(screen.getByText('Prompts', { selector: 'summary' }));
   fireEvent.change(screen.getByRole('combobox', { name: 'Prompt handling' }), { target: { value: 't3' } });
-  fireEvent.change(screen.getByRole('textbox', { name: 'T3 Code location' }), { target: { value: '/Applications/T3 Code (Nightly).app' } });
-  expect(localStorage.getItem('life-manager.t3-location')).toBe('/Applications/T3 Code (Nightly).app');
+  fireEvent.change(screen.getByRole('textbox', { name: 'T3 webhook URL' }), { target: { value: 'https://hooks.example/task/token' } });
+  expect(localStorage.getItem('life-manager.t3-webhook-url')).toBe('https://hooks.example/task/token');
   cleanup();
   const next = setup().screen;
   await next.findByText('Select Tend');
   fireEvent.click(next.getByRole('button', { name: 'Settings' }));
   fireEvent.click(next.getByText('Prompts', { selector: 'summary' }));
-  expect((next.getByRole('textbox', { name: 'T3 Code location' }) as HTMLInputElement).value).toBe('/Applications/T3 Code (Nightly).app');
-  fireEvent.change(next.getByRole('textbox', { name: 'T3 Code location' }), { target: { value: '' } });
-  expect(localStorage.getItem('life-manager.t3-location')).toBe('');
+  expect((next.getByRole('textbox', { name: 'T3 webhook URL' }) as HTMLInputElement).value).toBe('https://hooks.example/task/token');
+  fireEvent.change(next.getByRole('textbox', { name: 'T3 webhook URL' }), { target: { value: '' } });
+  expect(localStorage.getItem('life-manager.t3-webhook-url')).toBe('');
 });
 
 it('confirms period resets once for all Items, including hidden descendants, and preserves snapshots', async () => {

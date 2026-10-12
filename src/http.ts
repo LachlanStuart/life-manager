@@ -4,6 +4,7 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import { z } from 'zod';
+import { t3WebhookInputSchema } from './t3-webhook.js';
 import type { LifeManagerActions, WidgetRegistrySurface } from './rpc.js';
 import { widgetActionInputSchema, widgetRenderInputSchema } from './rpc.js';
 import type { AgentReply, Item, PromptHandling, PromptTemplate } from './types.js';
@@ -63,7 +64,7 @@ export function createHttpHandler(options: {
   publicDir: string;
   feed?: ReturnType<typeof createChangeFeed>;
   sendToAgent?: AgentSender;
-  launchT3?: (location?: string) => Promise<void>;
+  sendT3?: (prompt: string, webhookUrl: string) => Promise<void>;
   serverIdentity?: import('./server-discovery.js').ServerIdentity;
 }) {
   const { actions, widgets } = options;
@@ -110,10 +111,10 @@ export function createHttpHandler(options: {
             json(await options.sendToAgent({ item, template, origin, target: input.target, ...(input.context ? { context: input.context } : {}) })); return;
           }
           case '/api/agent/t3': {
-            const input = z.object({ location: z.string().trim().max(4096).refine(value => !value.includes('\0')).optional() }).strict().parse(body);
-            if (!options.launchT3) throw new HttpError(503, 'T3 Code launch is not configured on this server.');
-            await options.launchT3(input.location);
-            json({ opened: true }); return;
+            const input = t3WebhookInputSchema.parse(body);
+            if (!options.sendT3) throw new HttpError(503, 'T3 webhook delivery is not configured on this server.');
+            await options.sendT3(input.prompt, input.webhookUrl);
+            json({ accepted: true }); return;
           }
           default: throw new HttpError(404, 'No such action.');
         }

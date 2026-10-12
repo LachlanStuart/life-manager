@@ -1,51 +1,42 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { launchT3 } from '../ui/t3-launch';
-import { copyPrompt } from '../ui/clipboard';
+import { sendT3 } from '../ui/t3-webhook';
 import { api } from '../ui/api';
 
-vi.mock('../ui/clipboard', () => ({ copyPrompt: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('../ui/api', () => ({ api: vi.fn().mockResolvedValue({ opened: true }) }));
+vi.mock('../ui/api', () => ({ api: vi.fn().mockResolvedValue({ accepted: true }) }));
 afterEach(() => { delete window.lifeManagerDesktop; vi.clearAllMocks(); vi.restoreAllMocks(); });
+const url = 'https://hooks.example/v1/hooks/environment/hook/token';
 
-it('copies in the browser before asking the server to open T3', async () => {
-  expect(await launchT3('Full prompt')).toEqual({ copied: true, opened: true, location: 'server' });
-  expect(copyPrompt).toHaveBeenCalledWith('Full prompt');
-  expect(api).toHaveBeenCalledWith('agent/t3', {});
-  expect(vi.mocked(copyPrompt).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(api).mock.invocationCallOrder[0]!);
+it('sends the full prompt and saved URL through the browser server without clipboard access', async () => {
+  expect(await sendT3('Full prompt', ` ${url} `)).toEqual({ accepted: true });
+  expect(api).toHaveBeenCalledExactlyOnceWith('agent/t3', { prompt: 'Full prompt', webhookUrl: url });
 });
 
-it('does not open a conversation when browser clipboard access fails', async () => {
-  vi.mocked(copyPrompt).mockRejectedValueOnce(new Error('Denied'));
-  expect(await launchT3('Full prompt')).toMatchObject({ copied: false, opened: false });
+it('requires configuration and never uses an old app path', async () => {
+  expect(await sendT3('Full prompt')).toMatchObject({ accepted: false, error: expect.stringContaining('Settings') });
   expect(api).not.toHaveBeenCalled();
 });
 
-it('keeps copied status when the server cannot launch T3', async () => {
-  vi.mocked(api).mockRejectedValueOnce(new Error('Start T3 first'));
-  expect(await launchT3('Full prompt')).toMatchObject({ copied: true, opened: false, error: 'Start T3 first' });
+it('reports failed delivery without retrying', async () => {
+  vi.mocked(api).mockRejectedValueOnce(new Error('Webhook unavailable'));
+  expect(await sendT3('Full prompt', url)).toEqual({ accepted: false, error: 'Webhook unavailable' });
+  expect(api).toHaveBeenCalledTimes(1);
 });
 
-it('uses Electron for both clipboard and launch, even when connected to a remote server', async () => {
-  const native = vi.fn().mockResolvedValue({ copied: true, opened: true, location: 'device' });
-  window.lifeManagerDesktop = { launchT3: native };
-  expect(await launchT3('Full prompt', '/Applications/T3 Code.app')).toMatchObject({ location: 'device' });
-  expect(native).toHaveBeenCalledWith('Full prompt', '/Applications/T3 Code.app');
-  expect(copyPrompt).not.toHaveBeenCalled();
-  expect(api).not.toHaveBeenCalled();
+it('uses Electron on this computer, including remote workspace connections, without server fallback', async () => {
+  const native = vi.fn().mockResolvedValue({ accepted: true });
+  window.lifeManagerDesktop = { sendT3: native };
+  expect(await sendT3('Full prompt', url)).toEqual({ accepted: true });
+  expect(native).toHaveBeenCalledWith('Full prompt', url);
   native.mockRejectedValueOnce(new Error('Native failure'));
-  await expect(launchT3('Full prompt')).rejects.toThrow('Native failure');
+  expect(await sendT3('Full prompt', url)).toEqual({ accepted: false, error: 'Native failure' });
   expect(api).not.toHaveBeenCalled();
 });
 
-it('sends the saved server installation path without altering the prompt or command arguments', async () => {
-  await launchT3('Full prompt', ' /server/tools/t3 ');
-  expect(api).toHaveBeenCalledWith('agent/t3', { location: '/server/tools/t3' });
-});
-
-it('does not fall back to the server if the Electron preload is unavailable', async () => {
+it('does not fall back to the server if the Electron preload is missing or outdated', async () => {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Chrome Electron LifeManagerDesktop');
-  expect(await launchT3('Prompt')).toMatchObject({ copied: false, opened: false, location: 'device' });
+  expect(await sendT3('Prompt', url)).toMatchObject({ accepted: false });
+  window.lifeManagerDesktop = {} as NonNullable<Window['lifeManagerDesktop']>;
+  expect(await sendT3('Prompt', url)).toMatchObject({ accepted: false });
   expect(api).not.toHaveBeenCalled();
-  expect(copyPrompt).not.toHaveBeenCalled();
 });

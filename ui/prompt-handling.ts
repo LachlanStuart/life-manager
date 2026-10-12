@@ -1,14 +1,14 @@
 import type { PromptHandling } from '../src/types';
 
 const key = 'life-manager.prompt-handling';
-const locationKey = 'life-manager.t3-location';
+const webhookUrlKey = 'life-manager.t3-webhook-url';
 
-export function readT3Location(): string {
-  try { return localStorage.getItem(locationKey) ?? ''; } catch { return ''; }
+export function readT3WebhookUrl(): string {
+  try { return localStorage.getItem(webhookUrlKey) ?? ''; } catch { return ''; }
 }
 
-export function saveT3Location(value: string): void {
-  try { localStorage.setItem(locationKey, value); } catch { /* Keep the choice for this session. */ }
+export function saveT3WebhookUrl(value: string): void {
+  try { localStorage.setItem(webhookUrlKey, value); } catch { /* Keep the choice for this session. */ }
 }
 
 export function readPromptHandling(): PromptHandling {

@@ -42,7 +42,7 @@ export interface Dashboard { items: Item[]; periodId: string; snapshotId: string
 export interface WidgetSummary { id: string; title: string; description: string }
 export interface PromptTemplate { id: string; name: string; prompt: string }
 export type PromptHandling = 'modal' | 'codex' | 't3';
-export interface T3LaunchReply { copied: boolean; opened: boolean; location: 'server' | 'device'; error?: string }
+export interface T3SendReply { accepted: boolean; error?: string }
 export interface AgentReply {
   message: string;
   prompt: string;

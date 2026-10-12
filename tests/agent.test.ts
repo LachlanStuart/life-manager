@@ -8,7 +8,7 @@ const item = { ...seedItems()[0]!, id: 'special/id', title: 'My & project' };
 const template = { id: 'one', name: 'Next', prompt: 'Explore {{item.name}} at {{ item.url }}' };
 
 describe('Codex links', () => {
-  it('prepares T3 prompts without launching and uses reachable context for a desktop client', async () => {
+  it('prepares T3 prompts without launching and uses reachable context for a webhook target', async () => {
     const sender = createAgentSender({ cwd: '/server/workspace', apiOrigin: 'http://127.0.0.1:4317', skillPath: '/server/skill.md' });
     const reply = await sender.send({ item, template, origin: 'https://remote.example', target: 't3', context: 'client' });
     expect(reply.prompt).toContain('GET https://remote.example/api/items/special%2Fid');

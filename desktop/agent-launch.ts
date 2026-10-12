@@ -1,19 +1,11 @@
-import { clipboard } from 'electron';
-import { mkdir } from 'node:fs/promises';
-import { launchT3Conversation } from '../src/t3-launch.js';
-import type { T3LaunchReply } from '../src/types.js';
-import type { DesktopConfig } from './config.js';
+import { sendT3Webhook } from '../src/t3-webhook.js';
+import type { T3SendReply } from '../src/types.js';
 
-export async function launchDesktopT3(prompt: unknown, config: DesktopConfig | undefined, defaultDirectory: string, location?: unknown): Promise<T3LaunchReply> {
-  if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 200_000 || prompt.includes('\0')) throw new Error('Invalid agent prompt.');
-  let copied = false;
+export async function sendDesktopT3(prompt: unknown, webhookUrl: unknown): Promise<T3SendReply> {
   try {
-    clipboard.writeText(prompt); copied = true;
-    const directory = config?.mode === 'local' ? config.dataDir : defaultDirectory;
-    await mkdir(directory, { recursive: true });
-    await launchT3Conversation(directory, location);
-    return { copied, opened: true, location: 'device' };
+    await sendT3Webhook(prompt, webhookUrl);
+    return { accepted: true };
   } catch (error) {
-    return { copied, opened: false, location: 'device', error: error instanceof Error ? error.message : String(error) };
+    return { accepted: false, error: error instanceof Error ? error.message : 'Could not send the prompt to T3 Code.' };
   }
 }

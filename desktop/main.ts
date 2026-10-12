@@ -5,8 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { networkInterfaces } from 'node:os';
 import { parseConfig, externalLinkAllowed, type DesktopConfig } from './config.js';
 import { validateServerConnection } from '../src/server-discovery.js';
-import { launchDesktopT3 } from './agent-launch.js';
-import type { T3LaunchReply } from '../src/types.js';
+import { sendDesktopT3 } from './agent-launch.js';
+import type { T3SendReply } from '../src/types.js';
 
 app.setName('Life Manager');
 if (process.env.LIFE_MANAGER_DESKTOP_HOME) app.setPath('userData', process.env.LIFE_MANAGER_DESKTOP_HOME);
@@ -208,11 +208,11 @@ function verifySettingsSender(event: Electron.IpcMainInvokeEvent) {
     throw new Error('This operation is only available in Connection Settings.');
   }
 }
-ipcMain.handle('workspace:launch-t3', async (event, prompt: unknown, location: unknown): Promise<T3LaunchReply> => {
+ipcMain.handle('workspace:send-t3', async (event, prompt: unknown, webhookUrl: unknown): Promise<T3SendReply> => {
   if (!window || !origin || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || new URL(event.senderFrame.url).origin !== origin) {
     throw new Error('This operation is only available in the workspace window.');
   }
-  return launchDesktopT3(prompt, config, defaultDirectory, location);
+  return sendDesktopT3(prompt, webhookUrl);
 });
 ipcMain.handle('desktop:load', event => { verifySettingsSender(event); return { config, defaultDirectory, error: lastError }; });
 ipcMain.handle('desktop:directory', async event => {

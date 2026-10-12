@@ -29,8 +29,8 @@ async function setup() {
   const actions = createLifeManagerActions(store, () => widgets.summaries());
   widgets = createWidgetRegistry(actions);
   const sendToAgent = vi.fn<AgentSender>(async () => ({ message: 'Codex link ready.', prompt: 'Full prompt', url: 'codex://threads/new?prompt=test' }));
-  const launchT3 = vi.fn().mockResolvedValue(undefined);
-  const server = createServer(createHttpHandler({ actions, widgets, attachmentsDir, publicDir, sendToAgent, launchT3 }));
+  const sendT3 = vi.fn().mockResolvedValue(undefined);
+  const server = createServer(createHttpHandler({ actions, widgets, attachmentsDir, publicDir, sendToAgent, sendT3 }));
   cleanups.push(async () => {
     server.closeAllConnections();
     if (server.listening) await closeServer(server);
@@ -46,7 +46,7 @@ async function setup() {
   const post = (path: string, body: unknown, headers: Record<string, string> = {}) => get(path, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Life-Manager': '1', ...headers }, body: JSON.stringify(body),
   });
-  return { actions, store, get, post, origin, attachmentsDir, sendToAgent, launchT3 };
+  return { actions, store, get, post, origin, attachmentsDir, sendToAgent, sendT3 };
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -73,21 +73,23 @@ it('lists deleted Items and restores through HTTP with revision and snapshot val
   expect(restored.dashboard.items.some(item => item.id === 'build')).toBe(true);
 });
 
-it('only launches T3 on an explicit protected action, never while preparing a prompt', async () => {
-  const { post, get, launchT3, sendToAgent } = await setup();
+it('only submits to T3 on an explicit protected action, never while preparing a prompt', async () => {
+  const { post, get, sendT3, sendToAgent } = await setup();
   await json(await post('/api/templates/save', prompt));
   await json(await post('/api/agent/link', { itemId: 'build', templateId: prompt.id, target: 't3', context: 'client' }));
   expect(sendToAgent).toHaveBeenCalledWith(expect.objectContaining({ target: 't3', context: 'client' }));
-  expect(launchT3).not.toHaveBeenCalled();
+  expect(sendT3).not.toHaveBeenCalled();
   await json(await post('/api/agent/t3', {}, { Origin: 'https://foreign.example' }), 403);
   await json(await get('/api/agent/t3', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }), 403);
   await json(await post('/api/agent/t3', { cwd: '/arbitrary/path' }), 400);
-  expect(launchT3).not.toHaveBeenCalled();
-  expect(await json(await post('/api/agent/t3', {}))).toEqual({ opened: true });
-  expect(launchT3).toHaveBeenCalledExactlyOnceWith(undefined);
-  await json(await post('/api/agent/t3', { location: '/Applications/T3 Code.app' }));
-  expect(launchT3).toHaveBeenLastCalledWith('/Applications/T3 Code.app');
-  await json(await post('/api/agent/t3', { location: { executable: '/tmp/script' } }), 400);
+  expect(sendT3).not.toHaveBeenCalled();
+  const input = { prompt: 'Full prompt', webhookUrl: 'https://hooks.example/task/token' };
+  await json(await post('/api/agent/t3', {}), 400);
+  expect(await json(await post('/api/agent/t3', input))).toEqual({ accepted: true });
+  expect(sendT3).toHaveBeenCalledExactlyOnceWith(input.prompt, input.webhookUrl);
+  await json(await post('/api/agent/t3', { ...input, webhookUrl: 'file:///tmp/hook' }), 400);
+  await json(await post('/api/agent/t3', { ...input, location: '/Applications/T3 Code.app' }), 400);
+  expect(sendT3).toHaveBeenCalledTimes(1);
 });
 
 describe('standalone HTTP application', () => {

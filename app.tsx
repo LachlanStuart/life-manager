@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
-import { readPromptHandling, savePromptHandling, readT3Location, saveT3Location } from './ui/prompt-handling';
-import { isDesktopClient, launchT3 } from './ui/t3-launch';
+import { readPromptHandling, savePromptHandling, readT3WebhookUrl, saveT3WebhookUrl } from './ui/prompt-handling';
+import { isDesktopClient, sendT3 } from './ui/t3-webhook';
 import { Modal } from './ui/Modal';
 import { ItemContextMenu } from './ui/ItemContextMenu';
 import { MoveItemForm } from './ui/MoveItemForm';
@@ -82,7 +82,7 @@ export function LifeManagerPage() {
   const [search, setSearch] = useState('');
   const [searchItems, setSearchItems] = useState<Item[]>([]);
   const [promptHandling, setPromptHandling] = useState(readPromptHandling);
-  const [t3Location, setT3Location] = useState(readT3Location);
+  const [t3WebhookUrl, setT3WebhookUrl] = useState(readT3WebhookUrl);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate>({ id: '', name: '', prompt: '' });
   const frame = useRef<HTMLDivElement>(null);
@@ -200,7 +200,7 @@ export function LifeManagerPage() {
   const renderWidget = useCallback((input: WidgetRenderInput) => api<WidgetRenderResult>('widgets/render', input), []);
   const actWidget = useCallback(async (input: WidgetActionInput) => { await saveNotes(); const result = await api<WidgetActionResult>('widgets/action', input); await refresh(); return result; }, [saveNotes, refresh]);
   const sendToAgent = useCallback((itemId: string, templateId: string) => api<AgentReply>('agent/link', { itemId, templateId, target: promptHandling,
-    ...(promptHandling === 't3' && isDesktopClient() ? { context: 'client' } : {}),
+    ...(promptHandling === 't3' ? { context: 'client' } : {}),
   }), [promptHandling]);
 
   const settings = workspaceSettings(workspace ?? undefined);
@@ -330,7 +330,7 @@ export function LifeManagerPage() {
         <section className="lm-detail-pane" aria-label="Item details"><div className="lm-pane-actions"><button onClick={() => navigate({ ...routeRef.current, itemId: null })}>{outline ? '← Outline' : board ? '← Board' : '← Wheel'}</button><div className="lm-pane-actions__right"><button className="lm-expand" onClick={() => setExpanded(value => !value)}>{expanded ? 'Split view' : 'Expand'}</button></div></div>
           {displayed ? <Suspense fallback={<div className="lm-loading">Opening Item…</div>}><ItemPanel settings={settings} propertyId={editPropertyId} key={`${route.snapshotId ?? 'current'}:${displayed.id}`} item={displayed} items={items} showAll={outline ? false : showAll} readOnly={readOnly} snapshotId={route.snapshotId} widgets={workspace.widgets}
             renderWidget={renderWidget} actWidget={actWidget} uploadImage={uploadImage} onOpenItem={select} onCommand={async value => { if (value.type === 'delete' || value.type === 'delete-many') await saveNotes(); await command(value); }} onSelect={select} onNotesChange={changeNotes} notesStatus={noteStatus}
-            promptTemplates={workspace.promptTemplates} promptHandling={promptHandling} onSendToAgent={browserDemo ? undefined : sendToAgent} onLaunchT3={browserDemo ? undefined : prompt => launchT3(prompt, t3Location)} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
+            promptTemplates={workspace.promptTemplates} promptHandling={promptHandling} onSendToAgent={browserDemo ? undefined : sendToAgent} onSendT3={browserDemo ? undefined : prompt => sendT3(prompt, t3WebhookUrl)} /></Suspense> : <div className="lm-empty">This Item is not in this dashboard.</div>}
           {noteStatus === 'Save error' && <button onClick={() => void run(saveNotes)}>Retry saving notes</button>}
         </section></>}
     </div>}
@@ -423,11 +423,12 @@ export function LifeManagerPage() {
           <option value="t3">T3 Code</option>
         </select></label>
         {promptHandling === 't3' && <>
-          <label>T3 Code location<input type="text" value={t3Location} maxLength={4096} placeholder="/Applications/T3 Code (Nightly).app" spellCheck={false}
-            onChange={event => { setT3Location(event.target.value); saveT3Location(event.target.value); }} /></label>
-          <p>Path to the T3 Code app bundle or CLI executable {isDesktopClient() ? 'on this computer' : 'on the Life Manager server'}. Saved automatically for this client. Leave blank to detect automatically.</p>
+          <label>T3 webhook URL<input type="url" value={t3WebhookUrl} maxLength={8192} placeholder="Paste the webhook URL from T3 Code" spellCheck={false} autoComplete="off"
+            onChange={event => { setT3WebhookUrl(event.target.value); saveT3WebhookUrl(event.target.value); }} /></label>
+          <p>In T3 Code, create an On webhook task with <code>{'{{body.prompt}}'}</code> as its prompt, then paste its copied URL here. Use a webhook without signature validation. The URL contains a secret; keep it private.</p>
+          <p>Requests are sent from {isDesktopClient() ? 'this computer' : 'the Life Manager server'}. T3 must be able to reach this Life Manager address to read and update Items. Saved automatically for this client.</p>
         </>}
-        <p>Saved for this browser or desktop client. Codex opens a draft on this device. T3 Code copies the prompt and opens a blank conversation {isDesktopClient() ? 'on this computer' : 'on the Life Manager server'} for you to paste and submit.</p>
+        <p>Saved for this browser or desktop client. Codex opens a draft on this device. T3 Code sends the full prompt directly and starts the configured webhook task.</p>
         <form onSubmit={event => { event.preventDefault(); void run(async () => {
           const saved = await api<PromptTemplate>('templates/save', { ...editingTemplate, id: editingTemplate.id || newClientId('prompt') }); setEditingTemplate(saved); await refresh();
         }); }}><label>Template<select aria-label="Edit template" value={editingTemplate.id} onChange={event => setTemplate(event.target.value)}><option value="">New template</option>{workspace?.promptTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
