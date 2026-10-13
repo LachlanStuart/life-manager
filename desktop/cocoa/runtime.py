@@ -119,6 +119,9 @@ def control(home, command):
     with socket.socket(socket.AF_UNIX) as client:
         client.settimeout(3)
         client.connect(str(Path(home) / "control.sock"))
+        if command == "stop":
+            # Saving may require a user's decision; only a final shutdown result is success.
+            client.settimeout(None)
         client.sendall((json.dumps({"command": command}) + "\n").encode())
         with client.makefile("r") as reader:
             result = json.loads(reader.readline(65536))
@@ -144,18 +147,23 @@ class ControlServer:
                 client, _ = self.socket.accept()
             except OSError:
                 return
-            with client:
-                client.settimeout(3)
-                try:
-                    with client.makefile("r") as reader:
-                        message = json.loads(reader.readline(4096))
-                    command = message.get("command")
-                    if command not in {"status", "open", "stop"}:
-                        raise ValueError("Unknown launcher command.")
-                    result = self.handler(command)
-                    client.sendall((json.dumps(result) + "\n").encode())
-                except (ValueError, OSError):
-                    pass
+            # Keep status/reopen responsive while stop waits for saving or a dialog.
+            # Non-daemon workers finish sending their reply before Python exits.
+            threading.Thread(target=self._handle, args=(client,), daemon=False).start()
+
+    def _handle(self, client):
+        with client:
+            client.settimeout(3)
+            try:
+                with client.makefile("r") as reader:
+                    message = json.loads(reader.readline(4096))
+                command = message.get("command")
+                if command not in {"status", "open", "stop"}:
+                    raise ValueError("Unknown launcher command.")
+                result = self.handler(command)
+                client.sendall((json.dumps(result) + "\n").encode())
+            except (ValueError, OSError):
+                pass
 
     def close(self):
         self.socket.close()

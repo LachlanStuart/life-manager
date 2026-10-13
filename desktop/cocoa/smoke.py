@@ -35,6 +35,7 @@ def scenario(home, mode):
 
     errors = []
     prompts = []
+    checks_thread = None
 
     class Hook(BaseHTTPRequestHandler):
         def do_POST(self):
@@ -64,6 +65,7 @@ def scenario(home, mode):
     host = NodeHost(os.environ.get("LIFE_MANAGER_NODE", shutil.which("node")), home / "workspace")
 
     def ready(desktop):
+        nonlocal checks_thread
         def ui(operation):
             reply = queue.Queue()
             def execute():
@@ -102,6 +104,18 @@ def scenario(home, mode):
                     return
 
                 original_pid = control(home, "status")["pid"]
+                # Dispatch Command+Q through the native menu's actual key equivalent.
+                def command_q():
+                    event = A.NSEvent.keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode_(
+                        A.NSEventTypeKeyDown, (0, 0), A.NSEventModifierFlagCommand, 0,
+                        desktop.window.windowNumber(), None, "q", "q", False, 12)
+                    return desktop.app.mainMenu().performKeyEquivalent_(event)
+                assert ui(command_q)
+                assert not control(home, "status")["visible"]
+                assert host.process.poll() is None
+                assert ui(lambda: desktop.app.activationPolicy()) == A.NSApplicationActivationPolicyAccessory
+                assert ui(lambda: desktop.status_item.button().image().isEqual_(desktop.tray_icon))
+                ui(lambda: desktop.menu.performActionForItemAtIndex_(0))
                 # Exercise the actual close delegate and status-menu action repeatedly.
                 for _ in range(3):
                     ui(lambda: desktop.window.performClose_(None))
@@ -156,7 +170,8 @@ def scenario(home, mode):
                 # A failed flush cancels Quit and reopens the hidden workspace.
                 js("window.realFlush = window.lifeManagerFlush; window.lifeManagerFlush = async () => { throw new Error('Synthetic save failure'); }; null")
                 ui(lambda: desktop.window.performClose_(None))
-                control(home, "stop")
+                cancelled = subprocess.run([sys.executable, str(ROOT / "desktop/cocoa/lm.py"), "stop", "--home", str(home)], capture_output=True, text=True, timeout=15)
+                assert cancelled.returncode != 0 and "Shutdown cancelled" in cancelled.stderr
                 wait_for(lambda: getattr(desktop, "save_error", None), "failed-save Keep Open path")
                 wait_for(lambda: control(home, "status")["state"] == "running", "Quit cancelled")
                 assert control(home, "status")["visible"] and host.process.poll() is None
@@ -166,21 +181,50 @@ def scenario(home, mode):
                 ui(lambda: desktop.webview.loadRequest_(F.NSURLRequest.requestWithURL_(F.NSURL.URLWithString_(host.origin + "/items/build"))))
                 wait_for(lambda: js("Boolean(document.querySelector('[contenteditable=true]'))"), "real notes editor")
                 js("document.querySelector('[contenteditable=true]').focus(); document.execCommand('insertText', false, 'Pending Cocoa note');")
-                control(home, "stop")
+                close_started, release_close = threading.Event(), threading.Event()
+                original_close = host.close
+                def delayed_close():
+                    close_started.set()
+                    assert release_close.wait(timeout=10), "Test did not release server shutdown"
+                    original_close()
+                host.close = delayed_close
+                stopping = subprocess.Popen([sys.executable, str(ROOT / "desktop/cocoa/lm.py"), "stop", "--home", str(home)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                try:
+                    assert close_started.wait(timeout=10), "Server shutdown did not start"
+                    assert stopping.poll() is None, "lm stop exited before server shutdown"
+                    assert host.process.poll() is None
+                    try:
+                        stopping.wait(timeout=0.25)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    else:
+                        raise AssertionError("lm stop did not wait for the held server shutdown")
+                    assert control(home, "status")["state"] == "quitting"
+                finally:
+                    release_close.set()
+                output, error = stopping.communicate(timeout=15)
+                assert stopping.returncode == 0, error
+                assert json.loads(output)["state"] == "stopped"
+                assert host.process.poll() is not None
+                assert not (home / "workspace/.server.lock").exists()
             except BaseException:
                 errors.append(traceback.format_exc())
                 AppHelper.callAfter(desktop.stop_loop)
 
-        threading.Thread(target=checks, daemon=True).start()
+        checks_thread = threading.Thread(target=checks, daemon=True)
+        checks_thread.start()
 
     try:
         run(host, home, desktop_class=SmokeDesktop, on_ready=ready)
     finally:
+        if checks_thread:
+            checks_thread.join(timeout=20)
         host.close()
         hook.shutdown()
         hook.server_close()
     if errors:
         raise AssertionError(errors[0])
+    assert checks_thread and not checks_thread.is_alive(), "Native checks did not finish"
     assert not (home / "workspace/.server.json").exists()
     assert not (home / "workspace/.server.lock").exists()
     if mode == "lifecycle":

@@ -1,7 +1,9 @@
 """AppKit lifecycle and an origin-checked WKWebView bridge."""
 import json
 import os
+import queue
 import signal
+import threading
 import uuid
 from urllib.parse import urlsplit
 
@@ -20,6 +22,9 @@ class Desktop(F.NSObject):
         self.host, self.home = host, home
         self.preferences = Preferences(home)
         self.quit_token = None
+        self.stop_lock = threading.Lock()
+        self.stop_waiters = []
+        self.stop_result = None
         self.allow_quit = False
         self.loaded = False
         self.visible = True
@@ -44,12 +49,13 @@ class Desktop(F.NSObject):
         self.add_menu_item(self.menu, "Open in Browser", "openBrowser:")
         self.add_menu_item(self.menu, "Open Log", "openLog:")
         self.menu.addItem_(A.NSMenuItem.separatorItem())
-        self.add_menu_item(self.menu, "Quit Life Manager", "quit:", "q")
+        self.add_menu_item(self.menu, "Quit Life Manager", "quit:")
         self.status_item.setMenu_(self.menu)
         main_menu = A.NSMenu.alloc().initWithTitle_("Main")
         app_item = A.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Life Manager", None, "")
         app_menu = A.NSMenu.alloc().initWithTitle_("Life Manager")
-        self.add_menu_item(app_menu, "Quit Life Manager", "quit:", "q")
+        self.add_menu_item(app_menu, "Hide Life Manager", "hideWorkspace:", "q")
+        self.add_menu_item(app_menu, "Quit Life Manager", "quit:")
         app_item.setSubmenu_(app_menu)
         main_menu.addItem_(app_item)
         edit_item = A.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Edit", None, "")
@@ -103,10 +109,26 @@ class Desktop(F.NSObject):
         if command == "open":
             AppHelper.callAfter(self.showWorkspace_, None)
         elif command == "stop":
-            AppHelper.callAfter(self.quit_, None)
+            waiter = queue.Queue()
+            with self.stop_lock:
+                if self.stop_result is not None:
+                    return self.stop_result
+                self.stop_waiters.append(waiter)
+                if len(self.stop_waiters) == 1:
+                    AppHelper.callAfter(self.quit_, None)
+            return waiter.get()
         return {"pid": os.getpid(), "serverPid": self.host.process.pid, "origin": self.host.origin,
                 "dataDir": self.host.data_dir, "visible": self.visible,
-                "state": "quit-requested" if command == "stop" else "quitting" if self.quit_token else "server-stopped" if self.host.process.poll() is not None else "running"}
+                "state": "quitting" if self.quit_token else "server-stopped" if self.host.process.poll() is not None else "running"}
+
+    @objc.python_method
+    def complete_stop(self, result, final=False):
+        with self.stop_lock:
+            if final:
+                self.stop_result = result
+            waiters, self.stop_waiters = self.stop_waiters, []
+        for waiter in waiters:
+            waiter.put(result)
 
     def applicationDidFinishLaunching_(self, notification):
         self.showWorkspace_(None)
@@ -128,6 +150,9 @@ class Desktop(F.NSObject):
         self.visible = False
         self.app.setActivationPolicy_(A.NSApplicationActivationPolicyAccessory)
         return False
+
+    def hideWorkspace_(self, sender):
+        self.window.performClose_(None)
 
     def applicationShouldHandleReopen_hasVisibleWindows_(self, app, visible):
         self.showWorkspace_(None)
@@ -171,8 +196,10 @@ class Desktop(F.NSObject):
             return
         if error and not self.choose_discard(error):
             self.quit_token = None
+            self.complete_stop({"error": "Shutdown cancelled: Life Manager was kept open because edits could not be saved."})
             return
         self.host.close()
+        self.complete_stop({"state": "stopped"}, final=True)
         self.control_server.close()
         self.allow_quit = True
         self.stop_loop()
@@ -285,6 +312,8 @@ def run(host, home, desktop_class=Desktop, on_ready=None):
     try:
         desktop.app.run()
     finally:
+        if desktop.stop_result is None:
+            desktop.complete_stop({"error": "Desktop exited before confirming server shutdown."}, final=True)
         desktop.control_server.close()
         desktop.content.removeScriptMessageHandlerForName_("lifeManager")
         A.NSStatusBar.systemStatusBar().removeStatusItem_(desktop.status_item)
