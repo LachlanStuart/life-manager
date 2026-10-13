@@ -1,9 +1,10 @@
 import type { T3SendReply } from '../src/types';
 import { api } from './api';
+import type { DesktopPreferences } from './client-storage';
 
 declare global {
   interface Window {
-    lifeManagerDesktop?: { sendT3: (prompt: string, webhookUrl: string) => Promise<T3SendReply> };
+    lifeManagerDesktop?: { sendT3: (prompt: string, webhookUrl: string) => Promise<T3SendReply>; preferences?: DesktopPreferences };
   }
 }
 

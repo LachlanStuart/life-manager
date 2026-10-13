@@ -9,3 +9,5 @@ node_modules/
 *.log
 .desktop-build/
 release/
+desktop/cocoa/.venv/
+__pycache__/

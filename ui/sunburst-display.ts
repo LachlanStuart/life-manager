@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { clientStorage } from './client-storage';
 
 export interface SunburstDisplay {
   radialLabels: boolean;
@@ -52,7 +53,7 @@ export function getDefaultSunburstDisplay(): SunburstDisplay {
 }
 
 function rawStorageValue() {
-  try { return globalThis.localStorage?.getItem(SUNBURST_DISPLAY_KEY) ?? null; }
+  try { return clientStorage.getItem(SUNBURST_DISPLAY_KEY); }
   catch { return null; }
 }
 
@@ -170,7 +171,7 @@ export function writeSunburstDisplay(display: SunburstDisplay): void {
   const next = parseDisplay(JSON.stringify(display));
   const raw = JSON.stringify(next);
   cachedDisplay = next;
-  try { globalThis.localStorage?.setItem(SUNBURST_DISPLAY_KEY, raw); } catch { /* Private browsing may disable storage. */ }
+  try { clientStorage.setItem(SUNBURST_DISPLAY_KEY, raw); } catch { /* Private browsing may disable storage. */ }
   // If storage is blocked, retain the in-memory preference for this session.
   // Cache the value that was actually observed so getSnapshot does not discard it.
   cachedRaw = rawStorageValue();

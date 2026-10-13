@@ -187,6 +187,41 @@ Host integrations run where the server runs. Local media paths and widget comman
 
 After building, `npm run test:desktop` launches the packaged app against temporary profiles and verifies window loading, the native database, live notifications, persistence across restart, automatic attachment to an existing workspace owner, and explicit server connections. It also verifies that Quit stops only app-owned servers and that a remote connection sends its prompt through the native webhook bridge. The delivery check uses a temporary local HTTP receiver without starting a real T3 task. Use the same Node runtime used to install dependencies, as with `npm run verify`.
 
+### Cocoa/WebKit launcher
+
+`desktop/cocoa/lm` invokes `uv run --locked` against [desktop/cocoa/pyproject.toml](../desktop/cocoa/pyproject.toml) and its committed lockfile. Python 3.13 and PyObjC provide `NSApplication`, a retained `NSStatusItem` and `WKWebView`. No application bundle or Electron process is created. The ordinary production `dist/` UI and [shared server runtime](../src/server-runtime.ts) are used without a frontend fork or workspace migration.
+
+`lm` and `lm start` start or reopen the desktop, `lm status` reports JSON containing the desktop/server PIDs, origin, data directory and visibility, and `lm stop` requests Quit. Stop returns after the request is accepted; a failed save can leave the desktop open for a decision. Use status to confirm shutdown. Commands accept these options:
+
+| Option | Environment / default | Purpose |
+| --- | --- | --- |
+| `--data-dir` | `LIFE_MANAGER_DATA_DIR`, otherwise the standard macOS workspace | Open an existing workspace in place or create a new one. |
+| `--node` | `LIFE_MANAGER_NODE`, otherwise `node` on PATH | Select the installed Node runtime that matches the checkout's SQLite binary. |
+| `--home` | `LIFE_MANAGER_COCOA_HOME`, otherwise `~/Library/Application Support/Life Manager/cocoa/` | Select the launcher profile, preferences, log and single-instance control files. Use the same profile for start, stop and status. |
+| `--port` | `0` | Request an available loopback port, or specify a fixed port. `HOST` is ignored; this launcher always binds `127.0.0.1`. |
+
+A profile holds an OS file lock for its entire desktop lifetime. Its private Unix control socket accepts only open, stop and status commands. Repeated or simultaneous launches reopen the owner; stale sockets are replaced only after acquiring the lock. An independently served workspace is refused, with its address reported in `desktop.log`. Remote connections and server attachment remain Electron features.
+
+[server.ts](../desktop/cocoa/server.ts) runs in an owned Node child and uses a private newline-JSON stdin/stdout transport. Closing the parent pipe stops the server, including during startup or after a Python crash. Normal shutdown closes live feeds and SQLite and releases the workspace lock. The parent bounds unresponsive shutdown with termination and kill fallbacks. The transport also calls the existing [desktop T3 sender](../desktop/agent-launch.ts), preserving webhook validation, timeout, secret-safe errors and the no-retry rule.
+
+The [native shell](../desktop/cocoa/cocoa.py) checks WebKit's actual web view, main-frame flag and security origin before accepting `sendT3`, `setPreference` or the token-matched Quit completion. The document-start script exposes only the shared T3 method and synchronous preference accessors. It never exposes Python objects, shell commands, file paths or generic request/evaluation methods. External navigation is blocked in the workspace view; supported HTTP, HTTPS, mail and Codex links open through macOS. Widget frames cannot invoke the native bridge.
+
+Appearance, prompt handling, T3 webhook URL, property filters and sunburst display preferences are stored in the profile's private `preferences.json`, outside workspace snapshots and exports. Preferences are injected before React starts and persist across changing server ports. Browser and Electron clients retain their existing storage. WebKit uses an ephemeral website data store; arbitrary website storage is not persisted. Preference writes are included in save-aware Quit. A failed write or note save keeps the desktop open unless the user explicitly discards it.
+
+The Dock image and menu-bar template are loaded directly from `desktop/life-manager.icns` and `desktop/tray-template.png`, the same files used by Electron. Closing hides the retained window and Dock presence; the status item stays alive. Reopening restores regular activation and reapplies a retained image view to the Dock tile, including in an unbundled Python process. Minimizing retains the Dock icon. Source icon updates take effect on the next launch.
+
+`desktop.log` records startup and server errors; **Open Log** is available in the status menu. If Node exits unexpectedly, status reports `server-stopped`; quit and restart after resolving the log's error. If startup reports a `NODE_MODULE_VERSION` mismatch, stop the desktop and use the same Node executable for `npm rebuild better-sqlite3` and `LIFE_MANAGER_NODE`. A missing prebuilt SQLite binary may require Xcode Command Line Tools for compilation. Rebuilding Electron uses its separate staging directory and does not replace the checkout's Node binary.
+
+Run the checks with that same Node on PATH:
+
+```sh
+npm run verify
+npm run test:cocoa
+npm run test:cocoa:desktop
+```
+
+The Python runtime checks exercise SQLite persistence, ownership exclusion, parent-crash and early-EOF cleanup, the control socket and bridge validation. The macOS desktop checks require a logged-in graphical session and open disposable windows. They exercise the real React/MDXEditor, concurrent reopening, repeated close/menu/Dock icon transitions, minimize/restore, preferences across restarts, native webhook delivery to a temporary local receiver, rejected subframe calls and external navigation, and successful/failed save-aware Quit. Logs and temporary workspaces are printed under `/tmp/life-manager-cocoa-*`; no real T3 task is invoked.
+
 ## Browser-only demo
 
 ```sh

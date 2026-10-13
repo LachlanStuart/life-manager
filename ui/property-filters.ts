@@ -1,6 +1,7 @@
 import type { Item, WorkspaceSettings } from '../src/types';
 import { DEFAULT_WORKSPACE_SETTINGS, effectivePropertyValue, propertyValue } from '../src/properties';
 import { propertyChoices } from './PropertySelect';
+import { clientStorage } from './client-storage';
 
 /** Explicit hidden-value overrides. Absent properties use configured defaults; [] shows all. */
 export type PropertyFilters = Record<string, (string | null)[]>;
@@ -8,11 +9,11 @@ export type PropertyFilters = Record<string, (string | null)[]>;
 const storageKey = 'life-manager.property-filters';
 
 export function readPropertyFilters(): PropertyFilters {
-  try { return parsePropertyFilters(localStorage.getItem(storageKey)); } catch { return {}; }
+  try { return parsePropertyFilters(clientStorage.getItem(storageKey)); } catch { return {}; }
 }
 
 export function savePropertyFilters(filters: PropertyFilters | undefined): void {
-  try { localStorage.setItem(storageKey, JSON.stringify(filters ?? {})); } catch { /* Keep filters for this session when storage is unavailable. */ }
+  try { clientStorage.setItem(storageKey, JSON.stringify(filters ?? {})); } catch { /* Keep filters for this session when storage is unavailable. */ }
 }
 
 export function parsePropertyFilters(raw: string | null): PropertyFilters {

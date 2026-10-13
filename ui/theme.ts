@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { clientStorage } from './client-storage';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type Theme = 'light' | 'dark';
@@ -12,7 +13,7 @@ function preference(value: string | null): ThemePreference {
 }
 
 export function readThemePreference(): ThemePreference {
-  try { return preference(localStorage.getItem(key)); } catch { return 'system'; }
+  try { return preference(clientStorage.getItem(key)); } catch { return 'system'; }
 }
 
 export function applyTheme(value: ThemePreference): Theme {
@@ -41,7 +42,7 @@ export function useThemePreference() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
   const setPreference = (next: ThemePreference) => {
-    try { localStorage.setItem(key, next); } catch { /* Keep the choice for this session. */ }
+    try { clientStorage.setItem(key, next); } catch { /* Keep the choice for this session. */ }
     setValue(next);
     setTheme(applyTheme(next));
   };

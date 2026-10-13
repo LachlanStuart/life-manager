@@ -90,6 +90,28 @@ Desktop and browser windows can use the same workspace simultaneously. Local hos
 
 Rebuild and replace the app to update it, quitting the old app first. Your workspace stays outside the application bundle. See [desktop operation](docs/REFERENCE.md#desktop-operation) for logs and connection details.
 
+### Cocoa/WebKit launcher (optional)
+
+On macOS, the alternative launcher uses installed Python and Node runtimes with the system WebKit view. It needs no Electron build or custom application bundle. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Node.js 22.12 or newer, then run from this checkout:
+
+```sh
+ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
+npm run build
+uv sync --locked --project desktop/cocoa --python 3.13
+export LIFE_MANAGER_NODE="$(command -v node)"
+desktop/cocoa/lm start
+```
+
+`uv` manages the isolated Python 3.13 environment and locked PyObjC dependencies. It can use an already installed Python interpreter; pass its path to `--python` when needed. The launcher uses Cocoa directly through PyObjC and does not require pywebview.
+
+Use `desktop/cocoa/lm` (or `npm run desktop:cocoa`) to open the window again, `desktop/cocoa/lm status` for its current server address, and `desktop/cocoa/lm stop` to request save-aware Quit. Add this checkout's `desktop/cocoa` directory to your shell's `PATH` to use `lm`, `lm start`, `lm stop` and `lm status` from anywhere.
+
+The launcher opens the normal workspace in place. Set `LIFE_MANAGER_DATA_DIR` or pass `--data-dir /path/to/workspace` to select another directory. Stop any server already hosting that directory first: this launcher owns a local-only server and does not attach to existing or remote servers. Closing the window keeps the menu-bar icon and server running. Reopening restores the same window and Life Manager Dock icon; minimizing keeps the Dock icon visible. Quit waits for pending edits and offers **Keep Open** or **Quit Without Saving** when saving fails.
+
+Keep `LIFE_MANAGER_NODE` pointed at the Node executable used for installation. After switching Node versions, stop the launcher and run `npm rebuild better-sqlite3` with the new runtime before restarting. To update, quit, pull the source changes, repeat `npm ci`, `npm run build` and `uv sync --locked --project desktop/cocoa`, then launch again. Client preferences and workspace data live outside the checkout. See [Cocoa operation and checks](docs/REFERENCE.md#cocoawebkit-launcher) for configuration and diagnostics.
+
+If npm reports that dependency install scripts were skipped pending approval, run `npm install-scripts approve better-sqlite3 esbuild`, then `npm rebuild better-sqlite3 esbuild`. Those scripts install the native SQLite module and the web build tool; Electron is not needed by this launcher.
+
 ## Install and try the standalone server
 
 You'll need **Node.js 22.12 or newer**, npm and Git. Use the same Node version for installation and execution.
