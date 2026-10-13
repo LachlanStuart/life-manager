@@ -11,6 +11,7 @@ import { videoWidget } from './plugins/video.js';
 import { createTwitchWidget } from './plugins/twitch.js';
 import { createChangeFeed, createHttpHandler } from './http.js';
 import { createAgentSender } from './agent.js';
+import { launchT3Conversation } from './t3-launch.js';
 import { sendT3Webhook } from './t3-webhook.js';
 import { discoverWorkspaceServer, serverRecordName, type ServerIdentity } from './server-discovery.js';
 
@@ -57,6 +58,7 @@ export async function startServer(options: ServerOptions) {
       publicDir: options.publicDir, attachmentsDir: resolve(dataDir, 'attachments'),
       sendToAgent: input => createAgentSender({ cwd: options.cwd, skillPath: options.skillPath, apiOrigin: origin }).send(input),
       sendT3: sendT3Webhook,
+      launchT3: location => launchT3Conversation(options.cwd, location),
     }));
     const host = options.host ?? '127.0.0.1';
     await new Promise<void>((done, reject) => {

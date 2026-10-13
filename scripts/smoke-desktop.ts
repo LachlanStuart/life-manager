@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createServer, request, type Server } from 'node:http';
 import { resolve, join } from 'node:path';
@@ -101,13 +101,15 @@ try {
 
   let checkNativeWebhook = false;
   let webhookUrl = '';
+  let launcher = '';
+  let useLaunch = false;
   const webhookPrompts: unknown[] = [];
   let nativeResult: { accepted?: boolean; error?: string } | undefined;
   legacy = createServer((incoming, outgoing) => {
     if (checkNativeWebhook && incoming.url === '/') {
       outgoing.writeHead(200, { 'Content-Type': 'text/html' });
       outgoing.end(`<script>
-        window.lifeManagerDesktop.sendT3('Desktop smoke prompt', ${JSON.stringify(webhookUrl)}).then(result =>
+        window.lifeManagerDesktop.${useLaunch ? 'launchT3' : 'sendT3'}('Desktop smoke prompt', ${JSON.stringify(useLaunch ? launcher : webhookUrl)}).then(result =>
           fetch('/smoke-result', {method: 'POST', body: JSON.stringify(result)}))
           .catch(error => fetch('/smoke-result', {method: 'POST', body: JSON.stringify({error: String(error)})}));
       </script>`);
@@ -150,6 +152,21 @@ try {
   assert.deepEqual(webhookPrompts, [{ prompt: 'Desktop smoke prompt' }]);
   await quit();
   console.log('PASS: sandboxed preload submits the full prompt through a local webhook request for a remote workspace connection.');
+
+  const argumentsFile = join(directory, 't3-arguments');
+  launcher = join(directory, 'fake-t3');
+  await writeFile(launcher, '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$LIFE_MANAGER_T3_SMOKE_ARGUMENTS"\n');
+  await chmod(launcher, 0o700);
+  useLaunch = true;
+  nativeResult = undefined;
+  const nativeProfile = await launch({ mode: 'remote', url: legacyOrigin }, { LIFE_MANAGER_T3_SMOKE_ARGUMENTS: argumentsFile });
+  await waitFor(async () => nativeResult, 'native copy-and-open result');
+  assert.deepEqual(nativeResult, { copied: true, opened: true, location: 'device' });
+  assert.equal(await readFile(argumentsFile, 'utf8'), `app\n${join(nativeProfile, 'workspace')}\n`);
+  assert.equal(execFileSync('/usr/bin/pbpaste', { encoding: 'utf8' }), 'Desktop smoke prompt');
+  assert.equal(webhookPrompts.length, 1);
+  await quit();
+  console.log('PASS: native copy-and-open launches locally for a remote workspace without calling a webhook.');
 
   await new Promise<void>(done => legacy!.close(() => done())); legacy = undefined;
   await external.stop(); external = undefined;

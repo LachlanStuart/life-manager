@@ -64,6 +64,7 @@ export function createHttpHandler(options: {
   publicDir: string;
   feed?: ReturnType<typeof createChangeFeed>;
   sendToAgent?: AgentSender;
+  launchT3?: (location?: string) => Promise<void>;
   sendT3?: (prompt: string, webhookUrl: string) => Promise<void>;
   serverIdentity?: import('./server-discovery.js').ServerIdentity;
 }) {
@@ -103,12 +104,18 @@ export function createHttpHandler(options: {
           case '/api/templates/save': json(actions.savePromptTemplate(body as PromptTemplate)); return;
           case '/api/templates/delete': actions.deletePromptTemplate(body as { id: string }); json({ deleted: true }); return;
           case '/api/agent/link': {
-            const input = z.object({ itemId: z.string().min(1), templateId: z.string().min(1), target: z.enum(['modal', 'codex', 't3']).default('modal'), context: z.literal('client').optional() }).strict().parse(body);
+            const input = z.object({ itemId: z.string().min(1), templateId: z.string().min(1), target: z.enum(['modal', 'codex', 't3', 't3-launch']).default('modal'), context: z.literal('client').optional() }).strict().parse(body);
             const item = actions.workspace().dashboard.items.find(value => value.id === input.itemId);
             const template = actions.listPromptTemplates().find(value => value.id === input.templateId);
             if (!item || !template) throw new HttpError(404, 'The Item or prompt template no longer exists.');
             if (!options.sendToAgent) throw new HttpError(503, 'Agent prompts are not configured.');
             json(await options.sendToAgent({ item, template, origin, target: input.target, ...(input.context ? { context: input.context } : {}) })); return;
+          }
+          case '/api/agent/t3/launch': {
+            const input = z.object({ location: z.string().trim().max(4096).refine(value => !value.includes('\0')).optional() }).strict().parse(body);
+            if (!options.launchT3) throw new HttpError(503, 'T3 Code launch is not configured on this server.');
+            await options.launchT3(input.location);
+            json({ opened: true }); return;
           }
           case '/api/agent/t3': {
             const input = t3WebhookInputSchema.parse(body);

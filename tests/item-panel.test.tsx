@@ -314,16 +314,48 @@ describe('ItemPanel', () => {
     expect(props.onCommand).not.toHaveBeenCalled();
   });
 
-  it('submits to T3 only on click and reports acceptance', async () => {
+  it('launches T3 only on click and reports both clipboard and conversation results', async () => {
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
     const user = userEvent.setup();
-    const launch = vi.fn().mockResolvedValue({ accepted: true });
-    renderPanel({ promptHandling: 't3', onSendT3: launch });
+    const send = vi.fn();
+    const launch = vi.fn().mockResolvedValue({ copied: true, opened: true, location: 'device' });
+    renderPanel({ promptHandling: 't3-launch', onLaunchT3: launch, onSendT3: send });
     const button = screen.getByRole('button', { name: 'Resume work' });
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
     expect(launch).not.toHaveBeenCalled();
     await user.click(button);
     expect(launch).toHaveBeenCalledExactlyOnceWith('Full prompt');
+    expect(send).not.toHaveBeenCalled();
+    expect(await screen.findByText('Prompt copied to this device’s clipboard.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'T3 Code' }).textContent).toContain('on this computer');
+    expect(screen.queryByRole('link', { name: 'Resume work' })).toBeNull();
+  });
+
+  it('retains copied status and offers the full prompt when T3 launch fails', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    const user = userEvent.setup();
+    renderPanel({ promptHandling: 't3-launch', onLaunchT3: vi.fn().mockResolvedValue({ copied: true, opened: false, location: 'server', error: 'Start T3 Code first.' }) });
+    const button = screen.getByRole('button', { name: 'Resume work' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    await user.click(button);
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Start T3 Code first.');
+    expect(screen.getByText('Prompt copied to this device’s clipboard.')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Show prompt' }));
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Full prompt' }).value).toBe('Full prompt');
+  });
+
+  it('submits to T3 only on click and reports acceptance', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    const user = userEvent.setup();
+    const launch = vi.fn().mockResolvedValue({ accepted: true });
+    const open = vi.fn();
+    renderPanel({ promptHandling: 't3', onSendT3: launch, onLaunchT3: open });
+    const button = screen.getByRole('button', { name: 'Resume work' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    expect(launch).not.toHaveBeenCalled();
+    await user.click(button);
+    expect(launch).toHaveBeenCalledExactlyOnceWith('Full prompt');
+    expect(open).not.toHaveBeenCalled();
     expect(await screen.findByText('T3 Code accepted the prompt. Check T3 Code for task progress.')).toBeTruthy();
     expect(screen.getByRole('dialog', { name: 'T3 Code' }).textContent).toContain('accepted the prompt');
     expect(screen.queryByRole('link', { name: 'Resume work' })).toBeNull();

@@ -15,11 +15,19 @@ export function saveT3WebhookUrl(value: string): void {
 export function readPromptHandling(): PromptHandling {
   try {
     const value = clientStorage.getItem(key);
-    if (value === 'codex' || value === 't3') return value;
+    if (value === 'codex' || value === 't3' || value === 't3-launch') return value;
   } catch { /* Storage may be disabled. */ }
   return 'modal';
 }
 
 export function savePromptHandling(value: PromptHandling): void {
   try { clientStorage.setItem(key, value); } catch { /* Keep the choice for this session. */ }
+}
+
+export function readT3Location(): string {
+  try { return clientStorage.getItem('life-manager.t3-location') ?? ''; } catch { return ''; }
+}
+
+export function saveT3Location(value: string): void {
+  try { clientStorage.setItem('life-manager.t3-location', value); } catch { /* Keep the choice for this session. */ }
 }

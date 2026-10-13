@@ -138,6 +138,33 @@ it('persists the T3 webhook URL across client restarts', async () => {
   expect(localStorage.getItem('life-manager.t3-webhook-url')).toBe('');
 });
 
+it('keeps both T3 options and their settings independent across restarts', async () => {
+  localStorage.setItem('life-manager.prompt-handling', 't3');
+  localStorage.setItem('life-manager.t3-webhook-url', 'https://hooks.example/task/token');
+  localStorage.setItem('life-manager.t3-location', '/Applications/T3 Code.app');
+  const { screen } = setup();
+  await screen.findByText('Select Tend');
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(screen.getByText('Prompts', { selector: 'summary' }));
+  const handling = (screen.getByRole('combobox', { name: 'Prompt handling' }) as HTMLSelectElement);
+  expect(handling.value).toBe('t3');
+  expect(screen.getByRole('option', { name: 'T3 Code — webhook' })).toBeTruthy();
+  expect(screen.getByRole('option', { name: 'T3 Code — copy and open' })).toBeTruthy();
+  fireEvent.change(handling, { target: { value: 't3-launch' } });
+  expect(screen.queryByRole('textbox', { name: 'T3 webhook URL' })).toBeNull();
+  expect((screen.getByRole('textbox', { name: 'T3 Code location' }) as HTMLInputElement).value).toBe('/Applications/T3 Code.app');
+  fireEvent.change(screen.getByRole('textbox', { name: 'T3 Code location' }), { target: { value: '/tools/t3' } });
+  cleanup();
+  const next = setup().screen;
+  await next.findByText('Select Tend');
+  fireEvent.click(next.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(next.getByText('Prompts', { selector: 'summary' }));
+  expect((next.getByRole('combobox', { name: 'Prompt handling' }) as HTMLSelectElement).value).toBe('t3-launch');
+  expect((next.getByRole('textbox', { name: 'T3 Code location' }) as HTMLInputElement).value).toBe('/tools/t3');
+  fireEvent.change(next.getByRole('combobox', { name: 'Prompt handling' }), { target: { value: 't3' } });
+  expect((next.getByRole('textbox', { name: 'T3 webhook URL' }) as HTMLInputElement).value).toBe('https://hooks.example/task/token');
+});
+
 it('confirms period resets once for all Items, including hidden descendants, and preserves snapshots', async () => {
   const { screen, current, historical, mutations } = setup('/', [
     { id: 'hidden', parentId: 'build', order: 0, title: 'Hidden child', status: 'Done', notes: 'Keep notes', included: false, weight: 1, effortOverride: 60 },

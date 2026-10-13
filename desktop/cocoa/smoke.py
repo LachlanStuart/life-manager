@@ -62,6 +62,9 @@ def scenario(home, mode):
             self.showWorkspace_(None)
             return mode == "discard"
 
+    fake_t3 = home / "fake-t3"
+    fake_t3.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$0.arguments"\n')
+    fake_t3.chmod(0o700)
     host = NodeHost(os.environ.get("LIFE_MANAGER_NODE", shutil.which("node")), home / "workspace")
 
     def ready(desktop):
@@ -148,6 +151,15 @@ def scenario(home, mode):
                 js(f"void window.lifeManagerDesktop.sendT3('Cocoa smoke prompt', {json.dumps(webhook)}).then(value => window.hookResult = value)")
                 wait_for(lambda: js("window.hookResult?.accepted"), "native webhook reply")
                 assert prompts == [{"prompt": "Cocoa smoke prompt"}]
+
+                js(f"void window.lifeManagerDesktop.launchT3('Cocoa copy prompt', {json.dumps(str(fake_t3))}).then(value => window.launchResult = value)")
+                wait_for(lambda: js("window.launchResult?.opened"), "native copy-and-open reply")
+                assert js("window.launchResult.copied") is True
+                assert ui(lambda: A.NSPasteboard.generalPasteboard().stringForType_(A.NSPasteboardTypeString)) == "Cocoa copy prompt"
+                assert fake_t3.with_suffix(".arguments").read_text() == f"app\n{host.data_dir}\n"
+                assert prompts == [{"prompt": "Cocoa smoke prompt"}]
+                js(f"window.lifeManagerDesktop.preferences.setItem('life-manager.t3-location', {json.dumps(str(fake_t3))})")
+                wait_for(lambda: Preferences(home).values.get("life-manager.t3-location") == str(fake_t3), "launcher preference persistence")
 
                 # Both same-origin and opaque-origin child frames must be rejected by native checks.
                 for sandbox in [False, True]:

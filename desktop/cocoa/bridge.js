@@ -23,6 +23,7 @@
     if (error) request.reject(new Error(error)); else request.resolve(result);
   }});
   Object.defineProperty(window, 'lifeManagerDesktop', { value: Object.freeze({
+    launchT3: (prompt, location = '') => call('launchT3', { prompt, location }),
     sendT3: (prompt, webhookUrl) => call('sendT3', { prompt, webhookUrl }),
     preferences: Object.freeze({
       getItem: key => values[key] ?? null,

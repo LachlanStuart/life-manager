@@ -10,7 +10,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 PREFERENCE_KEYS = frozenset({
-    "life-manager.theme", "life-manager.prompt-handling", "life-manager.t3-webhook-url",
+    "life-manager.theme", "life-manager.prompt-handling", "life-manager.t3-webhook-url", "life-manager.t3-location",
     "life-manager.property-filters", "life-manager.sunburst-display.v1",
 })
 
@@ -85,11 +85,17 @@ class NodeHost:
             callback({"accepted": False, "error": "The local server stopped. Check T3 before resubmitting."})
 
     def send_t3(self, prompt, webhook_url, callback):
+        self._request({"method": "sendT3", "prompt": prompt, "webhookUrl": webhook_url}, callback)
+
+    def launch_t3(self, location, callback):
+        self._request({"method": "launchT3", "location": location}, callback)
+
+    def _request(self, message, callback):
         request_id = uuid.uuid4().hex
         with self.lock:
             self.callbacks[request_id] = callback
             try:
-                self.process.stdin.write(json.dumps({"id": request_id, "method": "sendT3", "prompt": prompt, "webhookUrl": webhook_url}) + "\n")
+                self.process.stdin.write(json.dumps({"id": request_id, **message}) + "\n")
                 self.process.stdin.flush()
             except (BrokenPipeError, ValueError):
                 self.callbacks.pop(request_id, None)

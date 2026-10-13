@@ -29,8 +29,9 @@ async function setup() {
   const actions = createLifeManagerActions(store, () => widgets.summaries());
   widgets = createWidgetRegistry(actions);
   const sendToAgent = vi.fn<AgentSender>(async () => ({ message: 'Codex link ready.', prompt: 'Full prompt', url: 'codex://threads/new?prompt=test' }));
+  const launchT3 = vi.fn().mockResolvedValue(undefined);
   const sendT3 = vi.fn().mockResolvedValue(undefined);
-  const server = createServer(createHttpHandler({ actions, widgets, attachmentsDir, publicDir, sendToAgent, sendT3 }));
+  const server = createServer(createHttpHandler({ actions, widgets, attachmentsDir, publicDir, sendToAgent, sendT3, launchT3 }));
   cleanups.push(async () => {
     server.closeAllConnections();
     if (server.listening) await closeServer(server);
@@ -46,7 +47,7 @@ async function setup() {
   const post = (path: string, body: unknown, headers: Record<string, string> = {}) => get(path, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Life-Manager': '1', ...headers }, body: JSON.stringify(body),
   });
-  return { actions, store, get, post, origin, attachmentsDir, sendToAgent, sendT3 };
+  return { actions, store, get, post, origin, attachmentsDir, sendToAgent, sendT3, launchT3 };
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -90,6 +91,23 @@ it('only submits to T3 on an explicit protected action, never while preparing a 
   await json(await post('/api/agent/t3', { ...input, webhookUrl: 'file:///tmp/hook' }), 400);
   await json(await post('/api/agent/t3', { ...input, location: '/Applications/T3 Code.app' }), 400);
   expect(sendT3).toHaveBeenCalledTimes(1);
+});
+
+it('keeps copy-and-open separate from webhooks and protects the launch endpoint', async () => {
+  const { post, get, launchT3, sendT3 } = await setup();
+  await json(await post('/api/templates/save', prompt));
+  await json(await post('/api/agent/link', { itemId: 'build', templateId: prompt.id, target: 't3-launch' }));
+  expect(launchT3).not.toHaveBeenCalled();
+  await json(await post('/api/agent/t3/launch', {}, { Origin: 'https://foreign.example' }), 403);
+  await json(await get('/api/agent/t3/launch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }), 403);
+  await json(await post('/api/agent/t3/launch', { cwd: '/arbitrary/path' }), 400);
+  expect(launchT3).not.toHaveBeenCalled();
+  expect(await json(await post('/api/agent/t3/launch', {}))).toEqual({ opened: true });
+  expect(launchT3).toHaveBeenCalledExactlyOnceWith(undefined);
+  await json(await post('/api/agent/t3/launch', { location: '/Applications/T3 Code.app' }));
+  expect(launchT3).toHaveBeenLastCalledWith('/Applications/T3 Code.app');
+  await json(await post('/api/agent/t3/launch', { location: {} }), 400);
+  expect(sendT3).not.toHaveBeenCalled();
 });
 
 describe('standalone HTTP application', () => {

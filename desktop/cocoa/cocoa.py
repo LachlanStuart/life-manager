@@ -238,6 +238,22 @@ class Desktop(F.NSObject):
                 self.preferences.set(body.get("key"), body.get("value"))
                 self.install_script()
                 self.reply(document, request_id, True)
+            elif method == "launchT3":
+                prompt = body.get("prompt")
+                if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 200_000 or "\0" in prompt:
+                    self.reply(document, request_id, error="Invalid agent prompt.")
+                    return
+                copied = False
+                try:
+                    clipboard = A.NSPasteboard.generalPasteboard()
+                    clipboard.clearContents()
+                    if not clipboard.setString_forType_(prompt, A.NSPasteboardTypeString):
+                        raise RuntimeError("Could not copy the prompt.")
+                    copied = True
+                    self.host.launch_t3(body.get("location"), lambda result: AppHelper.callAfter(
+                        self.reply, document, request_id, {"copied": True, "opened": bool(result.get("opened")), "location": "device", **({"error": result["error"]} if result.get("error") else {})}))
+                except Exception:
+                    self.reply(document, request_id, {"copied": copied, "opened": False, "location": "device", "error": "Could not copy the prompt or open T3 Code. Check T3 before trying again."})
             elif method == "sendT3":
                 self.host.send_t3(body.get("prompt"), body.get("webhookUrl"), lambda result: AppHelper.callAfter(self.reply, document, request_id, result))
             else:

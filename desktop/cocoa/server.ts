@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import { startServer } from '../../src/server-runtime.js';
 import { resolveDataDirectory } from '../../src/data-directory.js';
+import { launchT3Conversation } from '../../src/t3-launch.js';
 import { sendDesktopT3 } from '../agent-launch.js';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -25,6 +26,16 @@ input.on('line', line => {
   void (async () => {
     let message;
     try { message = JSON.parse(line); } catch { return; }
+    if (message.method === 'launchT3' && typeof message.id === 'string') {
+      try {
+        await startup;
+        if (!server || stopping) throw new Error('The local server is unavailable.');
+        await launchT3Conversation(server.dataDir, message.location);
+        output({ id: message.id, result: { opened: true } });
+      } catch (error) {
+        output({ id: message.id, result: { opened: false, error: error instanceof Error ? error.message : 'Could not open T3 Code.' } });
+      }
+    }
     if (message.method === 'sendT3' && typeof message.id === 'string') {
       output({ id: message.id, result: await sendDesktopT3(message.prompt, message.webhookUrl) });
     }
